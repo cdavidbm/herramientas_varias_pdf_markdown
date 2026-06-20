@@ -94,6 +94,13 @@ def slugify(text: str, maxlen: int = 90) -> str:
 SKIP_CLASSES = {"image"}  # decorative images inline
 SKIP_TAGS = {"style", "script", "meta", "link", "head", "title"}
 
+# Local (same-file) footnote anchors: a ref `<a href="#footnote-015">1</a>` whose
+# body lives in the same document as `<… id="footnote-015">…</…>`. This is the
+# default Calibre / InDesign pattern (`_idFootnote`), distinct from the pooled
+# `Footnote.xhtml#anchor` pattern handled via footnote_markers.
+NOTE_ID_RE = re.compile(r"(footnote|endnote|fn|note|nota)[-_]?\d", re.IGNORECASE)
+NOTE_CLASS_RE = re.compile(r"(footnote|endnote|nota|note)", re.IGNORECASE)
+
 
 class Converter:
     """Converts a soup body into markdown lines.
@@ -112,6 +119,11 @@ class Converter:
         # merely repeats the plan-provided H1 (a very common EPUB duplication,
         # independent of the book's CSS classes).
         self.section_title_norm = re.sub(r"\s+", " ", section_title).strip().lower()
+        # Local (same-file) footnote support: bare ids of note bodies found in
+        # the file currently being converted, and that file's name (used to
+        # namespace ids so two files in one section can't collide).
+        self.local_note_ids: set[str] = set()
+        self.current_file = ""
         self.used_footnotes: list[tuple[int, str]] = []
         self.footnote_counter = 0
         self.footnote_seen: dict[str, int] = {}
@@ -212,6 +224,13 @@ class Converter:
                 anchor_id = href.split("#", 1)[1] if "#" in href else href
                 num = self._resolve_footnote(anchor_id)
                 return f"[^{num}]"
+            # Local (same-file) footnote ref: href="#footnote-015" whose body was
+            # indexed in this file by _index_local_footnotes().
+            if href.startswith("#"):
+                target = href[1:]
+                if target in self.local_note_ids:
+                    num = self._resolve_footnote(f"{self.current_file}::{target}")
+                    return f"[^{num}]"
             # Internal anchor: drop link, keep text
             return "".join(self._inline(c) for c in node.children)
 
@@ -346,8 +365,52 @@ class Converter:
 
     # ---- public --------------------------------------------------------------
 
-    def convert_file(self, html: str) -> list[str]:
+    def _local_note_body(self, el: Tag) -> str:
+        """Extract a same-file footnote body, stripping its leading back-link
+        and number marker."""
+        target = el.find("p") or el
+        if not isinstance(target, Tag):
+            return ""
+        # Drop return/back-link anchors (e.g. href="#footnote-015-backlink").
+        for a in list(target.find_all("a")):
+            if "backlink" in _attr(a, "href").lower():
+                a.extract()
+        text = "".join(self._inline(c) for c in target.children)
+        text = re.sub(r"^\s*\[?\d+[.)\]]?\s*", "", text)   # leading "1 " / "1." / "[1]"
+        return re.sub(r"\s+", " ", text).strip()
+
+    def _index_local_footnotes(self, soup: BeautifulSoup) -> None:
+        """Find note bodies referenced by same-file `href="#id"` anchors, fold
+        their text into the footnote lookup, and remove them from the flow so
+        they are not rendered inline."""
+        targets = {
+            _attr(a, "href")[1:]
+            for a in soup.find_all("a")
+            if _attr(a, "href").startswith("#")
+        }
+        for tid in targets:
+            if not tid:
+                continue
+            el = soup.find(id=tid)
+            if not isinstance(el, Tag):
+                continue
+            cls = " ".join(_classes(el))
+            if not (NOTE_ID_RE.search(tid) or NOTE_CLASS_RE.search(cls)):
+                continue  # ordinary cross-reference anchor, not a note
+            key = f"{self.current_file}::{tid}"
+            if key in self.footnote_lookup:
+                continue
+            body = self._local_note_body(el)
+            if not body:
+                continue
+            self.footnote_lookup[key] = body
+            self.local_note_ids.add(tid)
+            el.decompose()
+
+    def convert_file(self, html: str, filename: str = "") -> list[str]:
         soup = BeautifulSoup(html, "html.parser")
+        self.current_file = filename
+        self._index_local_footnotes(soup)
         body = soup.body or soup
         lines = self._block(body)
         return lines
@@ -564,7 +627,7 @@ def main() -> int:
                     missing.append(f)
                     continue
                 html = fp.read_text(encoding="utf-8")
-                parts.extend(conv.convert_file(html))
+                parts.extend(conv.convert_file(html, filename=f))
 
             if missing:
                 print(f"warning: missing files for '{title}': {missing}", file=sys.stderr)

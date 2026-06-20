@@ -45,10 +45,11 @@ pointing at them directly, or copy the folder next to a new book.
     - `--keep-frontmatter` — don't drop front-matter cruft.
   **Limits (inherent to file-granularity):** an EPUB that packs many chapters
   into a single `.xhtml` (common in Anna's-Archive rips) yields one coarse
-  section per file — the floor is one `.md` per source file. Footnotes only
-  resolve when the book uses a pooled notes file referenced by
-  `<sup><a href="pool#anchor">` (or `<a href><sup>`); other note structures
-  pass through as raw superscripts.
+  section per file — the floor is one `.md` per source file. Footnotes resolve
+  for the two common encodings — a pooled notes file (`<sup><a href="pool#…">`
+  or `<a href><sup>`) and same-file local anchors (`<a href="#footnote-015">`
+  with the body as `<… id="footnote-015">`, the default Calibre/InDesign
+  `_idFootnote` pattern); other note structures pass through as raw superscripts.
 
 ### PDF → per-section Markdown (single PDF, plan-driven)
 
@@ -287,11 +288,14 @@ Two things may still need attention on an unusual book:
    (legacy lists for *The Study Quran* / Davies). Rarely needed now; add a
    class only if a book emits duplicate non-title headers.
 
-2. **Footnote reference pattern.** The converter recognises footnote refs as
-   `<sup><a href="*pool#anchor">N</a></sup>` (or `<a href><sup>`) pointing into
-   a pooled footnote file, in two body formats (`by_a_id`, `by_p_id`; set
-   `footnote_format` in the plan). If a book keeps notes in another structure,
-   either point `--footnotes` at the right file or accept raw superscripts.
+2. **Footnote reference pattern.** The converter resolves two encodings out of
+   the box: (a) a **pooled** footnote file — `<sup><a href="*pool#anchor">N</a>`
+   (or `<a href><sup>`), in body formats `by_a_id` / `by_p_id` (set
+   `footnote_format` in the plan); and (b) **same-file local anchors** —
+   `<a href="#footnote-015">N</a>` whose body is an element with
+   `id="footnote-015"` in the same document (auto-detected, no config). A book
+   using some other structure either needs `--footnotes` pointed at the right
+   file or falls back to raw superscripts.
 
 ---
 
