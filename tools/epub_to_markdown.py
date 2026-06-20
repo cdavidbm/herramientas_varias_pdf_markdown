@@ -105,8 +105,13 @@ class Converter:
     """
 
     def __init__(self, footnote_lookup: dict[str, str] | None = None,
-                 footnote_file_marker: str | list[str] = "Footnote.xhtml"):
+                 footnote_file_marker: str | list[str] = "Footnote.xhtml",
+                 section_title: str = ""):
         self.footnote_lookup = footnote_lookup or {}
+        # Normalised section title, used to suppress an in-document heading that
+        # merely repeats the plan-provided H1 (a very common EPUB duplication,
+        # independent of the book's CSS classes).
+        self.section_title_norm = re.sub(r"\s+", " ", section_title).strip().lower()
         self.used_footnotes: list[tuple[int, str]] = []
         self.footnote_counter = 0
         self.footnote_seen: dict[str, int] = {}
@@ -118,9 +123,21 @@ class Converter:
         #   ["notas001.xhtml", "notas002.xhtml", ...] — Smith *El enigma
         #     cuántico* (one notes file per chapter)
         if isinstance(footnote_file_marker, str):
-            self.footnote_markers: list[str] = [footnote_file_marker]
+            raw_markers = [footnote_file_marker]
         else:
-            self.footnote_markers = list(footnote_file_marker)
+            raw_markers = list(footnote_file_marker)
+        # Also match by basename: a plan may carry the pool as "text/Foo.xhtml"
+        # while the in-document hrefs reference just "Foo.xhtml#anchor".
+        markers: list[str] = []
+        for m in raw_markers:
+            if not m:
+                continue
+            if m not in markers:
+                markers.append(m)
+            base = m.rsplit("/", 1)[-1]
+            if base and base not in markers:
+                markers.append(base)
+        self.footnote_markers: list[str] = markers
 
     # ---- footnote bookkeeping ----------------------------------------------
 
@@ -253,6 +270,10 @@ class Converter:
             text = self._inline(node).strip()
             text = re.sub(r"\s+", " ", text)
             if not text:
+                return []
+            # Suppress a heading that merely repeats the plan-provided section
+            # title (generic de-duplication, no per-book class needed).
+            if self.section_title_norm and text.lower() == self.section_title_norm:
                 return []
             level_map = {"h1": 1, "h2": 2, "h3": 3, "h4": 4, "h5": 5, "h6": 6}
             hashes = "#" * level_map[name]
@@ -532,7 +553,8 @@ def main() -> int:
             else:
                 marker_for_conv = fn_files  # list — converter checks each
             conv = Converter(footnote_lookup=footnote_lookup,
-                             footnote_file_marker=marker_for_conv)
+                             footnote_file_marker=marker_for_conv,
+                             section_title=title)
             parts: list[str] = [f"# {title}", ""]
 
             missing = []

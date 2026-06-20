@@ -31,10 +31,24 @@ pointing at them directly, or copy the folder next to a new book.
   section) and writes one `.md` per section. Handles continuation files,
   resolves pooled footnotes into per-file `[^N]: ...` definitions, preserves
   Arabic/diacritical typography, and skips decorative/page-break markup.
-- `build_plan.py` — inspects an EPUB and emits a `plan.json`. The current
-  version is tailored to HarperCollins' *The Study Quran* (merging Chapter_Xa,
-  Xb continuations, skipping cover/index/maps/editorial-board pages). Adapt
-  the `SKIP_FILES` / `SKIP_FRONTMATTER` sets at the top for a new book.
+- `build_plan.py` — **generic** plan generator: inspects ANY EPUB and emits a
+  `plan.json` automatically. Reads the package document (`.opf`) for the spine
+  (canonical reading order) and the table of contents (EPUB3 `nav` or EPUB2
+  `.ncx`) for chapter titles, then writes one section per TOC-named chapter,
+  merging untitled continuation files (e.g. `Chapter_2a.xhtml`) into the
+  preceding chapter and skipping cover/title/copyright/TOC/index cruft
+  (English + Spanish). Auto-detects the footnote-pool file and its format.
+  Tested on 38 mixed EPUBs (EPUB2/EPUB3, flat and `text/`-rooted, ISBN-prefixed
+  filenames, Spanish and English). No per-book editing needed — just eyeball
+  the output.
+    - `--footnotes auto|none|<file>` — pool detection (default auto).
+    - `--keep-frontmatter` — don't drop front-matter cruft.
+  **Limits (inherent to file-granularity):** an EPUB that packs many chapters
+  into a single `.xhtml` (common in Anna's-Archive rips) yields one coarse
+  section per file — the floor is one `.md` per source file. Footnotes only
+  resolve when the book uses a pooled notes file referenced by
+  `<sup><a href="pool#anchor">` (or `<a href><sup>`); other note structures
+  pass through as raw superscripts.
 
 ### PDF → per-section Markdown (single PDF, plan-driven)
 
@@ -211,14 +225,15 @@ Filenames come out as `NN_slugified-title.pdf` so they sort in reading order.
 python3 path/to/tools/build_plan.py "book.epub" > plan.json
 ```
 
-The generator reads the EPUB's internal `nav.xhtml` to discover canonical
-chapter titles, merges continuation files (e.g. `Chapter_2.xhtml` +
-`Chapter_2a.xhtml`), and emits a `plan.json` with one entry per logical
-section.
+The generator reads the EPUB's spine (`.opf`) for reading order and its TOC
+(`nav.xhtml` or `toc.ncx`) for chapter titles, merges continuation files
+(e.g. `Chapter_2.xhtml` + `Chapter_2a.xhtml`), skips front/back-matter cruft,
+auto-detects the footnote pool, and emits a `plan.json` with one entry per
+logical section. It is **book-agnostic** — no editing required. Diagnostics
+(TOC source, footnote pool, what was skipped) print to stderr.
 
-The current `build_plan.py` is tuned for *The Study Quran*. For a different
-book, edit the `SKIP_FILES` / `SKIP_FRONTMATTER` sets to match which pages are
-substantive versus fragmentary (editorial boards, copyright, index, maps…).
+Always eyeball the result before converting: drop any front/back-matter
+sections you don't want, fix a title, or merge two sections by hand.
 
 ### 2. Preview and convert
 
@@ -263,24 +278,20 @@ section with resolved footnotes if the source had them.
 
 ## Adapting the EPUB converter to a new book
 
-Most of the HTML-to-Markdown code in `epub_to_markdown.py` is generic. Three
-things may need tweaking for a new book:
+`build_plan.py` is now generic, and `epub_to_markdown.py` de-duplicates a
+heading that merely repeats the plan title (so most books need no tweaking).
+Two things may still need attention on an unusual book:
 
-1. **Header-suppression classes.** The converter hides headings whose CSS class
-   is in `SKIP_HEADER_CLASSES` (so the book's repeated title/byline headers
-   don't duplicate the H1 from `plan.json`). For *The Study Quran* that's
-   `{h2, h2a, h2b, h2f, h2bm, h2bm1}`. Inspect the new book's XHTML and add
-   any equivalent classes.
+1. **Header-suppression classes.** Beyond the generic title-dedup, the
+   converter also hides headings whose CSS class is in `SKIP_HEADER_CLASSES`
+   (legacy lists for *The Study Quran* / Davies). Rarely needed now; add a
+   class only if a book emits duplicate non-title headers.
 
 2. **Footnote reference pattern.** The converter recognises footnote refs as
-   `<sup><a href="*Footnote.xhtml#...">N</a></sup>` pointing into a single
-   pooled footnote file. If the new book keeps footnotes inside each chapter
-   file (instead of a pool), adjust the `<sup>` branch in `_inline()` and the
-   `load_footnote_lookup()` function.
-
-3. **`build_plan.py` is book-specific.** It decides which frontmatter pages
-   are worth keeping, which backmatter to include, and how continuation files
-   merge. Use it as a template, or hand-write `plan.json` for a new book.
+   `<sup><a href="*pool#anchor">N</a></sup>` (or `<a href><sup>`) pointing into
+   a pooled footnote file, in two body formats (`by_a_id`, `by_p_id`; set
+   `footnote_format` in the plan). If a book keeps notes in another structure,
+   either point `--footnotes` at the right file or accept raw superscripts.
 
 ---
 
@@ -295,7 +306,7 @@ things may need tweaking for a new book:
 | `pdf_chapters_to_markdown.py`  | Multi-PDF (pre-split) → markdown w/ page-bottom footnotes | Python stdlib + poppler CLI |
 | `rtf_to_markdown.py`           | RTF → per-section markdown w/ pooled notes | Python + striprtf |
 | `epub_to_markdown.py`          | EPUB → per-chapter markdown              | Python + beautifulsoup4 |
-| `build_plan.py`                | Generates `plan.json` from an EPUB       | Python + beautifulsoup4 |
+| `build_plan.py`                | Generates `plan.json` from ANY EPUB (spine+TOC, generic) | Python + beautifulsoup4 |
 | `attach_notes_by_chapter.py`   | Post-process to attach pooled notes per chapter | Python + beautifulsoup4 |
 | `README.md`                    | This file | — |
 
