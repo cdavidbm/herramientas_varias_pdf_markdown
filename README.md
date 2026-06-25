@@ -15,18 +15,46 @@ afinado a un tipo de fuente real. Se eligen según el documento.
 
 ---
 
+## 🤖 Cómo se opera (lo maneja Claude, no tú)
+
+Estas herramientas están pensadas para que **las use Claude por ti**. No tienes
+que saber cuál aplicar a cada documento: le pides un resultado —"pasa este libro
+a markdown", "prepáralo para NotebookLM"— y **Claude diagnostica la fuente y
+elige la herramienta solo** (incluido decidir entre un bisturí, OCR o Docling).
+
+El "cerebro" de esa decisión ya está listo en dos sitios:
+
+- **Skill `/forja`** — algoritmo de auto-diagnóstico y enrutado, disponible en
+  cualquier carpeta.
+- **[`CLAUDE.md`](CLAUDE.md)** — el mismo manual de operación, que Claude Code
+  carga automáticamente al trabajar **dentro de este repo**.
+
+Y para el paso siguiente del flujo:
+
+- **Skill `/traducir-md`** — traduce el markdown por capítulo preservando las
+  notas `[^N]`, los encabezados y el formato, con glosario de términos para
+  mantener consistencia en todo el libro.
+
+Tú solo decides lo que Claude no puede inferir (idioma de traducción, qué
+front-matter descartar). Lo demás se detecta.
+
+---
+
 ## ✨ Qué resuelve
 
 | Problema del documento | Herramienta |
 |---|---|
 | Un PDF largo que hay que partir por capítulos | `split_pdf.py` + `detect_chapters.py` |
 | Escaneo con **dos páginas por hoja** (spreads) | `split_pdf_spreads.py` |
+| Escaneo **sin capa de texto** (solo imágenes) | `ocrmypdf` (OCR) → luego el bisturí que toque |
 | PDF digital limpio → markdown por secciones | `pdf_sections_to_markdown.py` |
 | Carpeta de **un PDF por capítulo** con notas a pie | `pdf_chapters_to_markdown.py` |
 | Libro escaneado (post-OCR) con citas Harvard | `pdf_book_to_markdown.py` |
+| PDF **complejo** (tablas, fórmulas, multicolumna) donde la extracción falla | `docling` (conversor ML de alta fidelidad) |
 | **Cualquier EPUB** → markdown por capítulo | `build_plan.py` + `epub_to_markdown.py` |
 | EPUB **ilustrado** (figuras, glifos musicales) | `epub_illustrated_to_markdown.py` |
 | RTF de ePubLibre/Titivillus con notas agrupadas | `rtf_to_markdown.py` |
+| **Office** (docx, pptx, xlsx), html o imágenes → markdown | `markitdown` (o su MCP) |
 
 ---
 
