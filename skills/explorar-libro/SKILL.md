@@ -15,34 +15,46 @@ herramienta **localiza** los pasajes y tú **lees solo esos** y sintetizas.
 - Intención: "mira este libro y busca sobre X", "escanea este PDF/EPUB sobre…",
   "qué dice este libro acerca de…".
 
-## Reparto del trabajo
+## Elige la herramienta según el objetivo (automático)
 
-- **Herramienta (determinista):** `book_explore.py` extrae el texto del PDF/EPUB
-  y busca términos, devolviendo pasajes con **ubicación** (página en PDF,
-  capítulo/archivo en EPUB) + contexto, y un **ranking de secciones por densidad**
-  de coincidencias. Insensible a mayúsculas y acentos (español).
-- **Tú (criterio):** expandes el tema en términos de búsqueda, eliges qué pasajes
-  importan, los lees y sintetizas con citas.
+- **Carpeta de markdown / corpus** (varios libros ya convertidos, p. ej. una
+  serie) → usa el **índice FTS5** `tools/book_index.py`. Es lo mejor para ahorrar
+  tokens: indexa una vez y consulta al instante, con ranking bm25.
+- **Un solo PDF o EPUB** (aún sin convertir) → usa `book_explore.py`
+  (`~/.claude/skills/explorar-libro/book_explore.py`), que extrae y localiza por
+  página (PDF) o capítulo (EPUB).
 
-## Procedimiento
+En ambos: **tú (criterio)** expandes el tema en términos, eliges los pasajes
+relevantes, los lees y sintetizas con citas.
 
-1. **Expande el tema en términos** (este es el paso de juicio). Para "qué hay
-   sobre la melancolía saturnina" → `saturno, melancolía, bilis negra, Krónos,
-   humor, abatimiento`. Incluye sinónimos, términos técnicos y variantes (latín,
-   griego) propios del campo (astrología, alquimia, filosofía).
+## Procedimiento — corpus / carpeta (índice FTS5)
+
+```bash
+T=/mnt/c/ideas/_La_Forja/tools
+python3 $T/book_index.py query "RUTA/markdown" "reed flute, nay, longing" --top 8
+```
+- Construye el índice solo si falta o cambió (se guarda como `.forja_index.db`
+  DENTRO de la carpeta; git lo ignora). `build` y `status` son subcomandos.
+- Devuelve pasajes rankeados con `archivo › encabezado` + fragmento. **Lee solo
+  los archivos citados** (Read) y sintetiza. Insensible a acentos.
+- Para orientarte primero, `python3 $T/book_map.py "RUTA/markdown"` da el mapa
+  (archivos, títulos, palabras, notas) sin leer el contenido.
+
+## Procedimiento — un solo archivo (PDF/EPUB)
+
+1. **Expande el tema en términos** (paso de juicio). Para "melancolía saturnina"
+   → `saturno, melancolía, bilis negra, Krónos, humor, abatimiento`. Incluye
+   sinónimos y variantes (latín, griego) del campo.
 2. **Corre la herramienta:**
    ```bash
    python3 ~/.claude/skills/explorar-libro/book_explore.py "RUTA/libro.pdf" \
        --terms "saturno, melancolía, bilis negra, Krónos" --context 2
    ```
-   Opciones: `--regex PATRÓN` para patrones; `--context N` líneas alrededor;
-   `--max N` tope de coincidencias.
-3. **Mira el ranking de secciones** del resumen: las páginas/capítulos con más
-   coincidencias son donde el tema se concentra. **Lee esos** (con la herramienta
-   Read sobre el `.md` si ya está convertido, o pidiendo más contexto/`--max`).
-4. **Sintetiza** lo encontrado: qué dice el libro sobre el tema, **citando
-   página/capítulo** (p. ej. "en pág. 91–93 desarrolla…"), para que el usuario
-   pueda ir directo. Distingue lo que el texto afirma de tu interpretación.
+   Opciones: `--regex PATRÓN`; `--context N`; `--max N`.
+3. **Mira el ranking de secciones**: las páginas/capítulos con más coincidencias
+   son donde el tema se concentra. **Lee esos**.
+4. **Sintetiza** citando página/capítulo (p. ej. "en pág. 91–93 desarrolla…").
+   Distingue lo que el texto afirma de tu interpretación.
 
 ## Casos y límites
 

@@ -22,9 +22,19 @@ externas que este repo NO contiene; instálalas (abajo).
 | `/qa-traduccion` | Verifica que la traducción preservó la estructura | `check_translation.py` |
 | `/revisar-prosa` | Corrector editorial (consistencia, tipografía) | `proofread.py` |
 | `/citas` | Bibliografía y citas con `pandoc --citeproc` | `check_citations.py` |
-| `/explorar-libro` | "Mira tal libro y busca qué hay sobre X": localiza pasajes con su página/capítulo | `book_explore.py` |
+| `/explorar-libro` | "Mira tal libro y busca qué hay sobre X": localiza pasajes con su página/capítulo (o índice FTS5 en carpetas) | `book_explore.py`, `tools/book_index.py` |
+| `/forja-flujo` | **Orquestación automática**: detecta la intención y encadena las skills solo (sin invocar nada) | — |
 
 Patrón: **lo mecánico → script determinista**; **lo de criterio → la skill**.
+
+## Herramientas de ahorro de tokens (en `tools/`, sin instalar nada)
+
+- **`book_index.py`** — índice de búsqueda **FTS5** (SQLite, insensible a acentos)
+  sobre una carpeta de markdown: `build` / `query "términos"` / `status`. El
+  índice `.forja_index.db` se guarda junto a los libros (git-ignored). Recupera
+  solo los pasajes relevantes → se lee mucho menos. Puro beneficio, no toca calidad.
+- **`book_map.py`** — mapa estructural (archivos, títulos, palabras, notas) para
+  orientarse sin leer el contenido.
 
 ## Herramientas externas requeridas (NO vienen en git)
 
