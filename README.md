@@ -15,6 +15,32 @@ afinado a un tipo de fuente real. Se eligen según el documento.
 
 ---
 
+## 🖥️ Instalar en una máquina nueva (setup)
+
+Clonar **no** deja todo listo por sí solo: trae el código y el `CLAUDE.md`, pero
+las skills, las herramientas del sistema, los modelos de OCR y los MCP no viven en
+git. Para dejarlo todo funcionando, un solo comando (idempotente):
+
+```bash
+git clone git@github.com:cdavidbm/herramientas_varias_pdf_markdown.git ~/… # o C:\ideas\_La_Forja
+cd _La_Forja
+bash setup.sh          # instala skills, docling/markitdown, modelos OCR, venv y MCP
+```
+
+> **Clona en la misma ruta que la otra máquina** (`C:\ideas\_La_Forja` →
+> `/mnt/c/ideas/_La_Forja`): las skills referencian `tools/` por esa ruta.
+
+`setup.sh` reporta lo que necesita **root** (deps base: `poppler-utils`, `pandoc`,
+`ocrmypdf`, `tesseract`…) para que las instales tú, y hace el resto sin root.
+Al terminar: **reinicia Claude Code** (carga skills y MCP) y abre Claude dentro de
+la carpeta (su `CLAUDE.md` se carga solo). NotebookLM es un paso opcional aparte.
+
+**¿Prefieres pedírselo a Claude?** Abre Claude en la carpeta clonada y dile:
+*"lee el README y deja este repo instalado y funcionando en esta máquina"* —
+correrá `setup.sh` y te guiará con lo que requiera root o login.
+
+---
+
 ## 🤖 Cómo se opera (lo maneja Claude, no tú)
 
 Estas herramientas están pensadas para que **las use Claude por ti**. No tienes
