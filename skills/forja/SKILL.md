@@ -52,8 +52,11 @@ Decide en este orden:
 1. **¿Encriptado?** (pdfinfo `Encrypted: yes`) → `qpdf --decrypt in.pdf out.pdf`
    primero (si falta qpdf, avísalo). Luego re-diagnostica.
 2. **¿Sin capa de texto?** Si `chars/5pp` es muy bajo (≈ < 500, o sea < ~100 por
-   página) → es **escaneo de imágenes** → OCR:
-   `ocrmypdf --skip-text archivo.pdf archivo_ocr.pdf` y sigue con `archivo_ocr.pdf`.
+   página) → es **escaneo de imágenes** → OCR. Rápido:
+   `ocrmypdf --skip-text archivo.pdf archivo_ocr.pdf`. Si el escaneo es de **mala
+   calidad** (torcido, tenue, ruidoso) o de idioma no latino (griego, árabe,
+   persa, latín), usa la skill [[ocr]] (modelos best + preprocesado + RapidOCR).
+   Sigue con el `archivo_ocr.pdf` resultante.
 3. **¿Escaneo 2-up?** (dos páginas por hoja). Señal: en `pdfinfo` el tamaño es
    **apaisado** (ancho/alto > ~1.3) en la mayoría de páginas → 
    `python3 $T/split_pdf_spreads.py archivo.pdf` (deja `_1up.pdf`; las páginas

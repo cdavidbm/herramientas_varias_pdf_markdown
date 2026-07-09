@@ -24,6 +24,7 @@ tokens (leer solo lo necesario).
 | Lo que pide el usuario (intención) | Cadena automática |
 |---|---|
 | "convierte/pasa este libro/carpeta a markdown" | [[forja]] (auto-diagnóstico) → `book_map.py` para confirmar el resultado |
+| "haz OCR / este escaneo salió mal / arregla este OCR corrupto" | [[ocr]] (preprocesado + modelos best multilingües + RapidOCR; detecta corrupción) → [[forja]] |
 | "mira este libro/carpeta y dime qué hay sobre X" | [[explorar-libro]]: carpeta → `book_index.py`; archivo → `book_explore.py` → leo solo lo top y sintetizo con citas |
 | "traduce este libro/capítulo/carpeta" | (si es PDF/EPUB) [[forja]] → [[traducir-md]] → [[qa-traduccion]] → (a criterio) [[revisar-prosa]] |
 | "revisa/corrige este texto" | [[revisar-prosa]] (script `proofread.py` + criterio) |

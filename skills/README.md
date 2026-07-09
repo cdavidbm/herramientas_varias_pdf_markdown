@@ -24,6 +24,7 @@ externas que este repo NO contiene; instálalas (abajo).
 | `/citas` | Bibliografía y citas con `pandoc --citeproc` | `check_citations.py` |
 | `/explorar-libro` | "Mira tal libro y busca qué hay sobre X": localiza pasajes con su página/capítulo (o índice FTS5 en carpetas) | `book_explore.py`, `tools/book_index.py` |
 | `/forja-flujo` | **Orquestación automática**: detecta la intención y encadena las skills solo (sin invocar nada) | — |
+| `/ocr` | OCR de máxima calidad para escaneos malos y OCRs corruptos: preprocesado, modelos best multilingües, RapidOCR, detección de corrupción | `tools/ocr_*.py` |
 
 Patrón: **lo mecánico → script determinista**; **lo de criterio → la skill**.
 
@@ -35,6 +36,19 @@ Patrón: **lo mecánico → script determinista**; **lo de criterio → la skill
   solo los pasajes relevantes → se lee mucho menos. Puro beneficio, no toca calidad.
 - **`book_map.py`** — mapa estructural (archivos, títulos, palabras, notas) para
   orientarse sin leer el contenido.
+
+## OCR de alta calidad (skill `/ocr`)
+
+Ejecuta una vez por equipo:
+```bash
+bash tools/ocr_setup.sh
+```
+Descarga modelos **tessdata_best** (eng spa lat grc ell ara fas deu fra ita osd)
+a `~/.local/share/forja-tessdata` y crea un venv `~/.local/share/forja-ocr-venv`
+con OpenCV + RapidOCR. Nada de esto va en git (son binarios grandes); el script
+lo reproduce en cualquier máquina. Tools: `ocr_preprocess.py` (limpieza de
+imagen con OpenCV), `ocr_corruption.py` (detecta texto corrupto, stdlib).
+Requiere `uv` y red a GitHub.
 
 ## Herramientas externas requeridas (NO vienen en git)
 
