@@ -55,6 +55,17 @@ else
 fi
 echo
 
+# --- 6) Contexto de usuario global (verídico; no pisa uno existente) ----------
+echo "6) Contexto de usuario (~/.claude/CLAUDE.md)"
+if [ -f "$HOME/.claude/CLAUDE.md" ]; then
+    echo "   · ya existe, no lo toco"
+else
+    mkdir -p "$HOME/.claude"
+    cp "$REPO/docs/contexto-usuario.md" "$HOME/.claude/CLAUDE.md" \
+        && echo "   ✓ copiado (revísalo/ajústalo a tu gusto)"
+fi
+echo
+
 echo "== Pasos manuales que faltan =="
 ((${#falta[@]})) && echo "  • Instala las deps con root (línea sudo apt-get de arriba)."
 echo "  • NotebookLM (opcional): uv tool install \"notebooklm-py[browser]\" &&"
