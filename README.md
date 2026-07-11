@@ -60,6 +60,12 @@ Y para el paso siguiente del flujo:
 - **Skill `/traducir-md`** — traduce el markdown por capítulo preservando las
   notas `[^N]`, los encabezados y el formato, con glosario de términos para
   mantener consistencia en todo el libro.
+- **Skill `/youtube`** — convierte un video de YouTube en markdown de estudio a
+  partir de sus subtítulos (incluidos los **auto-generados**): sin marcas de
+  tiempo, con puntuación, párrafos y ortografía restaurados por el agente, sin
+  resumir nada. Si el video **no tiene subtítulos**, transcribe el audio con ASR
+  local (faster-whisper). También descarga audio, video y subtítulos con `yt-dlp`,
+  y accede a videos privados/con login vía cookies.
 
 Tú solo decides lo que Claude no puede inferir (idioma de traducción, qué
 front-matter descartar). Lo demás se detecta.
@@ -81,6 +87,9 @@ front-matter descartar). Lo demás se detecta.
 | EPUB **ilustrado** (figuras, glifos musicales) | `epub_illustrated_to_markdown.py` |
 | RTF de ePubLibre/Titivillus con notas agrupadas | `rtf_to_markdown.py` |
 | **Office** (docx, pptx, xlsx), html o imágenes → markdown | `markitdown` (o su MCP) |
+| **Video de YouTube** → markdown de estudio (subtítulos, incl. auto-generados) | `yt_transcript.py` + skill `/youtube` |
+| Video de YouTube **sin subtítulos** → transcript por audio (ASR local) | `yt_audio_transcribe.py` (faster-whisper) |
+| Bajar **audio/video/subtítulos** de YouTube | `yt_media.py` (yt-dlp) |
 
 ---
 
@@ -136,6 +145,10 @@ tools/
 │
 ├── rtf_to_markdown.py            RTF (notas agrupadas) → markdown por sección
 ├── attach_notes_by_chapter.py    adjunta notas agrupadas a cada capítulo
+│
+├── yt_transcript.py              YouTube/local subs → texto limpio sin timestamps
+├── yt_audio_transcribe.py        video sin subtítulos → transcript por ASR (Whisper)
+├── yt_media.py                   yt-dlp: baja audio/video/subtítulos/metadatos
 └── README.md                     📖 manual detallado (formatos, plan.json, flujos)
 ```
 
@@ -185,6 +198,13 @@ pip install --user striprtf
 
 # (Opcional) reparar OCR de escaneos antiguos antes de pdf_book_to_markdown.py:
 sudo apt-get install ocrmypdf tesseract-ocr-spa
+
+# YouTube (skill /youtube, yt_transcript.py, yt_media.py):
+pip install --user yt-dlp                 # o: uv tool install yt-dlp
+sudo apt-get install ffmpeg               # para --audio, --video combinado y ASR
+
+# YouTube sin subtítulos → transcript por audio (yt_audio_transcribe.py):
+bash tools/asr_setup.sh                   # venv con faster-whisper (ASR local)
 ```
 
 Todos los scripts son Python 3 + utilidades de línea de comandos; sin servicios

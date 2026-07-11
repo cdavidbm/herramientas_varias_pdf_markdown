@@ -86,10 +86,29 @@ un PDF entero como sección.
   (preserva `[^N]`, encabezados, glosario).
 - Entregar en otro formato: `pandoc cap.md -o cap.epub|.docx|.pdf`.
 
+## YouTube → markdown de estudio (skill `/youtube`)
+
+Otra fuente además de libros: videos de YouTube, vía **`yt-dlp`**.
+- `python3 $T/yt_transcript.py "URL" --list` → sondea (subs manuales, auto, capítulos).
+- `python3 $T/yt_transcript.py "URL" --lang es` → texto limpio **sin timestamps y
+  sin la duplicación de los auto-subtítulos** (fusión de solapes) + `meta.json`.
+  Prefiere subs manuales; cae a auto-generados. También limpia un `.vtt/.srt` local.
+- Luego **el agente** restaura puntuación, mayúsculas, párrafos y ortografía y
+  arma el `.md` (front matter + `##` por capítulo). NUNCA resumir: es transcripción
+  editada, íntegra.
+- Descargas: `python3 $T/yt_media.py "URL" --audio|--video|--subs|--info`.
+- **Sin subtítulos** (ni manuales ni auto): transcribe el audio con ASR local
+  (faster-whisper). Prepara una vez `bash $T/asr_setup.sh` y usa
+  `~/.local/share/forja-asr-venv/bin/python $T/yt_audio_transcribe.py "URL" --lang es`.
+  Prueba un tramo (`--start/--end`) antes de lanzar horas de CPU. Videos ocultos
+  no listados bajan solos; para privados/con login usa `--cookies cookies.txt`
+  (en WSL, `--cookies-from-browser` NO lee la Vivaldi de Windows: exporta cookies.txt).
+
 ## Herramientas disponibles en el equipo
 Scripts del repo · `pandoc` · `ocrmypdf` · `tesseract` · poppler (`pdfinfo`,
 `pdftotext`, `pdfimages`) · `mutool` · **`docling`** (PDF complejos) ·
-**`markitdown`** (Office/html/imágenes). Sin claves de API.
+**`markitdown`** (Office/html/imágenes) · **`yt-dlp`** + `ffmpeg` (YouTube) ·
+**`faster-whisper`** (ASR local, venv). Sin claves de API.
 
 Detalles finos de cada script (manejo de notas por formato, límites): ver
 `README.md` y `tools/README.md`.

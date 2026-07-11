@@ -116,6 +116,51 @@ pointing at them directly, or copy the folder next to a new book.
   `"Notas"`); each note is `[N]\n<body lines>` with trailing `<<` back-link
   stripped; numbering resets at `[1]` to mark group boundaries.
 
+### YouTube → clean transcript / media (yt-dlp)
+
+- `yt_transcript.py` — **YouTube subtitles → clean, timestamp-free text**, the
+  workhorse for turning a video into a study markdown. Prefers human/manual
+  subs, falls back to YouTube's **auto-generated** captions. Its point is to
+  undo the auto-caption mess: it strips inline per-word timing tags
+  (`<00:00:04.400><c> word</c>`), drops the settled-duplicate cues, and rebuilds
+  the real word stream with a **word-level suffix/prefix overlap merge** so the
+  rolling window (`hello` → `hello everyone` → `hello everyone and welcome`)
+  collapses to one clean line instead of a stutter. Writes `<slug>.txt` +
+  `<slug>.meta.json` (title, channel, url, date, duration, chapters,
+  `subtitle_kind`). Also cleans a **local `.vtt`/`.srt`** with no network. It
+  does NOT add punctuation/paragraphs — that is editorial judgment the agent
+  does in the `/youtube` skill (auto-captions ship with none). Never summarizes.
+    - `--list` — show available manual/auto tracks and chapters, then exit.
+    - `--lang CODE` — preferred language; `--auto` forces auto-generated;
+      `--manual-only` fails instead of falling back.
+    - `--stdout` / `--no-files` / `--wrap N` / `--keep-overlap` (debug).
+- `yt_media.py` — front door to **yt-dlp** for downloads: `--info` (metadata,
+  `--json` for the full dump), `--audio` (bestaudio → mp3/m4a/opus…, needs
+  ffmpeg), `--video` (`--quality N` height cap, merged mp4), `--subs` (subtitle
+  files, `--lang`), `--thumbnail`, `--description`. Handles playlists;
+  `--no-playlist`, `--dry-run`, `-o DIR`.
+- `yt_audio_transcribe.py` — for videos with **no subtitles at all** (neither
+  manual nor auto): downloads the audio and transcribes it with **local ASR**
+  (faster-whisper, CTranslate2 CPU), emitting the SAME `<slug>.txt` +
+  `<slug>.meta.json` as `yt_transcript.py` so the `/youtube` polish step is
+  identical. `--model tiny|base|small|medium|large-v3` (default `large-v3`,
+  quality-first), `--lang`, `--start/--end` (transcribe just a segment via
+  yt-dlp `--download-sections` — use it to test a long video first), `--srt`,
+  `--device cpu|cuda`, `--no-vad`. **`--resumable`** auto-saves each segment as it
+  is produced and, if the run is interrupted (power-off, kill, crash), resumes
+  from the last saved segment when you relaunch the SAME command — recommended for
+  long videos. VAD (voice-activity filter) is on by default
+  with an **automatic fallback** to no-VAD if it yields nothing (Silero can
+  wrongly drop quiet/music passages). Needs the ASR venv:
+  `bash tools/asr_setup.sh`, then run it with
+  `~/.local/share/forja-asr-venv/bin/python`.
+
+All three accept `--cookies FILE` (a Netscape `cookies.txt`) or
+`--cookies-from-browser BROWSER` for private / members / age-restricted videos.
+Note: from **WSL**, `--cookies-from-browser` can't read a **Windows** browser's
+cookie DB (locked + DPAPI-encrypted) — export a `cookies.txt` and use
+`--cookies` instead.
+
 ## System requirements
 
 ```bash
@@ -127,6 +172,13 @@ sudo apt-get install mupdf-tools       # mutool
 
 # for EPUB conversion:
 # python3 stdlib + beautifulsoup4 (usually already installed)
+
+# for YouTube tools:
+#   yt-dlp on PATH (pip install --user yt-dlp, or: uv tool install yt-dlp)
+#   ffmpeg  (sudo apt-get install ffmpeg)  — for --audio / merged --video / ASR
+
+# for audio transcription (yt_audio_transcribe.py, no-subtitles fallback):
+bash tools/asr_setup.sh    # venv ~/.local/share/forja-asr-venv with faster-whisper
 ```
 
 ---
@@ -312,6 +364,9 @@ Two things may still need attention on an unusual book:
 | `epub_to_markdown.py`          | EPUB → per-chapter markdown              | Python + beautifulsoup4 |
 | `build_plan.py`                | Generates `plan.json` from ANY EPUB (spine+TOC, generic) | Python + beautifulsoup4 |
 | `attach_notes_by_chapter.py`   | Post-process to attach pooled notes per chapter | Python + beautifulsoup4 |
+| `yt_transcript.py`             | YouTube/local subs → clean, de-duplicated, timestamp-free text | Python stdlib + yt-dlp CLI |
+| `yt_media.py`                  | yt-dlp front door: audio/video/subs/info downloads | Python stdlib + yt-dlp CLI |
+| `yt_audio_transcribe.py`       | Video sin subtítulos → transcript por ASR (Whisper) | Python + faster-whisper (venv) + yt-dlp |
 | `README.md`                    | This file | — |
 
 ## Troubleshooting

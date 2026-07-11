@@ -11,23 +11,24 @@ echo
 # --- 1) Dependencias base (requieren root; solo se reportan si faltan) ---------
 echo "1) Dependencias base del sistema"
 falta=()
-for b in pandoc pdftotext pdfinfo mutool ocrmypdf tesseract qpdf; do
+for b in pandoc pdftotext pdfinfo mutool ocrmypdf tesseract qpdf ffmpeg; do
     if command -v "$b" >/dev/null; then echo "   ✓ $b"; else echo "   ✗ $b"; falta+=("$b"); fi
 done
 if ((${#falta[@]})); then
     echo "   → instala (con root):"
-    echo "     sudo apt-get install -y poppler-utils mupdf-tools pandoc ocrmypdf tesseract-ocr qpdf"
+    echo "     sudo apt-get install -y poppler-utils mupdf-tools pandoc ocrmypdf tesseract-ocr qpdf ffmpeg"
 fi
 command -v uv   >/dev/null && echo "   ✓ uv"   || echo "   ✗ uv   → curl -LsSf https://astral.sh/uv/install.sh | sh"
 command -v node >/dev/null && echo "   ✓ node" || echo "   ✗ node (para el MCP de YouTube)"
 echo
 
 # --- 2) Conversores de alta fidelidad (sin root, vía uv) ----------------------
-echo "2) Docling + markitdown"
+echo "2) Docling + markitdown + yt-dlp"
 if command -v uv >/dev/null; then
     command -v docling    >/dev/null || uv tool install docling
     command -v markitdown >/dev/null || uv tool install 'markitdown[all]'
-    echo "   ✓ docling / markitdown"
+    command -v yt-dlp     >/dev/null || uv tool install yt-dlp
+    echo "   ✓ docling / markitdown / yt-dlp"
 else
     echo "   ⚠ sin uv: sáltate este paso hasta instalar uv"
 fi
@@ -41,6 +42,11 @@ echo
 # --- 4) OCR de alta calidad (modelos best + venv OpenCV/RapidOCR) -------------
 echo "4) OCR (modelos multilingües + OpenCV/RapidOCR)"
 bash "$REPO/tools/ocr_setup.sh" | sed 's/^/   /'
+echo
+
+# --- 4b) ASR (transcribir audio de videos SIN subtítulos) ---------------------
+echo "4b) ASR de YouTube (faster-whisper, para videos sin subtítulos)"
+bash "$REPO/tools/asr_setup.sh" | sed 's/^/   /'
 echo
 
 # --- 5) MCP (se cargan al REINICIAR Claude Code) ------------------------------
