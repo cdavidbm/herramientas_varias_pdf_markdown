@@ -161,6 +161,35 @@ Note: from **WSL**, `--cookies-from-browser` can't read a **Windows** browser's
 cookie DB (locked + DPAPI-encrypted) — export a `cookies.txt` and use
 `--cookies` instead.
 
+### Post-OCR / post-Docling cleanup (Markdown → study-ready)
+
+These five run *after* Docling (or any converter) to turn a raw dump into clean,
+per-chapter Markdown. They are the tools the agent reaches for on scanned,
+heavily-annotated or glyph-bearing books (astrology, alchemy, scholarly monographs).
+
+- `clean_markdown.py` — removes running page-headers that got promoted to `##`
+  (window + sentence-interrupt heuristic, so legitimately repeated content
+  headers survive), undoes soft hyphens, extracts base64 images to files, and
+  collapses justified spacing. `--in-place` or `--out`.
+- `split_chapters.py` — splits one Markdown file into per-chapter files, either
+  from a JSON plan (by exact heading text or line number — precise) or by
+  `--by-heading LEVEL` (quick). Front matter becomes section 00; each chapter
+  gets an `# NN — Title`.
+- `footnotes_rebuild.py` — rebuilds `[^N]` footnotes from OCR where superscripts
+  were split into spaced digits (`phlegm.1 1 4` → `[^114]`) and definitions sit
+  as `114. …` at page bottoms. **Run per chapter** (numbering is file-scoped);
+  reset-aware for appendices. Reports coverage; `--apply` to write. Never leaves
+  an orphan marker. Don't run on indexes/bibliographies (page numbers look like
+  definitions).
+- `astro_glyphs.py` — astrological-glyph crib sheet (`--reference`) and a
+  garbled-cell flagger (`--flag FILE`) for OCR'd tables. No engine reads ♄♃♂ etc.,
+  so it points you at the exact table cells to fix by hand against the page image
+  rather than guessing.
+- `docling_incremental.py` — runs `docling convert` in page **batches** with
+  checkpoint + resume + progress, so a multi-hour scan survives an interruption.
+  `--no-ocr` for PDFs that already have a text layer (ABBYY/born-digital) is a big
+  speed-up. See its docstring for trade-offs.
+
 ## System requirements
 
 ```bash
@@ -367,6 +396,11 @@ Two things may still need attention on an unusual book:
 | `yt_transcript.py`             | YouTube/local subs → clean, de-duplicated, timestamp-free text | Python stdlib + yt-dlp CLI |
 | `yt_media.py`                  | yt-dlp front door: audio/video/subs/info downloads | Python stdlib + yt-dlp CLI |
 | `yt_audio_transcribe.py`       | Video sin subtítulos → transcript por ASR (Whisper) | Python + faster-whisper (venv) + yt-dlp |
+| `clean_markdown.py`            | Post-OCR cleanup: running-headers, soft hyphens, images, spacing | Python stdlib |
+| `split_chapters.py`            | Markdown → per-chapter files (plan or by-heading) | Python stdlib |
+| `footnotes_rebuild.py`         | Rebuild `[^N]` footnotes from OCR (per chapter, reset-aware) | Python stdlib |
+| `astro_glyphs.py`              | Astro-glyph reference + garbled-cell flagger for OCR tables | Python stdlib |
+| `docling_incremental.py`       | Docling in page batches w/ checkpoint + resume + progress | Python stdlib + docling + qpdf + poppler |
 | `README.md`                    | This file | — |
 
 ## Troubleshooting

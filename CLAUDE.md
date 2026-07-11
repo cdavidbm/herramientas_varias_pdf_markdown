@@ -43,10 +43,26 @@ Mira layout en una página de cuerpo:
 pdftotext -layout -f 20 -l 20 x.pdf - | sed -n '1,40p'
 pdfimages -list x.pdf | wc -l
 ```
-**Docling** (`docling x.pdf --to md --output ./markdown/`) si hay: multicolumna,
-tablas, fórmulas, muy ilustrado (imágenes ≫ páginas) o extracción rota.
-Si es **prosa limpia a una columna** → bisturí (§3b). Ante la duda: 1 capítulo
-con bisturí, revisa el `.md`; si quedó sucio, repite con Docling.
+**Docling** (`docling convert x.pdf --to md --output ./markdown/`) si hay:
+multicolumna, tablas, fórmulas, muy ilustrado (imágenes ≫ páginas) o extracción
+rota. Si es **prosa limpia a una columna** → bisturí (§3b). Ante la duda: 1
+capítulo con bisturí, revisa el `.md`; si quedó sucio, repite con Docling.
+
+> **Escaneo largo o equipo que se puede cerrar:** usa
+> `python3 $T/docling_incremental.py x.pdf --out ./markdown` — procesa por lotes
+> de páginas con **checkpoint + resume + progreso** (no pierde el trabajo si se
+> corta). Si el PDF ya trae capa de texto (ABBYY/nativo digital), añade `--no-ocr`
+> (acelera mucho). `--image-export-mode placeholder` evita incrustar imágenes.
+
+### 3c. Limpieza post-conversión (OCR/Docling → estudio)
+Tras convertir, dejar el markdown listo para leer/traducir:
+- `clean_markdown.py` — quita running-headers de página (sin borrar contenido
+  repetido legítimo), guion suave, saca imágenes base64 a archivo, normaliza espacios.
+- `split_chapters.py plan.json` (o `--by-heading 2`) — trocea en capítulos.
+- `footnotes_rebuild.py cap.md --apply` — reconstruye notas `[^N]` **por capítulo**
+  (marcador partido `1 3 8`→`[^138]` + definición al pie). NO en índices/bibliografía.
+- `astro_glyphs.py --flag cap.md` — señala celdas de glifos astrológicos corruptas
+  por OCR (♄♃♂ y signos) para corregirlas a mano contra la imagen; `--reference` = chuleta.
 
 ### 3b. Elegir bisturí PDF
 | Situación | Script |
