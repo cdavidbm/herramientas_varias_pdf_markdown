@@ -42,6 +42,15 @@ ocrmypdf --deskew --clean --rotate-pages --optimize 1 \
 `ocrmypdf` usará automáticamente los modelos best por `TESSDATA_PREFIX`. Extrae
 el texto (`pdftotext salida_ocr.pdf -`) y evalúa calidad con `$T/ocr_corruption.py`.
 
+> **Escaneo largo o equipo que se puede apagar:** usa
+> `python3 $T/ocr_incremental.py entrada.pdf --lang eng` en vez de `ocrmypdf`
+> directo — corre por **lotes de páginas con checkpoint + resume** (ocrmypdf a
+> secas no escribe nada hasta el final, así que una interrupción lo pierde todo).
+> Reanuda solo con volver a ejecutarlo. Modo `--mode redo` (por defecto) re-OCR-ea
+> para sustituir una capa de texto MALA (p. ej. Internet Archive) conservando la
+> imagen; `--mode skip` solo añade capa a páginas sin texto. Usa los modelos best
+> automáticamente. Ideal cuando hay que **pausar** a mitad.
+
 ## Paso 2 · Escalado para escaneos MUY malos
 
 Si el Paso 1 deja mucho texto sospechoso, procesa página por página con

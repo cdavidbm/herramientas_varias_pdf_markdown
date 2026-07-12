@@ -35,6 +35,11 @@ chars=$(pdftotext -f 1 -l 5 x.pdf - 2>/dev/null | wc -c); echo "chars/5pp=$chars
 ```
 - **Encrypted: yes** → `qpdf --decrypt x.pdf x_dec.pdf` → re-diagnostica.
 - **chars/5pp muy bajo (< ~500)** → escaneo sin texto → `ocrmypdf --skip-text x.pdf x_ocr.pdf`.
+  - **Capa de texto MALA** (OCR corrupto, p. ej. Internet Archive: griego perdido,
+    cursivas rotas) pero el escaneo es nítido → **re-OCR** con la skill `/ocr`. Para
+    escaneos largos o si hay que **pausar**, usa `python3 $T/ocr_incremental.py x.pdf
+    --lang eng` (lotes con checkpoint + resume + modelos best; `ocrmypdf` a secas no
+    es reanudable). Modo `redo` sustituye la capa mala conservando la imagen.
 - **Páginas apaisadas (ancho/alto > ~1.3)** → escaneo 2-up → `python3 $T/split_pdf_spreads.py x.pdf` (deja `x_1up.pdf`) ANTES de OCR/troceo.
 
 ### 3. ¿Bisturí o Docling?

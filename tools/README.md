@@ -189,6 +189,14 @@ heavily-annotated or glyph-bearing books (astrology, alchemy, scholarly monograp
   checkpoint + resume + progress, so a multi-hour scan survives an interruption.
   `--no-ocr` for PDFs that already have a text layer (ABBYY/born-digital) is a big
   speed-up. See its docstring for trade-offs.
+- `ocr_incremental.py PDF [--lang eng] [--mode redo|force|skip] [--batch N]` —
+  **resumable OCR.** Runs `ocrmypdf` over page **batches** with checkpoint +
+  resume + progress, so a long OCR survives a pause/crash and continues instead of
+  restarting from zero (plain `ocrmypdf` writes nothing until the very end). Auto-
+  uses `tessdata_best` if `~/.local/share/forja-tessdata` exists. Modes: `redo`
+  (re-OCR to replace a BAD text layer, e.g. Internet Archive — keeps the image),
+  `force` (rasterize+OCR), `skip` (only image-only pages). OCR is page-independent
+  so batches never split content. Produces `<stem>_ocr.pdf`; re-run = resume.
 
 ### Completeness & OUP-corruption QA (verify before translating)
 
@@ -432,6 +440,7 @@ Two things may still need attention on an unusual book:
 | `footnotes_rebuild.py`         | Rebuild `[^N]` footnotes from OCR (per chapter, reset-aware) | Python stdlib |
 | `astro_glyphs.py`              | Astro-glyph reference + garbled-cell flagger for OCR tables | Python stdlib |
 | `docling_incremental.py`       | Docling in page batches w/ checkpoint + resume + progress | Python stdlib + docling + qpdf + poppler |
+| `ocr_incremental.py`           | ocrmypdf in page batches w/ checkpoint + resume (best models) | Python stdlib + ocrmypdf + qpdf + poppler |
 | `README.md`                    | This file | — |
 
 ## Troubleshooting
