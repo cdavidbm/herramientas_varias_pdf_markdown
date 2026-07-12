@@ -197,6 +197,20 @@ heavily-annotated or glyph-bearing books (astrology, alchemy, scholarly monograp
   (re-OCR to replace a BAD text layer, e.g. Internet Archive — keeps the image),
   `force` (rasterize+OCR), `skip` (only image-only pages). OCR is page-independent
   so batches never split content. Produces `<stem>_ocr.pdf`; re-run = resume.
+    - `--sidecar-out FILE` also writes the plain OCR **text** (all pages, `\f`-
+      separated), resumable — use it when the OCR'd PDF's text layer isn't
+      pdftotext-extractable (recoded/LuraDocument scans embed text without ToUnicode).
+    - `--engine tesseract` renders each page with pdftoppm and runs tesseract
+      **directly** (needs `--sidecar-out`, text only). More accurate on italics than
+      ocrmypdf's own rasterization, which can misread e.g. *oikos*→*otkos*.
+    - Caveat: on recoded PDFs, `--mode redo` is a **no-op** (ocrmypdf keeps the
+      unrecognised text layer) — use `force` or `--engine tesseract`.
+- `ocr_text_to_markdown.py plan.json --text book_ocr.txt` — text-input sibling of
+  `pdf_sections_to_markdown.py`: slices a plain OCR **text** dump (from
+  `--sidecar-out`) into per-chapter markdown by page range — drops running-heads /
+  page numbers, de-hyphenates and reflows OCR-wrapped lines into paragraphs, marks
+  `##` headings, and splits an end-of-chapter `NOTES` block into `[^N]:` defs.
+  For scans whose PDF text layer isn't extractable.
 
 ### Completeness & OUP-corruption QA (verify before translating)
 
