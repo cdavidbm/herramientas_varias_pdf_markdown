@@ -213,6 +213,15 @@ heavily-annotated or glyph-bearing books (astrology, alchemy, scholarly monograp
   `--apply-md DIR` marks the matching lines in existing markdown as `##`/`###`
   (levelled per file). **Supervised**: `--dry-run` and eyeball the outline first — it
   proposes, you decide. Digital PDFs only (no signal on 2-font OCR scans).
+- `pdf_blocks.py book.pdf [--apply-md DIR]` — recover **block quotes** from a DIGITAL
+  pdf by **font size + indentation**. Extended quotations/verse are set off in the
+  original by a smaller/indented font that text extraction discards, so the bisturí
+  emits them as ordinary (often fragmented) body paragraphs. This reads per-line size
+  and left-x with pdfminer, groups the indented lines into quote blocks (spanning page
+  breaks), and `--apply-md` wraps the matching markdown paragraphs as one `>`
+  blockquote — **joining the fragments** and splitting a body paragraph the quote-end
+  was fused into. Auto-skips back-matter (index/notes). **Supervised** (`--dry-run`).
+  Digital PDFs only.
 - `ocr_text_to_markdown.py plan.json --text book_ocr.txt` — text-input sibling of
   `pdf_sections_to_markdown.py`: slices a plain OCR **text** dump (from
   `--sidecar-out`) into per-chapter markdown by page range — drops running-heads /
@@ -463,6 +472,8 @@ Two things may still need attention on an unusual book:
 | `astro_glyphs.py`              | Astro-glyph reference + garbled-cell flagger for OCR tables | Python stdlib |
 | `docling_incremental.py`       | Docling in page batches w/ checkpoint + resume + progress | Python stdlib + docling + qpdf + poppler |
 | `ocr_incremental.py`           | ocrmypdf in page batches w/ checkpoint + resume (best models) | Python stdlib + ocrmypdf + qpdf + poppler |
+| `pdf_headings.py`              | recover heading hierarchy by font size (digital PDFs) | pdfminer.six |
+| `pdf_blocks.py`                | recover block quotes by font size + indent (digital PDFs) | pdfminer.six |
 | `README.md`                    | This file | — |
 
 ## Troubleshooting

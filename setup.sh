@@ -34,6 +34,17 @@ else
 fi
 echo
 
+# --- 2b) Librería Python para los tools de estructura (pdf_headings / pdf_blocks) ---
+echo "2b) pdfminer.six (jerarquía de títulos y citas por tamaño de fuente)"
+if python3 -c "import pdfminer" 2>/dev/null; then
+    echo "   ✓ pdfminer.six"
+else
+    python3 -m pip install --user pdfminer.six >/dev/null 2>&1 \
+        && echo "   ✓ pdfminer.six instalado" \
+        || echo "   ✗ pdfminer.six → python3 -m pip install --user pdfminer.six"
+fi
+echo
+
 # --- 3) Skills → ~/.claude/skills --------------------------------------------
 echo "3) Skills"
 bash "$REPO/install-skills.sh" | sed 's/^/   /'
