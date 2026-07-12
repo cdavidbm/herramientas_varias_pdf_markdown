@@ -205,6 +205,14 @@ heavily-annotated or glyph-bearing books (astrology, alchemy, scholarly monograp
       ocrmypdf's own rasterization, which can misread e.g. *oikos*→*otkos*.
     - Caveat: on recoded PDFs, `--mode redo` is a **no-op** (ocrmypdf keeps the
       unrecognised text layer) — use `force` or `--engine tesseract`.
+- `pdf_headings.py book.pdf [--apply-md DIR]` — recover heading **hierarchy** from a
+  DIGITAL pdf by **font size**. Text bisturíes lose font info and flatten everything
+  to one `##` level (missing Title-Case subsections that aren't ALL-CAPS). This reads
+  per-line font sizes with pdfminer, finds the body size, and classifies larger
+  standalone short lines into tiers. Default prints the outline for review;
+  `--apply-md DIR` marks the matching lines in existing markdown as `##`/`###`
+  (levelled per file). **Supervised**: `--dry-run` and eyeball the outline first — it
+  proposes, you decide. Digital PDFs only (no signal on 2-font OCR scans).
 - `ocr_text_to_markdown.py plan.json --text book_ocr.txt` — text-input sibling of
   `pdf_sections_to_markdown.py`: slices a plain OCR **text** dump (from
   `--sidecar-out`) into per-chapter markdown by page range — drops running-heads /
