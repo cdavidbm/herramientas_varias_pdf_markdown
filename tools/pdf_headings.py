@@ -113,6 +113,7 @@ def main():
     ap.add_argument("--min-gap", type=float, default=0.4, help="min size delta over body to count as heading (pt)")
     ap.add_argument("--apply-md", type=Path, help="mark detected headings in the markdown files in this dir")
     ap.add_argument("--base-level", type=int, default=1, help="markdown level for the top heading tier (1=#, 2=##)")
+    ap.add_argument("--relevel", action="store_true", help="also re-level existing ##/### headings by font size (for flat books)")
     ap.add_argument("--dry-run", action="store_true", help="preview what --apply-md would mark, without writing")
     args = ap.parse_args()
 
@@ -128,32 +129,47 @@ def main():
             print(f"  p{p+1:>3} L{lvl} {s}pt{'*' if b else ' '} {'  '*(lvl-1)}{t}")
         return
 
-    # apply: PER-FILE relative leveling. A file's # title is set by the converter;
-    # the heading sizes present in that file are ranked -> ##, ###, … by size desc.
+    # apply: PER-FILE relative leveling. A file's `# ` title (single hash) is kept as
+    # the H1; the heading sizes present in that file are ranked -> ##, ###, … by size.
+    # default: only MARK plain lines matching a heading (good for under-marked books).
+    # --relevel: also RE-LEVEL existing ##/### headings by font size (fixes flat books
+    # where the converter dumped chapters and subsections all at ##).
     want = {}                                   # norm(text) -> font size
     for _, t, s, b, lvl in heads:
         want.setdefault(norm(t), s)
+
+    def matches(line):
+        s = line.strip()
+        if not s: return None, False
+        is_title = s.startswith("# ") and not s.startswith("## ")
+        txt = s.lstrip("#").strip()
+        was_head = s.startswith("#")
+        k = norm(txt)
+        if k in want and not is_title and (args.relevel or not was_head):
+            return (txt, want[k])
+        return None, False
+
     total = 0
     files = sorted(args.apply_md.glob("*.md"))
     for md in files:
         lines = md.read_text(encoding="utf-8").split("\n")
-        present = sorted({want[norm(l.strip())] for l in lines
-                          if l.strip() and not l.startswith("#") and norm(l.strip()) in want},
-                         reverse=True)
+        present = sorted({sz for ln in lines for txt, sz in [matches(ln)] if txt}, reverse=True)
         rank = {sz: args.base_level + 1 + i for i, sz in enumerate(present)}  # top present -> ##
         out, n = [], 0
         for ln in lines:
-            s = ln.strip()
-            if s and not s.startswith("#") and norm(s) in want and want[norm(s)] in rank:
-                out.append("#" * min(6, rank[want[norm(s)]]) + " " + s); n += 1
+            txt, sz = matches(ln)
+            if txt and sz in rank:
+                new = "#" * min(6, rank[sz]) + " " + txt
+                if new != ln: n += 1
+                out.append(new)
             else:
                 out.append(ln)
         if n and not args.dry_run:
             md.write_text("\n".join(out), encoding="utf-8")
         if n:
-            print(f"  {md.name}: +{n} headings ({'/'.join('#'*min(6,rank[z]) for z in present)})")
+            print(f"  {md.name}: {n} headings ({'/'.join('#'*min(6,rank[z]) for z in present)})")
         total += n
-    print(f"{'[dry-run] ' if args.dry_run else ''}marked {total} headings across {len(files)} files")
+    print(f"{'[dry-run] ' if args.dry_run else ''}{'re-leveled' if args.relevel else 'marked'} {total} headings across {len(files)} files")
 
 
 if __name__ == "__main__":
