@@ -124,10 +124,18 @@ def main():
 
     # apply: find each block as a run of consecutive markdown paragraphs, replace with `>`.
     # skip back-matter (index/notes/…): it is indented too, but those are not quotes.
-    BACKMATTER = re.compile(r"index|notes|bibliograph|contents|illustrations|plates|glossary", re.I)
+    BACKMATTER = re.compile(
+        r"index|[íi]ndice|notes|notas|bibliograf|contents|contenido|portada|cover|title"
+        r"|illustrations|ilustraciones|plates|l[áa]minas|glossary|glosario", re.I)
     bnorm = [(norm(t), t) for _, t in blocks if norm(t)]
     allfiles = sorted(args.apply_md.glob("*.md"))
     files = [f for f in allfiles if not BACKMATTER.search(f.name)]
+
+    NOTEDEF = re.compile(r"\[\^[^\]]+\]:")            # footnote definitions are indented too
+    def skippable(p):
+        s = p.lstrip()
+        return s.startswith(("#", ">", "*", "[")) or bool(NOTEDEF.search(p))
+
     total = 0
     for md in files:
         raw = md.read_text(encoding="utf-8")
@@ -136,13 +144,13 @@ def main():
         n = 0
         for bn, btext in bnorm:
             for i in range(len(paras)):
-                if paras[i] is None or used[i] or paras[i].lstrip().startswith(("#", ">")):
+                if paras[i] is None or used[i] or skippable(paras[i]):
                     continue
                 if not bn.startswith(norm(paras[i])[:24]):   # quick reject
                     continue
                 acc = ""
                 for j in range(i, min(i + 25, len(paras))):
-                    if paras[j] is None or paras[j].lstrip().startswith(("#", ">")):
+                    if paras[j] is None or skippable(paras[j]):
                         break
                     before = acc
                     acc = before + norm(paras[j])
