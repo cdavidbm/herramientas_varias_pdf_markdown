@@ -64,6 +64,22 @@ Tras convertir, dejar el markdown listo para leer/traducir:
 - `astro_glyphs.py --flag cap.md` — señala celdas de glifos astrológicos corruptas
   por OCR (♄♃♂ y signos) para corregirlas a mano contra la imagen; `--reference` = chuleta.
 
+### 3d. VERIFICACIÓN de completitud (obligatorio antes de traducir/publicar)
+Los bisturíes pueden **perder texto sin avisar** (años, cláusulas) según el layout;
+es invisible salvo que se mida. NO des una conversión por buena hasta verificar:
+- `check_completeness.py cap.pdf cap.md [--pages A-B] [--repair]` — alinea el
+  markdown contra `pdftotext -layout` y lista/repara el texto perdido. También
+  como bandera del conversor: `pdf_chapters_to_markdown.py plan.json --verify`.
+- Corrupción OUP/Distiller (ligaduras y diacríticos, parecen erratas pero son
+  texto roto): `fix_ligatures.py` (fi→W… con guarda de diccionario y protección de
+  nombres propios CamelCase), `fix_diacritics.py` (ı/€/acentos + NFC),
+  `clean_openings.py` (portadillas/capitulares). Todo de una vez con
+  `limpiar_academico.py ./markdown` (`--no-openings` para notas/índice).
+- Back-matter a 2 columnas roto por el bisturí → Docling + `docling_clean.py`.
+- Skills de QA: **`/qa-conversion`** (markdown vs PDF) antes de traducir;
+  **`/qa-traduccion`** (incluye detección de truncamiento por ratio de palabras)
+  después.
+
 ### 3b. Elegir bisturí PDF
 | Situación | Script |
 |---|---|

@@ -31,6 +31,11 @@ python3 ~/.claude/skills/qa-traduccion/check_translation.py \
 ```
 
 Detecta y reporta:
+- **Truncamiento:** el ratio de palabras traducido/original (🔴 si < 0.85). Es el
+  fallo más traicionero al traducir capítulos largos: el modelo se corta a mitad y
+  el `.md` sale incompleto. El español suele dar ~1.0–1.15; un ratio bajo casi
+  siempre es truncamiento u omisión. Verás también la última frase para cotejar
+  con el final del original.
 - **Notas al pie:** que el conjunto de `[^N]` del cuerpo coincida con el original
   y que cada cita tenga su definición `[^N]:` (🔴 si se rompe).
 - **Encabezados:** mismo número y misma jerarquía de niveles.

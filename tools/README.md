@@ -190,6 +190,37 @@ heavily-annotated or glyph-bearing books (astrology, alchemy, scholarly monograp
   `--no-ocr` for PDFs that already have a text layer (ABBYY/born-digital) is a big
   speed-up. See its docstring for trade-offs.
 
+### Completeness & OUP-corruption QA (verify before translating)
+
+Academic PDFs (OUP/Distiller) and the chapter bisturí introduce failures that are
+*invisible by eye* — you must measure them. Run these before trusting a
+conversion or handing it to translation.
+
+- `check_completeness.py PDF MD [--pages A-B] [--repair]` — **the safety net.**
+  Aligns the markdown against a complete `pdftotext -layout` reference and lists
+  every span the conversion **silently dropped** (years, clauses). `--repair`
+  reinserts them (with correct casing/punctuation, ligatures/diacritics cleaned).
+  `--exclude "…"` skips false positives (removed front-matter, image-wrapped
+  reading-order scrambles). Exit 1 if gaps found. Also wired into
+  `pdf_chapters_to_markdown.py --verify`.
+- `fix_ligatures.py` — repairs the OUP ligature bug where fi/ff/fl/ffi/ffl were
+  extracted as capitals `W V X Y Z` (`conWrmation` → `confirmation`).
+  Dictionary-guarded, and **protects CamelCase proper nouns** (LaVey, RavenWolf)
+  so it never turns a name into `Laffey`. `--report` to preview.
+- `fix_diacritics.py` — repairs dotless-i + displaced accent (`Martı´n` →
+  `Martín`), `€`-as-umlaut (`Wolfenb€ uttel` → `Wolfenbüttel`), space-detached
+  accents, and normalizes to NFC. Safe/deterministic.
+- `clean_openings.py` — strips scrambled chapter frontpieces (`APTER ONE / CH`)
+  and rejoins split drop-caps (`T he` → `The`). Aborts safely if the chapter is
+  already clean.
+- `docling_clean.py` — cleans Docling's own back-matter artifacts (`O Y cina` →
+  `Officina`, `R itual` → `Ritual`, `5 th` → `5th`, split accents, empty table
+  rows); `--title '# Notes'` sets the H1.
+- `limpiar_academico.py` — orchestrator: runs fix_ligatures + fix_diacritics +
+  clean_openings over a whole folder. `--no-openings` for notes/index.
+
+See the `/qa-conversion` skill for the full checklist.
+
 ## System requirements
 
 ```bash

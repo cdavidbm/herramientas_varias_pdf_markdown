@@ -322,6 +322,10 @@ def main() -> int:
     parser.add_argument('--out', type=Path, help='Output directory (overrides plan.output_dir)')
     parser.add_argument('--dry-run', action='store_true', help='Preview the plan and exit')
     parser.add_argument('--only', type=str, help='Process only sections whose title contains this substring')
+    parser.add_argument('--verify', action='store_true',
+                        help='After writing, run check_completeness.py per section to catch '
+                             'DROPPED text (the footnote-zone/paragraph heuristics can silently '
+                             'lose content on some layouts). Warns only; never modifies output.')
     args = parser.parse_args()
 
     require_tool('pdftotext')
@@ -380,6 +384,27 @@ def main() -> int:
         print(f'  wrote {out_path.name} ({wc} words, {len(md)} chars)')
 
     print(f'\nDone. {len(plans)} files written to {output_dir}')
+
+    if args.verify:
+        checker = Path(__file__).resolve().parent / 'check_completeness.py'
+        print('\nVerificando completitud contra pdftotext -layout '
+              '(texto perdido por la conversión)…')
+        flagged = 0
+        for out_path, title, pdf_path, p_start, p_end, slug in plans:
+            cmd = ['python3', str(checker), str(pdf_path), str(out_path)]
+            if p_end is not None or p_start != 1:
+                cmd += ['--pages', f'{p_start}-{p_end if p_end is not None else ""}']
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            first = (r.stdout.strip().splitlines() or [''])[0]
+            print('  ' + first)
+            if r.returncode == 1:
+                flagged += 1
+        if flagged:
+            print(f'\n  ⚠️  {flagged} sección(es) con posible texto perdido. Revisa el '
+                  f'detalle con:\n      python3 {checker.name} <pdf> <sección.md> [--pages A-B]\n'
+                  f'      y repara con --repair (excluye falsos positivos de orden de lectura).')
+        else:
+            print('  ✅ todas las secciones completas.')
     return 0
 
 

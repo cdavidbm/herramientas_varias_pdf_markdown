@@ -101,6 +101,36 @@ si quedó sucio, repite con Docling. Anuncia qué elegiste.
 **tú redactas el `plan.json`** (esquema abajo) y luego corres el conversor con
 `--dry-run` antes del run real.
 
+### Paso 3c · Post-limpieza y VERIFICACIÓN (obligatorio antes de traducir)
+
+La conversión no termina al escribir el `.md`. Dos comprobaciones que atrapan
+fallos invisibles a simple vista (aprendidas a las malas):
+
+1. **Completitud — ¿se perdió texto?** Los bisturíes pueden **dejar caer trozos
+   sin avisar** (años, cláusulas) según el layout. Verifica SIEMPRE:
+   ```bash
+   python3 $T/pdf_chapters_to_markdown.py plan.json --verify     # lo hace al vuelo
+   # o suelto, por sección:
+   python3 $T/check_completeness.py cap.pdf ./markdown/cap.md [--repair]
+   ```
+2. **Corrupción de caracteres** (PDF académicos OUP/Distiller): ligaduras como
+   mayúsculas (conWrmation→confirmation) y diacríticos rotos (Wolfenb€ uttel,
+   Martı´n). Límpialas de una pasada:
+   ```bash
+   python3 $T/limpiar_academico.py ./markdown        # ligaduras+diacríticos+aperturas
+   ```
+3. Portadillas revueltas ("APTER ONE / CH") y capitulares partidas ("T he"): las
+   arregla `clean_openings.py` (incluido en el orquestador).
+
+Para el checklist completo usa la skill **[[qa-conversion]]**. **No pases a
+NotebookLM ni a [[traducir-md]] hasta que la verificación de completitud dé 0
+lagunas** (salvo falsos positivos justificados como front-matter que quitaste).
+
+> **Back-matter a 2 columnas (notas finales, índice):** si el bisturí las
+> entremezcla, escala a **Docling** (ordena columnas y recupera la numeración de
+> notas) y luego limpia sus artefactos con `python3 $T/docling_clean.py in.md
+> out.md --title '# Notes'`.
+
 ### Paso 4 · EPUB
 
 ```bash

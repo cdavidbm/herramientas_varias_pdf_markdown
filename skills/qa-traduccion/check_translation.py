@@ -60,6 +60,8 @@ def analyze(path: Path) -> dict:
         "images": IMAGE.findall(text),
         "numbers": re.findall(r'\d+', text),
         "paras": [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()],
+        "words": len(text.split()),
+        "last": next((p.strip() for p in reversed(re.split(r'\n\s*\n', text)) if p.strip()), ""),
     }
 
 
@@ -91,6 +93,18 @@ def main() -> int:
         sin_ref = set(t["footnote_defs"]) - set(t["footnote_refs"])
         if sin_def: problemas.append(f"Notas citadas sin definición [^N]: {sorted(sin_def)}")
         if sin_ref: avisos.append(f"Definiciones sin cita en el cuerpo: {sorted(sin_ref)}")
+
+    # 1b. Recuento de palabras: detecta TRUNCAMIENTO (el fallo más traicionero de
+    #     traducir capítulos largos con un solo pase: el modelo se corta a mitad).
+    ratio = t["words"] / max(1, o["words"])
+    print(f"Palabras:               original {o['words']:>5} | traducido {t['words']:>5}  (ratio {ratio:.2f})")
+    if ratio < 0.85:
+        problemas.append(f"Traducción MUY corta (ratio {ratio:.2f}): probable TRUNCAMIENTO u "
+                         f"omisiones. El español suele igualar o superar (~1.0–1.15) al inglés. "
+                         f"Última frase del traducido: «{t['last'][:80]}…» — compárala con el final "
+                         f"del original.")
+    elif ratio > 1.30:
+        avisos.append(f"Traducción inusualmente larga (ratio {ratio:.2f}): ¿añadidos o duplicación?")
 
     # 2. Encabezados: mismo número y misma jerarquía de niveles
     print(f"Encabezados:            original {o['n_headings']:>3} | traducido {t['n_headings']:>3}")
