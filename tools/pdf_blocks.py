@@ -184,7 +184,14 @@ def main():
                 if used[i]:
                     break
         if n:
-            newraw = "\n\n".join(p for p in paras if p is not None)
+            # merge a quote the detection split in two: `> …` then `> <lowercase>` (continuation)
+            kept, cont = [], re.compile(r">\s+[a-zà-ÿ]")
+            for p in (q for q in paras if q is not None):
+                if kept and kept[-1].startswith("> ") and cont.match(p):
+                    kept[-1] = kept[-1].rstrip() + " " + p[1:].strip()
+                else:
+                    kept.append(p)
+            newraw = "\n\n".join(kept)
             if not args.dry_run:
                 md.write_text(newraw, encoding="utf-8")
             print(f"  {md.name}: {n} blockquote(s)")
