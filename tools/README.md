@@ -116,6 +116,28 @@ pointing at them directly, or copy the folder next to a new book.
   `"Notas"`); each note is `[N]\n<body lines>` with trailing `<<` back-link
   stripped; numbering resets at `[1]` to mark group boundaries.
 
+### LaTeX → per-book Markdown (astrology classics in LaTeX)
+
+- `latex_to_markdown.py` — for books that already ship as **LaTeX** with a
+  per-book master doing `\input{part/section}` (e.g. the janegca *latex-valens*
+  edition of Vettius Valens, or similar Hellenistic/astrology editions). Expands
+  the `\input`s in order, then:
+    - maps **starfont/wasysym** symbols (`\Sun`, `\Saturn`, `\Aries`, `\Trine`…)
+      to Unicode (☉ ♄ ♈ △…) so they render in markdown/NotebookLM;
+    - reroutes `\includegraphics{charts/NAME}` figures to raster PNGs under
+      `--imgdir` (convert the chart PDFs/EPS first with
+      `pdftoppm -png -r 150 -singlefile chart.pdf out`);
+    - strips study-noise commands (`\index`, `\marginnote`/`\mn`, `\secbr`,
+      `\S`, `figure/wrapfigure/center` wrappers) and unwraps `\hl{…}`;
+    - runs `pandoc -f latex -t gfm` and un-escapes the translator's
+      `<…>`/`[…]` restitution markup.
+  Usage: `python3 latex_to_markdown.py bookNN.tex --root <latex_dir>
+  --out bookNN.md [--imgdir ../imagenes/charts]`. Extend `SYM` or the
+  strip-list if a book uses other custom symbols/macros. For a **Spanish PDF**
+  from the same LaTeX, translate the `.tex` in place (preserve every command,
+  `\index`, symbols, page markers) and compile with **LuaLaTeX + `fontspec`**
+  (not `inputenc`/`fontenc T1`, which mangle `º`→`ž` under lualatex).
+
 ### YouTube → clean transcript / media (yt-dlp)
 
 - `yt_transcript.py` — **YouTube subtitles → clean, timestamp-free text**, the
