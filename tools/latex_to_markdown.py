@@ -62,9 +62,13 @@ def preprocess(tex, imgdir):
     # símbolos: \Sun\xspace , \Sun\, , \Sun{} , \Sun<no-alpha>
     for name, ch in SYM.items():
         tex = re.sub(r"\\"+name+r"(?:\\xspace|\\,|\\ |\{\})?(?![A-Za-z])", ch, tex)
-    # figuras: \includegraphics[..]{charts/NAME} -> ruta a PNG
-    tex = re.sub(r"\\includegraphics(?:\[[^\]]*\])?\{charts/([^}]+)\}",
-                 lambda m: r"\includegraphics{"+imgdir+"/"+m.group(1)+r".png}", tex)
+    # figuras: \includegraphics[..]{DIR/NAME} -> imgdir/NAME.png (cualquier subcarpeta:
+    # charts/, diagrams/…; tolera espacios y saltos de línea dentro de las llaves)
+    def _img(m):
+        name = m.group(1).strip().split("/")[-1]                 # basename
+        name = re.sub(r"\.(pdf|png|eps|jpe?g)$", "", name, flags=re.I)  # quita extensión
+        return r"\includegraphics{"+imgdir+"/"+name+r".png}"
+    tex = re.sub(r"\\includegraphics\s*(?:\[[^\]]*\])?\s*\{\s*([^}]+?)\s*\}", _img, tex)
     # envoltorios de figura que pandoc no entiende (dejar el includegraphics dentro)
     tex = re.sub(r"\\begin\{wrapfigure\}(\[[^\]]*\])?\{[^}]*\}\{[^}]*\}", "", tex)
     tex = re.sub(r"\\end\{wrapfigure\}", "", tex)
@@ -76,6 +80,9 @@ def preprocess(tex, imgdir):
     # borrar comandos de maquetación con argumento balanceado (incl. notas al margen)
     for cmd in ("index","marginnote","mn","label","caption","captionsetup"):
         tex = strip_balanced(tex, cmd)
+    # reglas de tabla que pandoc no necesita (dejan celdas basura tipo "2-4")
+    tex = re.sub(r"\\(Xhline|cline)\{[^}]*\}", "", tex)
+    tex = re.sub(r"\\approx\b", "≈", tex)
     # símbolo de sección  \S{8.6} / \S6.6 -> §…
     tex = re.sub(r"\\S\{([^}]*)\}", r"§\1", tex)
     tex = re.sub(r"\\S(?![A-Za-z{])", "§", tex)
