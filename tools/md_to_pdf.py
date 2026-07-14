@@ -46,6 +46,7 @@ def preamble(title, author, lang, toc):
 \usepackage{starfont}                                  %% glifos astrológicos
 \usepackage{newunicodechar}                            %% mapea ☉♄♈ -> starfont
 \usepackage{graphicx}
+\usepackage{pdflscape}                                  %% páginas apaisadas para tablas anchas
 \usepackage{longtable,booktabs,array}                  %% tablas de pandoc
 \usepackage{amssymb}
 %% --- geometría idéntica a las ediciones janegca (Valens/Doroteo) ---
@@ -165,6 +166,23 @@ def wrap_table_columns(tex):
         return r"\begin{longtable}[]{@{}" + cols + r"@{}}"
     return re.sub(r"\\begin\{longtable\}\[\]\{@\{\}([lcr]+)@\{\}\}", repl, tex)
 
+def typeset_wide_tables(tex, min_cols=8):
+    """Las tablas con muchas columnas (≥ min_cols) no caben legibles en vertical.
+    Envuelve cada longtable ancha en una página apaisada (`landscape`) y a cuerpo
+    `\\scriptsize`. Debe correr DESPUÉS de wrap_table_columns (que ya reparte el
+    ancho): en apaisado `\\linewidth` es mayor, así que las columnas se ensanchan solas."""
+    def _wrap(m):
+        tbl = m.group(0)
+        head = tbl.split("\n", 1)[0]
+        ncol = head.count(r"\arraybackslash}p{")            # tablas ya envueltas
+        if ncol == 0:                                        # spec cruda {@{}llll@{}}
+            spec = re.search(r"\{@\{\}(.*?)@\{\}\}", head)
+            ncol = len(re.findall(r"[lcrp]", spec.group(1))) if spec else 0
+        if ncol >= min_cols:
+            return "\\begin{landscape}\n{\\scriptsize\n" + tbl + "\n}\n\\end{landscape}"
+        return tbl
+    return re.sub(r"\\begin\{longtable\}.*?\\end\{longtable\}", _wrap, tex, flags=re.S)
+
 def _attachable(line):
     """¿Se puede colgar una nota reubicada al final de esta línea? Sí en prosa o verso;
     NO en encabezados, tablas, código NI en definiciones de nota/enlace `[^x]:`/`[x]:`
@@ -215,7 +233,7 @@ def md_to_latex(mdfile, role):
         tex = wrap_table_columns(star_sections(make_unnumbered(tex)))
     elif role == "front":                    # secciones sin nº + tablas que envuelven
         tex = wrap_table_columns(star_sections(tex))
-    return tex
+    return typeset_wide_tables(tex)          # tablas anchas -> apaisado + cuerpo pequeño
 
 def main():
     ap = argparse.ArgumentParser(description="markdown de estudio -> PDF bello (memoir/starfont)")
