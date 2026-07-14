@@ -48,8 +48,7 @@ def preamble(title, author, lang, toc, graphicspath=""):
 \usepackage{starfont}                                  %% glifos astrológicos
 \usepackage{newunicodechar}                            %% mapea ☉♄♈ -> starfont
 \usepackage{graphicx}
-\usepackage[export]{adjustbox}                          %% max width/height en \includegraphics
-\setkeys{Gin}{max width=\linewidth, max height=0.85\textheight, keepaspectratio}
+\usepackage[export]{adjustbox}                          %% claves max width/height en \includegraphics
 %(gpath)s
 \usepackage{pdflscape}                                  %% páginas apaisadas para tablas anchas
 \usepackage{longtable,booktabs,array}                  %% tablas de pandoc
@@ -179,6 +178,18 @@ def wrap_table_columns(tex):
         return r"\begin{longtable}[]{@{}" + cols + r"@{}}"
     return re.sub(r"\\begin\{longtable\}\[\]\{@\{\}([lcr]+)@\{\}\}", repl, tex)
 
+def center_images(tex, maxw=r"0.72\linewidth"):
+    """Centra cada imagen y le fija un tamaño máximo para que NO desborde el margen.
+    Con `adjustbox[export]` la clave `max width` debe ir en las opciones de cada
+    `\\includegraphics` (un `\\setkeys{Gin}{max width=...}` global NO se aplica). `max
+    width`/`max height` solo reducen: las imágenes pequeñas conservan su tamaño natural."""
+    def repl(m):
+        path = m.group(1)
+        return (r"\begin{center}\includegraphics[max width=%s,"
+                r"max height=0.8\textheight,keepaspectratio]{%s}\end{center}"
+                % (maxw, path))
+    return re.sub(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}", repl, tex)
+
 def typeset_wide_tables(tex, min_cols=8):
     """Las tablas con muchas columnas (≥ min_cols) no caben legibles en vertical.
     Envuelve cada longtable ancha en una página apaisada (`landscape`) y a cuerpo
@@ -247,7 +258,7 @@ def md_to_latex(mdfile, role):
         tex = wrap_table_columns(star_sections(make_unnumbered(tex)))
     elif role == "front":                    # secciones sin nº + tablas que envuelven
         tex = wrap_table_columns(star_sections(tex))
-    return typeset_wide_tables(tex)          # tablas anchas -> apaisado + cuerpo pequeño
+    return typeset_wide_tables(center_images(tex))   # imágenes centradas/acotadas; tablas anchas apaisadas
 
 def main():
     ap = argparse.ArgumentParser(description="markdown de estudio -> PDF bello (memoir/starfont)")
