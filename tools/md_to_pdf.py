@@ -173,8 +173,8 @@ def wrap_table_columns(tex):
 def typeset_wide_tables(tex, min_cols=8):
     """Las tablas con muchas columnas (≥ min_cols) no caben legibles en vertical.
     Envuelve cada longtable ancha en una página apaisada (`landscape`) y a cuerpo
-    `\\scriptsize`. Debe correr DESPUÉS de wrap_table_columns (que ya reparte el
-    ancho): en apaisado `\\linewidth` es mayor, así que las columnas se ensanchan solas."""
+    ~7 pt. Debe correr DESPUÉS de wrap_table_columns (que ya reparte el ancho): en
+    apaisado `\\linewidth` es mayor, así que las columnas se ensanchan solas."""
     def _wrap(m):
         tbl = m.group(0)
         head = tbl.split("\n", 1)[0]
@@ -183,7 +183,8 @@ def typeset_wide_tables(tex, min_cols=8):
             spec = re.search(r"\{@\{\}(.*?)@\{\}\}", head)
             ncol = len(re.findall(r"[lcrp]", spec.group(1))) if spec else 0
         if ncol >= min_cols:
-            return "\\begin{landscape}\n{\\scriptsize\n" + tbl + "\n}\n\\end{landscape}"
+            return ("\\begin{landscape}\n{\\fontsize{7pt}{8.4pt}\\selectfont\n"
+                    + tbl + "\n}\n\\end{landscape}")
         return tbl
     return re.sub(r"\\begin\{longtable\}.*?\\end\{longtable\}", _wrap, tex, flags=re.S)
 
