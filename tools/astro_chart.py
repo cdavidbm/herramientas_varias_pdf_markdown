@@ -138,11 +138,11 @@ def build_tex(spec, scale):
         if not cmd: sys.exit(f"Planeta no reconocido: {name!r}")
         lon = parse_lon(pos); pl.append((screen(lon), cmd, deg_label(lon)))
     pl.sort()
-    radii, last = [], None
-    for ang, _, _ in pl:                          # alterna radio si dos quedan a <7° en pantalla
-        r = 0.72
-        if last is not None and abs(ang - last) < 7: r = 0.60 if radii[-1] == 0.72 else 0.72
-        radii.append(r); last = ang
+    LEVELS = [0.74, 0.62, 0.50]                   # radios para des-solapar cúmulos (stelliums)
+    radii, last, lvl = [], None, 0
+    for ang, _, _ in pl:
+        lvl = (lvl + 1) % len(LEVELS) if (last is not None and (ang - last) < 13) else 0
+        radii.append(LEVELS[lvl]); last = ang
     for (ang, cmd, lab), r in zip(pl, radii):
         L.append(r"\node at (%.2f:%.2f) {\%s\,\tiny{%s}};" % (ang, r, cmd, lab))
     # suertes
