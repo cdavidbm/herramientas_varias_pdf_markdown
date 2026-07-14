@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""md_to_pdf.py — Convierte markdown de estudio (suite La Forja) a un **PDF bello**,
+con la misma tipografía clásica que las ediciones LaTeX de Valens/Doroteo: clase
+`memoir`, estilo de capítulo *bringhurst*, `fontspec`+LuaLaTeX (Unicode, ordinales,
+macrones, griego) y los **glifos astrológicos** (☉ ♄ ♈ △…) renderizados con la fuente
+`starfont` vía `newunicodechar`.
+
+Cada archivo `.md` se trata como un **capítulo** (su `#` de nivel 1 → `\\chapter`).
+Pasa varios en el orden deseado para armar un libro; `##`, `###`, notas `[^N]`, citas
+en verso, tablas, negritas e imágenes se preservan (vía pandoc).
+
+Uso:
+    python3 md_to_pdf.py salida.pdf cap01.md cap02.md ... \\
+            [--title "Título"] [--author "Autor"] [--lang spanish] [--toc] [--keep-tex]
+
+Requiere: pandoc, TeX Live con memoir, fontspec, starfont, wasysym, babel-<lang>,
+newunicodechar; motor **lualatex**. Ver README/CLAUDE.md de La Forja.
+"""
+import argparse, pathlib, subprocess, sys, tempfile, shutil, re
+
+# Glifos Unicode astrológicos -> comando starfont (inverso del SYM de latex_to_markdown)
+UNI2CMD = {
+    "☉":"Sun","☽":"Moon","☿":"Mercury","♀":"Venus","⊕":"Earth","♂":"Mars",
+    "♃":"Jupiter","♄":"Saturn","♅":"Uranus","♆":"Neptune","♇":"Pluto",
+    "♈":"Aries","♉":"Taurus","♊":"Gemini","♋":"Cancer","♌":"Leo","♍":"Virgo",
+    "♎":"Libra","♏":"Scorpio","♐":"Sagittarius","♑":"Capricorn","♒":"Aquarius","♓":"Pisces",
+    "☌":"Conjunction","☍":"Opposition","△":"Trine","□":"Square","⚹":"Sextile",
+    "☊":"Ascnode","☋":"Descnode","℞":"Retrograde","⊗":"Fortune",
+}
+
+def preamble(title, author, lang, toc):
+    unichars = "\n".join(
+        r"\newunicodechar{%s}{{\normalfont\%s}}" % (u, c) for u, c in UNI2CMD.items())
+    titleblock = ""
+    if title:
+        authorline = (r"{\small\scshape %s} \\" % author) if author else ""
+        titleblock = (
+            "\\begin{titlingpage}\n\\centering\n"
+            "{\\Huge\\scshape \\textsl{%s}\\\\ [1in]}\n%s\n"
+            "\\end{titlingpage}\n" % (title, authorline))
+    toctex = "\\tableofcontents\\clearpage\n" if toc else ""
+    return r"""\documentclass[extrafontsizes,ebook,12pt,oneside]{memoir}
+\usepackage{fontspec}                                  %% LuaLaTeX: Unicode nativo (no inputenc/T1)
+\usepackage[shorthands=off, greek, english, main=%(lang)s]{babel}
+\usepackage{wasysym}
+\usepackage{starfont}                                  %% glifos astrológicos
+\usepackage{newunicodechar}                            %% mapea ☉♄♈ -> starfont
+\usepackage{graphicx}
+\usepackage{longtable,booktabs,array}                  %% tablas de pandoc
+\usepackage{amssymb}
+%% --- geometría idéntica a las ediciones janegca (Valens/Doroteo) ---
+\usepackage[top=2cm, bottom=2cm, outer=2.5cm, inner=2.5cm,
+            heightrounded, marginparwidth=2.3cm, marginparsep=0.5cm]{geometry}
+\usepackage[colorlinks=true, linkcolor=black, urlcolor=blue, unicode]{hyperref}
+
+%% --- estilo de capítulo bringhurst (idéntico a Valens/Doroteo) ---
+\makechapterstyle{bringhurst}{%%
+  \renewcommand{\chapterheadstart}{}
+  \renewcommand{\chaptername}{}
+  \renewcommand{\printchaptername}{}
+  \renewcommand{\chapternamenum}{}
+  \renewcommand{\printchapternum}{}
+  \renewcommand{\afterchapternum}{}
+  \renewcommand{\printchaptertitle}[1]{\raggedright\larger\scshape\MakeLowercase{##1}}
+  \renewcommand{\afterchaptertitle}{\vskip 0.3em \hrule\vskip\onelineskip}
+}
+\setsecheadstyle{\bfseries\raggedright}
+\setsubsecheadstyle{\bfseries\raggedright}
+\setsubsubsecheadstyle{\small\bfseries}
+\nonzeroparskip
+\setlength{\parindent}{1.5em}
+
+%% --- titulillo: nombre del capítulo (con su nº) CENTRADO y pequeño; folio ABAJO ---
+\makepagestyle{forja}
+\makeoddhead{forja}{}{\footnotesize\scshape\rightmark}{}
+\makeevenhead{forja}{}{\footnotesize\scshape\rightmark}{}
+\makeoddfoot{forja}{}{\thepage}{}
+\makeevenfoot{forja}{}{\thepage}{}
+\makeheadrule{forja}{0pt}{0pt}
+%% marca = «N. Título» (el nº solo si el capítulo está numerado); las secciones no pisan
+\renewcommand{\chaptermark}[1]{\markboth
+  {\ifnum\value{chapter}>0 \thechapter.\ \fi #1}{\ifnum\value{chapter}>0 \thechapter.\ \fi #1}}
+\renewcommand{\sectionmark}[1]{}
+
+%% notas al pie: numeración corrida por página
+\usepackage{perpage}\MakePerPage{footnote}
+\renewcommand{\footnoterule}{\kern -3pt \hrule width 0.4\columnwidth \kern 2.6pt}
+
+%% pandoc: helpers que a veces exige el fragmento LaTeX
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\passthrough}[1]{#1}
+
+%% glifos astrológicos Unicode -> starfont
+%(unichars)s
+
+\begin{document}
+\chapterstyle{bringhurst}
+\pagestyle{forja}             %% titulillo centrado y pequeño; folio abajo
+\frontmatter
+\pagenumbering{gobble}
+%(titleblock)s
+\pagenumbering{roman}
+%(toctex)s""" % dict(lang=lang, unichars=unichars, titleblock=titleblock, toctex=toctex)
+
+# Detección del prefijo «Capítulo N —» / «Chapter N —» en el encabezado H1
+CHAP_RE = re.compile(r"^#\s+(?:Cap[íi]tulo|Chapter)\s+\S+\s*(?:—|–|-{1,3}|\.)", re.I)
+PREF_RE = re.compile(r"^\s*(?:Cap[íi]tulo|Chapter)\s+\S+\s*(?:—|–|-{1,3}|\.)\s*", re.I)
+
+def classify_roles(files):
+    """Reparte los archivos: los que empiezan «Capítulo N» son capítulos numerados;
+    los de antes del primero = front-matter (prefacio, introducción); los no-numerados
+    posteriores = apéndices. Así memoir numera solo los capítulos reales (1..N)."""
+    numbered = []
+    for f in files:
+        h1 = next((ln for ln in pathlib.Path(f).read_text(encoding="utf-8",
+                   errors="replace").splitlines() if ln.startswith("# ")), "")
+        numbered.append(bool(CHAP_RE.match(h1)))
+    fi = numbered.index(True) if any(numbered) else len(files)
+    return ["front" if i < fi else ("chapter" if n else "appendix")
+            for i, n in enumerate(numbered)]
+
+def make_unnumbered(tex):
+    """Convierte el primer \\chapter de un fragmento en \\chapter* (sin número) pero
+    lo mantiene en el índice y en el titulillo. Para apéndices."""
+    m = re.search(r"\\chapter(?:\[[^\]]*\])?\{((?:[^{}]|\{[^{}]*\})*)\}", tex)
+    if not m: return tex
+    t = m.group(1)
+    repl = (r"\chapter*{%s}\addcontentsline{toc}{chapter}{%s}\markboth{%s}{%s}"
+            % (t, t, t, t))
+    return tex[:m.start()] + repl + tex[m.end():]
+
+def star_sections(tex):
+    """Vuelve sin numerar las secciones de un fragmento (front-matter/apéndices), para
+    que no arrastren el contador de capítulo (p.ej. «25.11» en un apéndice sin número)."""
+    return re.sub(r"\\(section|subsection|subsubsection|paragraph)\{",
+                  r"\\\1*{", tex)
+
+def wrap_table_columns(tex):
+    """Hace que las columnas de ancho natural de pandoc (`{@{}ll@{}}`) envuelvan al
+    ancho de página, repartiéndolo por igual. Evita que las tablas anchas (glosarios)
+    se salgan del margen. Solo toca las de tipo l/c/r (no las que ya llevan p{})."""
+    def repl(m):
+        n = len(m.group(1))
+        w = r"\dimexpr(\linewidth-%d\tabcolsep)/%d\relax" % (2 * n, n)
+        cols = "".join(r">{\raggedright\arraybackslash}p{%s}" % w for _ in range(n))
+        return r"\begin{longtable}[]{@{}" + cols + r"@{}}"
+    return re.sub(r"\\begin\{longtable\}\[\]\{@\{\}([lcr]+)@\{\}\}", repl, tex)
+
+def _attachable(line):
+    """¿Se puede colgar una nota reubicada al final de esta línea? Sí en prosa o verso;
+    NO en encabezados, tablas, código NI en definiciones de nota/enlace `[^x]:`/`[x]:`
+    (colgarla ahí crearía una nota autorreferente -> \\footnote recursivo -> bucle)."""
+    s = line.strip()
+    if not s or s[0] in "#|`": return False
+    if s.startswith("["): return False           # definición de nota o de enlace
+    return True
+
+def relocate_heading_footnotes(text):
+    """Una nota `[^x]` en una línea de encabezado rompe LaTeX (\\footnote dentro de
+    \\chapter/\\section + hyperref). La reubica a la primera línea de prosa/verso
+    siguiente; si no hay ninguna antes de las definiciones, la deja en el título."""
+    fnref = re.compile(r"\[\^[^\]]+\]")
+    out, pending = [], []
+    for line in text.split("\n"):
+        m = re.match(r"^(#{1,6}\s+.*?)\s*((?:\[\^[^\]]+\])+)\s*$", line)
+        if m:                                    # encabezado con nota(s) al final
+            out.append(m.group(1)); pending += fnref.findall(m.group(2))
+        elif pending and _attachable(line):
+            out.append(line.rstrip() + "".join(pending)); pending = []
+        else:
+            out.append(line)
+    if pending:                                  # nunca hubo dónde colgarla: al último encabezado
+        for i in range(len(out) - 1, -1, -1):
+            if out[i].startswith("#"):
+                out[i] = out[i].rstrip() + " " + "".join(pending); break
+    return "\n".join(out)
+
+def md_to_latex(mdfile, role):
+    """Un .md -> fragmento LaTeX vía pandoc, según su rol (front/chapter/appendix).
+    En capítulos numerados quita el literal «Capítulo N —» del título (memoir pone el
+    número); en apéndices convierte el \\chapter en \\chapter* (sin número)."""
+    src = relocate_heading_footnotes(pathlib.Path(mdfile).read_text(encoding="utf-8"))
+    if role == "chapter":                    # memoir numera; quitar el prefijo literal
+        lines = src.split("\n")
+        for i, ln in enumerate(lines):
+            if ln.startswith("# "):
+                lines[i] = "# " + PREF_RE.sub("", ln[2:]); break
+        src = "\n".join(lines)
+    r = subprocess.run(
+        ["pandoc", "-f", "gfm", "-t", "latex", "--top-level-division=chapter", "--wrap=none"],
+        input=src, capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.stderr.write(f"pandoc falló en {mdfile}:\n{r.stderr[:1500]}\n"); sys.exit(1)
+    tex = r.stdout
+    if role == "appendix":                   # capítulo sin nº + secciones sin nº + tablas que envuelven
+        tex = wrap_table_columns(star_sections(make_unnumbered(tex)))
+    elif role == "front":                    # secciones sin nº + tablas que envuelven
+        tex = wrap_table_columns(star_sections(tex))
+    return tex
+
+def main():
+    ap = argparse.ArgumentParser(description="markdown de estudio -> PDF bello (memoir/starfont)")
+    ap.add_argument("out", help="PDF de salida")
+    ap.add_argument("md", nargs="+", help="archivos .md, en el orden del libro (un capítulo c/u)")
+    ap.add_argument("--title", default="", help="título de portada (si se omite, sin portada)")
+    ap.add_argument("--author", default="", help="autor/traductor para la portada")
+    ap.add_argument("--lang", default="spanish", help="idioma babel principal (def: spanish)")
+    ap.add_argument("--toc", action="store_true", help="incluir índice general")
+    ap.add_argument("--keep-tex", action="store_true", help="conservar el .tex intermedio junto al PDF")
+    a = ap.parse_args()
+
+    roles = classify_roles(a.md)
+    texs = [md_to_latex(m, r) for m, r in zip(a.md, roles)]
+    front = "\n\n".join(t for t, r in zip(texs, roles) if r == "front")
+    mainb = "\n\n".join(t for t, r in zip(texs, roles) if r != "front")
+    doc = (preamble(a.title, a.author, a.lang, a.toc)
+           + front + "\n\\mainmatter\n" + mainb + "\n\\end{document}\n")
+
+    out = pathlib.Path(a.out).resolve()
+    with tempfile.TemporaryDirectory() as td:
+        td = pathlib.Path(td)
+        tex = td / (out.stem + ".tex")
+        tex.write_text(doc, encoding="utf-8")
+        for i in (1, 2):                       # 2 pasadas: TOC/refs
+            try:
+                r = subprocess.run(["lualatex", "-interaction=nonstopmode", tex.name],
+                                   cwd=td, capture_output=True, text=True, timeout=300)
+            except subprocess.TimeoutExpired:  # red de seguridad: aborta un posible bucle
+                sys.stderr.write("lualatex superó 300s (posible bucle en el markdown: "
+                                 "¿nota autorreferente, tabla o bloque irrompible?). Abortado.\n")
+                if a.keep_tex: shutil.copy(tex, out.with_suffix(".tex"))
+                sys.exit(2)
+        pdf = td / (out.stem + ".pdf")
+        if not pdf.exists():
+            tail = "\n".join(l for l in r.stdout.splitlines() if l.startswith("!"))[:2000]
+            sys.stderr.write(f"lualatex no produjo PDF. Errores:\n{tail or r.stdout[-1500:]}\n")
+            if a.keep_tex: shutil.copy(tex, out.with_suffix(".tex"))
+            sys.exit(1)
+        shutil.copy(pdf, out)
+        if a.keep_tex: shutil.copy(tex, out.with_suffix(".tex"))
+    info = subprocess.run(["pdfinfo", str(out)], capture_output=True, text=True).stdout
+    pages = next((l.split()[-1] for l in info.splitlines() if l.startswith("Pages")), "?")
+    print(f"  {out.name}: {pages} páginas ({len(a.md)} capítulos)")
+
+if __name__ == "__main__":
+    main()

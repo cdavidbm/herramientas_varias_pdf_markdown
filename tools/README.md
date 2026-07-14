@@ -138,6 +138,28 @@ pointing at them directly, or copy the folder next to a new book.
   `\index`, symbols, page markers) and compile with **LuaLaTeX + `fontspec`**
   (not `inputenc`/`fontenc T1`, which mangle `º`→`ž` under lualatex).
 
+### Markdown → beautiful PDF (memoir/bringhurst, matching the LaTeX classics)
+
+- `md_to_pdf.py` — turns per-chapter study markdown (La Forja output) into a
+  **print-ready PDF** with the SAME typography as the janegca LaTeX editions
+  (Valens/Doroteo): `memoir` class, *bringhurst* chapter style, `fontspec`+LuaLaTeX
+  (Unicode, ordinals, macrons, Greek), astrological glyphs (☉ ♄ ♈ △…) rendered via
+  `starfont`+`newunicodechar`, `geometry` margins (2 cm / 2.5 cm), page number at the
+  foot, small centered running head. Each `.md` = one chapter (`#` → `\chapter`);
+  `##`/`###`, `[^N]` notes, verse quotes, tables, bold, images all pass through pandoc.
+  - **Auto-numbering:** files whose H1 is `# Capítulo N — …` / `# Chapter N — …` become
+    numbered chapters (memoir supplies the number; the literal prefix is stripped);
+    files before the first numbered one are unnumbered front-matter; trailing
+    non-numbered files are unnumbered appendices (with their sections unnumbered and
+    wide glossary tables wrapped to the margin).
+  - Usage: `python3 md_to_pdf.py out.pdf ch01.md ch02.md … [--title "…"]
+    [--author "…"] [--lang spanish] [--toc] [--keep-tex]` (pass files in book order).
+  - **Two known footguns, both handled:** a `[^n]` note ON a heading line is relocated
+    to the first prose/verse line (a self-referential footnote → infinite lualatex loop
+    → RAM exhaustion → machine freeze); and a 300 s per-pass timeout aborts any other
+    runaway. On low-RAM machines compile under a cgroup cap:
+    `systemd-run --user --scope -p MemoryMax=3G -p MemorySwapMax=0 python3 md_to_pdf.py …`.
+
 ### YouTube → clean transcript / media (yt-dlp)
 
 - `yt_transcript.py` — **YouTube subtitles → clean, timestamp-free text**, the
