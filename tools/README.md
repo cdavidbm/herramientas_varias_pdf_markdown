@@ -160,30 +160,6 @@ pointing at them directly, or copy the folder next to a new book.
     runaway. On low-RAM machines compile under a cgroup cap:
     `systemd-run --user --scope -p MemoryMax=3G -p MemorySwapMax=0 python3 md_to_pdf.py …`.
 
-### Astrology birth chart → PDF/PNG (whole-sign wheel, TikZ)
-
-- `astro_chart.py` — draws a **whole-sign (Hellenistic) chart wheel** in TikZ and compiles
-  it to PDF/PNG, with the same look as the janegca chart figures: two zodiac rings,
-  `starfont` sign glyphs, houses 1–12 (house I = the Ascendant's sign), planets placed by
-  ecliptic longitude with their degree, red Asc / blue MC axes, and Lots (Fortune ⊗,
-  Spirit, generic). Positions are given as absolute longitude `0–360` (0 = 0° Aries) or as
-  `"Signo grado"` (`"Libra 18"`, `"Pisces 6 50"`, `"Pisces 6°50'"`, `"♎ 18"`); sign/planet
-  names accepted in **ES and EN**.
-  - **Phase 1 — from given positions:**
-    - JSON: `python3 astro_chart.py out.pdf --spec chart.json [--png]` where the JSON is
-      `{"title","asc","mc","planets":{…},"lots":{…}}`.
-    - Direct CLI: `python3 astro_chart.py out.pdf --asc "Libra 18"
-      --planet Sol="Piscis 6 50" --planet Luna="Libra 18" --lot Fortuna="Escorpio 12"
-      --title "…" --png`.
-    - `--demo` renders a built-in validation chart (Dorotheus III.1; matches `charts/3_1_01`).
-  - **Phase 2 — from birth data:** `--birth "YYYY-MM-DD HH:MM" --lat <N+> --lon <E+>
-    --tz <hours-from-UTC>` computes planets, Asc, MC and the Lot of Fortune with the **Swiss
-    Ephemeris** (needs `pip install pyswisseph`).
-  - Options: `--scale` (TikZ scale, def 3.5), `--png` (pdftoppm 200 dpi), `--keep-tex`.
-  - Convention (single frame, not janegca's per-chart hand-rotation):
-    `screen(λ) = 180 + (λ − midpoint_of_Asc_sign)`, so the Ascendant sign sits on the left
-    and houses run coun-clockwise. Close planets are de-clumped by alternating their radius.
-
 ### YouTube → clean transcript / media (yt-dlp)
 
 - `yt_transcript.py` — **YouTube subtitles → clean, timestamp-free text**, the
