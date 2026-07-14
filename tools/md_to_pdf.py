@@ -105,19 +105,38 @@ def preamble(title, author, lang, toc):
 # Detección del prefijo «Capítulo N —» / «Chapter N —» en el encabezado H1
 CHAP_RE = re.compile(r"^#\s+(?:Cap[íi]tulo|Chapter)\s+\S+\s*(?:—|–|-{1,3}|\.)", re.I)
 PREF_RE = re.compile(r"^\s*(?:Cap[íi]tulo|Chapter)\s+\S+\s*(?:—|–|-{1,3}|\.)\s*", re.I)
+# Títulos H1 de front-matter (para libros SIN «Capítulo N», organizados por Partes)
+FRONT_RE = re.compile(
+    r"^#\s+(prefacio|preface|pr[oó]logo|proemio|introducci[oó]n|introduction|"
+    r"agradecimientos|acknowledg\w*|dedicatoria|nota\s+(?:preliminar|del|de)\b)", re.I)
 
 def classify_roles(files):
-    """Reparte los archivos: los que empiezan «Capítulo N» son capítulos numerados;
-    los de antes del primero = front-matter (prefacio, introducción); los no-numerados
-    posteriores = apéndices. Así memoir numera solo los capítulos reales (1..N)."""
-    numbered = []
+    """Reparte los archivos según su encabezado H1.
+
+    · Si el libro tiene capítulos «Capítulo/Chapter N»: esos son los numerados;
+      lo anterior al primero = front-matter; lo no-numerado posterior = apéndices.
+      Así memoir numera solo los capítulos reales (1..N).
+    · Si NO hay «Capítulo N» (libro por Partes/Apéndices): el front-matter es el
+      tramo inicial de archivos sin H1 o con título de front (portada, prefacio,
+      introducción, agradecimientos…); todo lo demás son divisiones sin numerar,
+      auto-rotuladas (Parte 1, Apéndice A, Glosario, Bibliografía, Índice)."""
+    h1s = []
     for f in files:
-        h1 = next((ln for ln in pathlib.Path(f).read_text(encoding="utf-8",
-                   errors="replace").splitlines() if ln.startswith("# ")), "")
-        numbered.append(bool(CHAP_RE.match(h1)))
-    fi = numbered.index(True) if any(numbered) else len(files)
-    return ["front" if i < fi else ("chapter" if n else "appendix")
-            for i, n in enumerate(numbered)]
+        h1s.append(next((ln for ln in pathlib.Path(f).read_text(encoding="utf-8",
+                   errors="replace").splitlines() if ln.startswith("# ")), ""))
+    numbered = [bool(CHAP_RE.match(h)) for h in h1s]
+    if any(numbered):
+        fi = numbered.index(True)
+        return ["front" if i < fi else ("chapter" if n else "appendix")
+                for i, n in enumerate(numbered)]
+    roles, in_front = [], True
+    for h in h1s:
+        if in_front and (not h or FRONT_RE.match(h)):
+            roles.append("front")
+        else:
+            in_front = False
+            roles.append("appendix")
+    return roles
 
 def make_unnumbered(tex):
     """Convierte el primer \\chapter de un fragmento en \\chapter* (sin número) pero
