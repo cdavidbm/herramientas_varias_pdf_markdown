@@ -28,9 +28,11 @@ UNI2CMD = {
     "☊":"Ascnode","☋":"Descnode","℞":"Retrograde","⊗":"Fortune",
 }
 
-def preamble(title, author, lang, toc):
+def preamble(title, author, lang, toc, graphicspath=""):
     unichars = "\n".join(
         r"\newunicodechar{%s}{{\normalfont\%s}}" % (u, c) for u, c in UNI2CMD.items())
+    gpath = (r"\graphicspath{%s}" % "".join("{%s/}" % d for d in graphicspath)
+             if graphicspath else "")
     titleblock = ""
     if title:
         authorline = (r"{\small\scshape %s} \\" % author) if author else ""
@@ -46,6 +48,9 @@ def preamble(title, author, lang, toc):
 \usepackage{starfont}                                  %% glifos astrológicos
 \usepackage{newunicodechar}                            %% mapea ☉♄♈ -> starfont
 \usepackage{graphicx}
+\usepackage[export]{adjustbox}                          %% max width/height en \includegraphics
+\setkeys{Gin}{max width=\linewidth, max height=0.85\textheight, keepaspectratio}
+%(gpath)s
 \usepackage{pdflscape}                                  %% páginas apaisadas para tablas anchas
 \usepackage{longtable,booktabs,array}                  %% tablas de pandoc
 \usepackage{amssymb}
@@ -101,11 +106,15 @@ def preamble(title, author, lang, toc):
 \pagenumbering{gobble}
 %(titleblock)s
 \pagenumbering{roman}
-%(toctex)s""" % dict(lang=lang, unichars=unichars, titleblock=titleblock, toctex=toctex)
+%(toctex)s""" % dict(lang=lang, unichars=unichars, titleblock=titleblock,
+                     toctex=toctex, gpath=gpath)
 
-# Detección del prefijo «Capítulo N —» / «Chapter N —» en el encabezado H1
-CHAP_RE = re.compile(r"^#\s+(?:Cap[íi]tulo|Chapter)\s+\S+\s*(?:—|–|-{1,3}|\.)", re.I)
-PREF_RE = re.compile(r"^\s*(?:Cap[íi]tulo|Chapter)\s+\S+\s*(?:—|–|-{1,3}|\.)\s*", re.I)
+# Detección del prefijo de capítulo numerado en el H1: «Capítulo N —», «Chapter N —»
+# o simplemente «NN —» (numeración por dígitos, p. ej. «# 05 — La Luna»).
+CHAP_RE = re.compile(
+    r"^#\s+(?:(?:Cap[íi]tulo|Chapter)\s+\S+|\d{1,3})\s*(?:—|–|-{1,3}|\.)", re.I)
+PREF_RE = re.compile(
+    r"^\s*(?:(?:Cap[íi]tulo|Chapter)\s+\S+|\d{1,3})\s*(?:—|–|-{1,3}|\.)\s*", re.I)
 # Títulos H1 de front-matter (para libros SIN «Capítulo N», organizados por Partes)
 FRONT_RE = re.compile(
     r"^#\s+(prefacio|preface|pr[oó]logo|proemio|introducci[oó]n|introduction|"
@@ -248,14 +257,22 @@ def main():
     ap.add_argument("--author", default="", help="autor/traductor para la portada")
     ap.add_argument("--lang", default="spanish", help="idioma babel principal (def: spanish)")
     ap.add_argument("--toc", action="store_true", help="incluir índice general")
+    ap.add_argument("--image-dir", action="append", default=[], metavar="DIR",
+                    help="carpeta donde buscar las imágenes (repetible); se añaden al graphicspath")
     ap.add_argument("--keep-tex", action="store_true", help="conservar el .tex intermedio junto al PDF")
     a = ap.parse_args()
+
+    # graphicspath = carpetas de imágenes indicadas + carpeta de cada .md (rutas absolutas)
+    gdirs = [str(pathlib.Path(d).resolve()) for d in a.image_dir]
+    for m in a.md:
+        d = str(pathlib.Path(m).resolve().parent)
+        if d not in gdirs: gdirs.append(d)
 
     roles = classify_roles(a.md)
     texs = [md_to_latex(m, r) for m, r in zip(a.md, roles)]
     front = "\n\n".join(t for t, r in zip(texs, roles) if r == "front")
     mainb = "\n\n".join(t for t, r in zip(texs, roles) if r != "front")
-    doc = (preamble(a.title, a.author, a.lang, a.toc)
+    doc = (preamble(a.title, a.author, a.lang, a.toc, gdirs)
            + front + "\n\\mainmatter\n" + mainb + "\n\\end{document}\n")
 
     out = pathlib.Path(a.out).resolve()
