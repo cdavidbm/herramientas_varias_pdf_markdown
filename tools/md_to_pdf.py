@@ -155,14 +155,18 @@ def star_sections(tex):
     return re.sub(r"\\(section|subsection|subsubsection|paragraph)\{",
                   r"\\\1*{", tex)
 
+_COLALIGN = {"l": r"\raggedright", "c": r"\centering", "r": r"\raggedleft"}
+
 def wrap_table_columns(tex):
     """Hace que las columnas de ancho natural de pandoc (`{@{}ll@{}}`) envuelvan al
     ancho de página, repartiéndolo por igual. Evita que las tablas anchas (glosarios)
-    se salgan del margen. Solo toca las de tipo l/c/r (no las que ya llevan p{})."""
+    se salgan del margen. Solo toca las de tipo l/c/r (no las que ya llevan p{}).
+    Respeta la alineación por columna del markdown (`:-:` centro, `--:` derecha)."""
     def repl(m):
-        n = len(m.group(1))
+        letters = m.group(1)
+        n = len(letters)
         w = r"\dimexpr(\linewidth-%d\tabcolsep)/%d\relax" % (2 * n, n)
-        cols = "".join(r">{\raggedright\arraybackslash}p{%s}" % w for _ in range(n))
+        cols = "".join(r">{%s\arraybackslash}p{%s}" % (_COLALIGN[c], w) for c in letters)
         return r"\begin{longtable}[]{@{}" + cols + r"@{}}"
     return re.sub(r"\\begin\{longtable\}\[\]\{@\{\}([lcr]+)@\{\}\}", repl, tex)
 
