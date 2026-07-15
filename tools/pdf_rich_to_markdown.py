@@ -194,8 +194,13 @@ def line_markdown(chars, body: float | None = None,
             buf.append(ch)
             i += 1
         piece = "".join(buf)
-        if sm and piece.strip().isdigit():
-            out.append(f"[^{int(piece.strip())}]")      # volado de llamada de nota
+        if sm and re.search(r"\d", piece):
+            # Un tramo volado puede traer VARIOS números y puntuación pegada
+            # («216.217», «.215»): cuando dos notas comparten renglón, sus números
+            # y el punto que cierra la primera caen en la misma fila alzada. Exigir
+            # que el tramo sea SOLO cifras dejaba «.217» como texto plano y perdía
+            # la nota. Se convierte cada racha de cifras y se respeta lo demás.
+            out.append(re.sub(r"\d{1,3}", lambda m: f"[^{int(m.group())}]", piece))
         else:
             out.append(_wrap(st, piece))
     s = "".join(out)
