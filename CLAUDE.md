@@ -64,8 +64,16 @@ Tras convertir, dejar el markdown listo para leer/traducir:
 - `clean_markdown.py` — quita running-headers de página (sin borrar contenido
   repetido legítimo), guion suave, saca imágenes base64 a archivo, normaliza espacios.
 - `split_chapters.py plan.json` (o `--by-heading 2`) — trocea en capítulos.
-- `footnotes_rebuild.py cap.md --apply` — reconstruye notas `[^N]` **por capítulo**
-  (marcador partido `1 3 8`→`[^138]` + definición al pie). NO en índices/bibliografía.
+- `footnotes_rebuild.py cap.md --apply` — reconstruye notas `[^N]` **por capítulo**.
+  Detecta 2 estilos de OCR: *pegado* (marcador partido `1 3 8`→`[^138]` + def. `114. …`)
+  y *suelto* (marcador ` N ` con espacio + def. `N Texto` sin punto, incluso partida en
+  dos líneas; numeración continua en todo el libro; libros AstroArt/Döser). NO en
+  índices/bibliografía. Para rehacer un archivo ya convertido: revierte con regex
+  (`^\[\^N\]:`→`N `, `\s*\[\^N\]`→` N`) y reaplica.
+- `morinus_directions_clean.py cap.md --apply` — limpia los volcados de direcciones de
+  **Morinus** que el OCR riega en la prosa (`Z (Virgo)Jupiter D --> Asc 29.71 1969.12.11`):
+  quita los glifos rotos, traduce planeta/signo/aspecto (inglés y alemán), y los reescribe
+  como dato limpio en monospace. Conserva toda la info (punto, promisor, arco, fecha).
 - `astro_glyphs.py --flag cap.md` — señala celdas de glifos astrológicos corruptas
   por OCR (♄♃♂ y signos) para corregirlas a mano contra la imagen; `--reference` = chuleta.
 

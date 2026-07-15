@@ -153,7 +153,13 @@ pointing at them directly, or copy the folder next to a new book.
     non-numbered files are unnumbered appendices (with their sections unnumbered and
     wide glossary tables wrapped to the margin).
   - Usage: `python3 md_to_pdf.py out.pdf ch01.md ch02.md … [--title "…"]
-    [--author "…"] [--lang spanish] [--toc] [--keep-tex]` (pass files in book order).
+    [--author "…"] [--lang spanish] [--toc] [--image-dir DIR] [--keep-tex]`
+    (pass files in book order; `--image-dir` repeatable, added to graphicspath).
+  - **No overflow:** every table's columns are spread to the page width in ALL
+    roles (chapters too, not just appendices) and tables with ≥8 columns are rotated
+    to a `landscape` page at ~7 pt; images are capped to `0.72\linewidth`; long URLs
+    break anywhere (`xurl`); and verbatim/code blocks wrap + go `\small` (`fvextra`)
+    so pasted data lines (e.g. cleaned Morinus directions) never run past the margin.
   - **Two known footguns, both handled:** a `[^n]` note ON a heading line is relocated
     to the first prose/verse line (a self-referential footnote → infinite lualatex loop
     → RAM exhaustion → machine freeze); and a 300 s per-pass timeout aborts any other
@@ -219,12 +225,34 @@ heavily-annotated or glyph-bearing books (astrology, alchemy, scholarly monograp
   from a JSON plan (by exact heading text or line number — precise) or by
   `--by-heading LEVEL` (quick). Front matter becomes section 00; each chapter
   gets an `# NN — Title`.
-- `footnotes_rebuild.py` — rebuilds `[^N]` footnotes from OCR where superscripts
-  were split into spaced digits (`phlegm.1 1 4` → `[^114]`) and definitions sit
-  as `114. …` at page bottoms. **Run per chapter** (numbering is file-scoped);
-  reset-aware for appendices. Reports coverage; `--apply` to write. Never leaves
-  an orphan marker. Don't run on indexes/bibliographies (page numbers look like
-  definitions).
+- `footnotes_rebuild.py` — rebuilds `[^N]` footnotes from OCR where the reference
+  numbers leaked into the text and the definitions sit as loose lines. Handles
+  **two OCR styles automatically**:
+  - *glued/spaced* — superscript split into spaced digits (`phlegm.1 1 4`) and
+    definitions as `114. …` (with a period). Reset-aware for appendices.
+  - *bare/loose* (AstroArt/Döser books) — marker is a space-delimited number
+    (`…Lilly. 1 Guido…`) and the definition is `N Texto` (no period), possibly
+    **split across two lines** (a lone `19` then `Lilly, p. 122` on the next),
+    with **book-continuous** numbering (a chapter starts at 14, another at 109).
+    It merges split defs, picks the definitions by a **longest-increasing-subsequence**
+    (so a duplicated number from OCR — two `25` — doesn't truncate the series),
+    and links each marker by a forward scan **guarded against dates/times**
+    (`17 de septiembre`, `5:50`) so a stray number isn't mistaken for a marker.
+    Unlinked notes hang off the preceding paragraph — never an orphan `[^N]:`.
+  **Run per chapter** (numbering is file-scoped). Reports coverage; `--apply` to
+  write. Don't run on indexes/bibliographies (page numbers look like definitions).
+  To redo a file already converted: revert with regex (`^\[\^N\]:`→`N `,
+  `\s*\[\^N\]`→` N`) then re-apply.
+- `morinus_directions_clean.py` — normalises the **Morinus** primary/symbolic
+  **direction dumps** that OCR strews through the prose of predictive-astrology
+  books (`Z (Virgo)Jupiter D --> Asc 29.71 1969.12.11`). It strips the broken
+  glyphs (the leading `Z` significator, the `D`), translates planet/sign/aspect to
+  Spanish (English **and** German Morinus labels: `Trigon`, `Quadrat`, `Sextil`),
+  makes the arc optional (some listings give only a date), and rewrites each record
+  as one clean monospace data line grouped in a code block
+  (`Asc · término de Júpiter en Virgo · 29.71° · 1969.12.11`). Keeps ALL the data
+  (point, promissor, arc, date); only removes the OCR artifacts. Reports; `--apply`
+  to write. (These blocks wrap/shrink at PDF time via `md_to_pdf.py`'s fvextra.)
 - `astro_glyphs.py` — astrological-glyph crib sheet (`--reference`) and a
   garbled-cell flagger (`--flag FILE`) for OCR'd tables. No engine reads ♄♃♂ etc.,
   so it points you at the exact table cells to fix by hand against the page image
@@ -512,7 +540,9 @@ Two things may still need attention on an unusual book:
 | `yt_audio_transcribe.py`       | Video sin subtítulos → transcript por ASR (Whisper) | Python + faster-whisper (venv) + yt-dlp |
 | `clean_markdown.py`            | Post-OCR cleanup: running-headers, soft hyphens, images, spacing | Python stdlib |
 | `split_chapters.py`            | Markdown → per-chapter files (plan or by-heading) | Python stdlib |
-| `footnotes_rebuild.py`         | Rebuild `[^N]` footnotes from OCR (per chapter, reset-aware) | Python stdlib |
+| `footnotes_rebuild.py`         | Rebuild `[^N]` footnotes from OCR (2 styles: glued & bare/loose) | Python stdlib |
+| `morinus_directions_clean.py`  | Clean Morinus direction dumps → tidy monospace data lines | Python stdlib |
+| `md_to_pdf.py`                 | Per-chapter study markdown → print-ready PDF (memoir/starfont/LuaLaTeX) | Python + pandoc + TeX Live |
 | `astro_glyphs.py`              | Astro-glyph reference + garbled-cell flagger for OCR tables | Python stdlib |
 | `docling_incremental.py`       | Docling in page batches w/ checkpoint + resume + progress | Python stdlib + docling + qpdf + poppler |
 | `ocr_incremental.py`           | ocrmypdf in page batches w/ checkpoint + resume (best models) | Python stdlib + ocrmypdf + qpdf + poppler |
