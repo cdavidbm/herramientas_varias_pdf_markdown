@@ -81,6 +81,17 @@ Tras convertir, dejar el markdown listo para leer/traducir:
   dos líneas; numeración continua en todo el libro; libros AstroArt/Döser). NO en
   índices/bibliografía. Para rehacer un archivo ya convertido: revierte con regex
   (`^\[\^N\]:`→`N `, `\s*\[\^N\]`→` N`) y reaplica.
+- `index_rebuild.py viejo_indice.md libro.pdf --out nuevo.md --report faltan.txt` —
+  el **índice analítico** del original no sirve tras traducir: sus números remiten a
+  OTRA edición, y el OCR de un índice a 2 columnas suele entrelazarlas, así que no se
+  puede ni renumerar (no sabes qué página es de qué entrada). Da igual: del viejo solo
+  se aprovecha QUÉ términos indexar; las páginas se buscan en el PDF nuevo. **No es un
+  grep**: un encabezado va invertido (`al-Rijāl, Ah ibn`), agrupa variantes (`África,
+  africanos`) o normaliza flexión (`Abasíes` vs. «abasí»), así que se prueban variantes
+  (buscar el encabezado tal cual falla en ~43%). Corre el `md_to_pdf` PRIMERO y pon el
+  índice AL FINAL: así añadirlo no mueve la paginación medida. Límite honesto: sale
+  **plano** (la jerarquía ya venía destruida) y es una concordancia curada, no el
+  índice del autor. Lo no encontrado se reporta, no se esconde.
 - `astro_glyphs.py --flag cap.md` — señala celdas de glifos astrológicos corruptas
   por OCR (♄♃♂ y signos) para corregirlas a mano contra la imagen; `--reference` = chuleta.
 - `fix_ordinals.py ./markdown --apply` — ordinales volados que el OCR destroza en

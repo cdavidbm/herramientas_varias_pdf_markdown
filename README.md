@@ -180,6 +180,7 @@ tools/
 ├── check_completeness.py         ¿se perdió texto? (md vs pdftotext -layout)
 ├── book_index.py                 índice FTS5 para buscar en una carpeta
 ├── book_map.py                   mapa de un markdown ya convertido
+├── index_rebuild.py              índice analítico → páginas del PDF que lees
 │
 │  ── Salida ──
 ├── md_to_pdf.py                  ⭐ libro → PDF maquetado (memoir + starfont)

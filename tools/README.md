@@ -695,6 +695,7 @@ inserts the `#` headings and drops the spurious ones that repeat those titles.
 | `ocr_text_to_markdown.py`      | Plain OCR text dump → per-chapter markdown by page range | Python stdlib |
 | `rtf_to_markdown.py`           | RTF → per-section markdown w/ pooled notes (auto-derives sections) | Python + striprtf |
 | `forja_common.py`              | Shared slugify / plan.json / require_tool / page_count | Python stdlib |
+| `index_rebuild.py`             | Rebuild a book's analytical index against the PDF you actually read | Python + poppler |
 | `latex_to_markdown.py`         | LaTeX classics (starfont/wasysym glyphs) → study markdown | Python + pandoc CLI |
 | `epub_to_markdown.py`          | EPUB → per-chapter markdown              | Python + beautifulsoup4 |
 | `epub_illustrated_to_markdown.py` | Image-heavy EPUB → per-section markdown w/ figures exported & embedded | Python + beautifulsoup4 |
