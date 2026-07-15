@@ -45,10 +45,14 @@ for pair in "${pydeps[@]}"; do
     mod="${pair%% *}"; pkg="${pair##* }"
     if python3 -c "import $mod" 2>/dev/null; then
         echo "   ✓ $pkg"
-    elif python3 -m pip install --user "$pkg" >/dev/null 2>&1; then
+    # `--user` a secas falla en entornos externally-managed (PEP 668, Debian/Ubuntu
+    # recientes, WSL); se reintenta con --break-system-packages (solo instala en
+    # ~/.local, no toca el Python del sistema).
+    elif python3 -m pip install --user "$pkg" >/dev/null 2>&1 \
+      || python3 -m pip install --user --break-system-packages "$pkg" >/dev/null 2>&1; then
         echo "   ✓ $pkg instalado"
     else
-        echo "   ✗ $pkg → python3 -m pip install --user $pkg"
+        echo "   ✗ $pkg → python3 -m pip install --user --break-system-packages $pkg"
     fi
 done
 echo
