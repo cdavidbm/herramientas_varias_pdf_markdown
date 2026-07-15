@@ -57,6 +57,7 @@ def preamble(title, author, lang, toc, graphicspath=""):
 \usepackage[top=2cm, bottom=2cm, outer=2.5cm, inner=2.5cm,
             heightrounded, marginparwidth=2.3cm, marginparsep=0.5cm]{geometry}
 \usepackage[colorlinks=true, linkcolor=black, urlcolor=blue, unicode]{hyperref}
+\usepackage{xurl}                                      %% parte URLs largas en cualquier carácter (no desbordan)
 
 %% --- estilo de capítulo bringhurst (idéntico a Valens/Doroteo) ---
 \makechapterstyle{bringhurst}{%%
@@ -254,10 +255,13 @@ def md_to_latex(mdfile, role):
     if r.returncode != 0:
         sys.stderr.write(f"pandoc falló en {mdfile}:\n{r.stderr[:1500]}\n"); sys.exit(1)
     tex = r.stdout
-    if role == "appendix":                   # capítulo sin nº + secciones sin nº + tablas que envuelven
-        tex = wrap_table_columns(star_sections(make_unnumbered(tex)))
-    elif role == "front":                    # secciones sin nº + tablas que envuelven
-        tex = wrap_table_columns(star_sections(tex))
+    if role == "appendix":                   # capítulo sin nº + secciones sin nº
+        tex = star_sections(make_unnumbered(tex))
+    elif role == "front":                    # secciones sin nº
+        tex = star_sections(tex)
+    # las tablas se reparten al ancho de página en TODOS los roles (también capítulos):
+    # antes solo se envolvían en front/apéndices y las de los capítulos desbordaban.
+    tex = wrap_table_columns(tex)
     return typeset_wide_tables(center_images(tex))   # imágenes centradas/acotadas; tablas anchas apaisadas
 
 def main():

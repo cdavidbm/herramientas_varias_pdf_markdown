@@ -42,6 +42,90 @@ from pathlib import Path
 
 DEF_RE = re.compile(r"^(\d{1,3})\.\s+(\S.*)$")
 
+# --- Variante "suelta" (p. ej. libros de AstroArt/Döser) ---------------------
+# Otro estilo de OCR: la definición es «N Texto» (número + espacio, SIN punto) en
+# una línea propia intercalada entre párrafos, y el marcador en el cuerpo es un
+# número suelto delimitado por espacios («…Lilly. 1 Guido…»), NO pegado a la
+# palabra. DEF_RE (que exige punto tras el número) no lo detecta. rebuild_bare()
+# lo maneja: acepta definiciones sólo si forman una secuencia 1,2,3,… (así los
+# números sueltos de prosa —años, páginas— no se confunden con notas).
+DEF_BARE_RE = re.compile(r"^(\d{1,3})\s+(\S.*)$")
+
+
+def rebuild_bare(text):
+    lines = text.split("\n")
+    # Definiciones candidatas «N Texto» (número + espacio, SIN punto: así NO capta
+    # los ítems de listas numeradas «1. …», que sí llevan punto). La numeración de
+    # notas suele ser CONTINUA en todo el libro (un capítulo empieza en 14, otro en
+    # 109…), no reinicia en 1: tomamos la racha CONSECUTIVA (n == previo+1) más larga.
+    cand = [(i, int(m.group(1)), m.group(2))
+            for i, ln in enumerate(lines)
+            if (m := DEF_BARE_RE.match(ln.strip()))]
+    # Las notas están numeradas de forma ESTRICTAMENTE CRECIENTE en orden de archivo
+    # (con huecos si el OCR fusionó alguna definición). Nos quedamos con la mayor
+    # subsecuencia creciente contigua: un número que rompa la monotonía (p. ej. un
+    # ítem de lista o un año al inicio de línea) inicia una racha nueva y se descarta
+    # si la suya es más corta.
+    best, cur = [], []
+    for c in cand:
+        if cur and c[1] > cur[-1][1]:
+            cur.append(c)
+        else:
+            if len(cur) > len(best): best = cur
+            cur = [c]
+    if len(cur) > len(best): best = cur
+    if len(best) < 2:                           # no parece este estilo
+        return None
+    defs = {n: (i, t) for (i, n, t) in best}    # n -> (idx_línea, texto)
+    def_idx = {i for (i, _n, _t) in best}
+
+    body = "\n".join(lines)
+    # spans de las líneas-definición (para no tomarlas como marcadores)
+    def_spans, off = [], 0
+    for i, ln in enumerate(lines):
+        if i in def_idx:
+            def_spans.append((off, off + len(ln)))
+        off += len(ln) + 1
+
+    def in_def(p):
+        return any(a <= p < b for a, b in def_spans)
+
+    # Marcadores en el cuerpo, en orden: número suelto precedido de espacio o de
+    # puntuación/letra (no de otro dígito) y seguido de espacio/puntuación/fin (no
+    # de dígito). Así 1970, 30.13 o «casa 6.ª» NO cuentan como marcador.
+    replacements, linked_ns, pos = [], set(), 0
+    for n in range(min(defs), max(defs) + 1):
+        if n not in defs:
+            continue
+        rx = re.compile(r"(?<=[\s.,;:)\]!?»”’]) ?" + str(n) + r"(?=[\s.,;:)\]]|$)")
+        found = next((m for m in rx.finditer(body)
+                      if m.start() >= pos and not in_def(m.start())), None)
+        if found:
+            replacements.append((found.start(), found.end(), n))
+            pos = found.end()
+            linked_ns.add(n)
+
+    newbody = body
+    for s, e, n in sorted(replacements, reverse=True):
+        # el span es « N» o «N» (la puntuación previa queda fuera, en el lookbehind);
+        # el espacio previo, si lo había, se descarta: «Lilly. 1 Guido» -> «Lilly.[^1] Guido»
+        newbody = newbody[:s] + f"[^{n}]" + newbody[e:]
+
+    # definiciones -> «[^N]: Texto», SOLO las notas cuyo marcador se enlazó (si no,
+    # quedaría un `[^N]:` huérfano que pandoc descarta = cita perdida). Las demás se
+    # quedan como número suelto en línea (sin pérdida de la referencia).
+    conv, out = 0, []
+    for i, ln in enumerate(newbody.split("\n")):
+        m = DEF_BARE_RE.match(ln.strip())
+        if i in def_idx and m and int(m.group(1)) in linked_ns:
+            out.append(f"[^{int(m.group(1))}]: {m.group(2)}"); conv += 1
+        else:
+            out.append(ln)
+    linked = len(linked_ns)
+    final = re.sub(r"\n{3,}", "\n\n", "\n".join(out))
+    stats = dict(blocks=1, defs=len(defs), linked=linked, converted=conv, unmatched=[])
+    return final, stats
+
 
 def rebuild(text):
     lines = text.split("\n")
@@ -124,7 +208,14 @@ def main():
     args = ap.parse_args()
 
     src = Path(args.input)
-    final, st = rebuild(src.read_text(encoding="utf-8"))
+    raw = src.read_text(encoding="utf-8")
+    final, st = rebuild(raw)                      # estilo «N. texto» + marcador pegado
+    alt = rebuild_bare(raw)                       # estilo suelto «N texto» + marcador con espacio
+    # elegir el que ENLACE más marcadores (evita que un falso positivo del estilo
+    # «N.» sobre listas numeradas «1. …» gane sobre el estilo suelto real).
+    if alt and alt[1]["linked"] >= st["linked"]:
+        final, st = alt
+        print(f"  (estilo suelto «N texto» detectado)")
     print(f"{src.name}: blocks={st['blocks']} defs={st['defs']} "
           f"linked={st['linked']} converted={st['converted']} unmatched={len(st['unmatched'])}")
     if st["unmatched"]:
