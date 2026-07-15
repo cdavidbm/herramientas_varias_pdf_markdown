@@ -76,6 +76,29 @@ Tras convertir, dejar el markdown listo para leer/traducir:
   como dato limpio en monospace. Conserva toda la info (punto, promisor, arco, fecha).
 - `astro_glyphs.py --flag cap.md` — señala celdas de glifos astrológicos corruptas
   por OCR (♄♃♂ y signos) para corregirlas a mano contra la imagen; `--reference` = chuleta.
+- `fix_ordinals.py ./markdown --apply` — ordinales volados que el OCR destroza en
+  **escaneos**: `4 lh`→`4th`, `ll' h`→`11th`, `I 1 '`→`1st`, `12 ,h`→`12th`. Deriva el
+  sufijo del NÚMERO (no adivina la corrupción), solo 1-31, y no toca horas/fechas/cifras.
+  Crítico en libros de **casas** astrológicas o siglos: cambia el sentido y ningún
+  corrector lo ve. (`docling_clean.py` ya cubre el caso LIMPIO `5 th`→`5th`.)
+- `chapter_bounds.py libro.pdf clean.md --sections secs.json --offset N [--apply]` —
+  cuando **no puedes fiarte de los encabezados** de Docling: título repetido como
+  running header y promovido a encabezado en sitio equivocado (¡a mitad de frase!),
+  título recurrente como subtítulo, o título centrado partido en 2 líneas. Localiza el
+  límite REAL de cada capítulo por la **frase de apertura** de su página en el PDF
+  (índice → página del libro + `--offset` = página PDF). Determinista. `--apply` inserta
+  los `#` y borra los encabezados espurios → luego `split_chapters.py --by-heading 1`.
+
+> **Orden del flujo (importante):** en un escaneo con notas, hazlo
+> **convertir → RECONSTRUIR NOTAS → traducir → PDF**. Si traduces antes, hay que rehacer
+> el aparato en los dos idiomas a la vez. Comprueba SIEMPRE `grep -c "\[\^" markdown/*.md`
+> antes de lanzar traducciones: sin `[^N]`, las citas se imprimen como párrafos sueltos
+> en mitad del texto.
+
+> **Nombres de archivo en Unicode DESCOMPUESTO (NFD):** «Öner Döser» puede estar en disco
+> como `O`+U+0308. `pdfinfo`/`pdftotext` fallan aunque `ls` lo muestre bien, y **copiar la
+> ruta de `ls` tampoco sirve**. Resuélvelo SIEMPRE por glob: `F=$(ls *Financial*.pdf | head -1)`.
+> Afecta también al `.md` que genera `docling_incremental.py`.
 
 ### 3d. VERIFICACIÓN de completitud (obligatorio antes de traducir/publicar)
 Los bisturíes pueden **perder texto sin avisar** (años, cláusulas) según el layout;
@@ -89,6 +112,12 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
   `clean_openings.py` (portadillas/capitulares). Todo de una vez con
   `limpiar_academico.py ./markdown` (`--no-openings` para notas/índice).
 - Back-matter a 2 columnas roto por el bisturí → Docling + `docling_clean.py`.
+- **El ratio global md/PDF ENGAÑA si el libro tiene figuras.** En libros con cartas o
+  diagramas, `pdftotext` extrae las etiquetas del gráfico como basura (`02' 05 21* Q 48'`)
+  que Docling —con razón— descarta al recortar la figura. Eso baja el ratio sin que falte
+  prosa (p. ej. 0.961 global). **Mide en un tramo SIN figuras** (glosario, un capítulo de
+  prosa densa): si ahí sale ~0.98-0.99, no hay pérdida. Un ratio bajo en un tramo de prosa
+  pura sí es alarma real.
 - Skills de QA: **`/qa-conversion`** (markdown vs PDF) antes de traducir;
   **`/qa-traduccion`** (incluye detección de truncamiento por ratio de palabras)
   después.

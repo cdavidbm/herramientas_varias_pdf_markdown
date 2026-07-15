@@ -25,6 +25,7 @@ import md_to_pdf
 import clean_markdown
 import check_completeness
 import split_chapters
+import fix_ordinals
 
 
 class LatexEscape(unittest.TestCase):
@@ -119,6 +120,52 @@ class SplitByPlanMonotonic(unittest.TestCase):
         ]}
         out = split_chapters.split_by_plan(lines, plan)
         self.assertEqual(len(out), 3)
+
+
+class FixOrdinals(unittest.TestCase):
+    """fix_ordinals: el OCR rompe los ordinales volados de escaneos («4 lh» → 4th).
+    El sufijo se deriva del NÚMERO, no de la basura que dejó el OCR."""
+
+    def test_suffix_rule(self):
+        self.assertEqual(fix_ordinals.suffix(1), "st")
+        self.assertEqual(fix_ordinals.suffix(2), "nd")
+        self.assertEqual(fix_ordinals.suffix(3), "rd")
+        self.assertEqual(fix_ordinals.suffix(4), "th")
+        # 11/12/13 son 'th' aunque acaben en 1/2/3
+        for n in (11, 12, 13):
+            self.assertEqual(fix_ordinals.suffix(n), "th")
+
+    def test_corrupt_forms(self):
+        for src, want in [
+            ("the 4 lh house", "the 4th house"),
+            ("the 12 ,h house", "the 12th house"),
+            ("the 9' h house", "the 9th house"),
+            ("Venus in the 4' v house", "Venus in the 4th house"),
+        ]:
+            self.assertEqual(fix_ordinals.fix(src)[0], want)
+
+    def test_ll_is_eleven(self):
+        self.assertEqual(fix_ordinals.fix("the ll' h house")[0], "the 11th house")
+
+    def test_capital_i_is_one(self):
+        self.assertIn("1st", fix_ordinals.fix("the I 1 ', 2 nd houses")[0])
+
+    def test_clean_spacing_normalized(self):
+        self.assertEqual(fix_ordinals.fix("the 12 th house")[0], "the 12th house")
+
+    def test_controls_untouched(self):
+        # horas, fechas, cifras y palabras con 'll' NO se tocan
+        for s in ("8 41 00 PM EET -02:00:00", "Feb 12 1966",
+                  "He earned 500 dollars in 2015", "all the still water"):
+            self.assertEqual(fix_ordinals.fix(s)[0], s)
+
+    def test_out_of_range_untouched(self):
+        # solo 1-31: un año no es un ordinal de casa/día
+        self.assertEqual(fix_ordinals.fix("in 2015 th")[0], "in 2015 th")
+
+    def test_count_reported(self):
+        _, n = fix_ordinals.fix("the 4 lh and the 9' h houses")
+        self.assertEqual(n, 2)
 
 
 class InlineRefRegexes(unittest.TestCase):

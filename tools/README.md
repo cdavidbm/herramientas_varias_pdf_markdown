@@ -548,6 +548,68 @@ Two things may still need attention on an unusual book:
 
 ---
 
+## Scanned books: two recurring OCR/layout traps
+
+These two came out of AstroArt/Cazimi scans (Döser, Obert). Both are invisible to a
+spell-checker and both change meaning, so they are worth a dedicated pass.
+
+### `fix_ordinals.py` — superscript ordinals mangled by OCR
+
+English ordinals are typeset with a superscript (4^th). Scanning separates it and
+misreads the letters, so the text layer ends up with `4 lh`, `ll' h`, `9' h`, `12 ,h`,
+`I 1 '`, `4' v`. In a book about astrological **houses** ("the 4th house") or about
+centuries, that silently changes the meaning.
+
+The trick is **not** to guess what each corruption meant. The correct suffix is derived
+from the number itself (1→st, 2→nd, 3→rd, 11/12/13→th, otherwise th), so the tool just
+recognises "number + junk-where-the-suffix-goes" and rewrites the whole thing. That
+holds up against corruptions not in the list.
+
+```bash
+python3 fix_ordinals.py cap.md               # dry-run + diff
+python3 fix_ordinals.py ./markdown --apply   # whole folder
+```
+
+Guards: only numbers 1-31; the junk must be adjacent; times (`8 41 00 PM`), dates
+(`Feb 12 1966`) and plain figures are left alone. `docling_clean.py` already handles the
+*clean* born-digital case (`5 th` → `5th`); this one is for *corrupt* scans.
+
+### `chapter_bounds.py` — when Docling's headings can't be trusted
+
+Splitting by heading assumes the headings are right. On scans they often aren't:
+
+* the book repeats the chapter title as a **running header** on every page, and Docling
+  promotes one to a heading — sometimes landing **in the middle of a sentence**;
+* the same title is reused later as a **subsection** ("Transits to the Lots" ×4 in a book
+  of chart examples), so title-matching produces duplicates and out-of-order boundaries;
+* a **centred title split across two lines** isn't detected at all.
+
+Matching on titles fails in all three. Instead, use the table of contents as ground truth:
+it gives each chapter's page, so pull that page's **first sentence of prose** from the PDF
+and find *that* in the markdown. Deterministic, and independent of the headings.
+
+```bash
+# secs.json:  [{"title": "1: FINANCIAL SIGNIFICATORS", "page": 8}, ...]   <- BOOK pages
+# --offset: pdf_page = book_page + offset (compare a printed folio to its PDF index)
+python3 chapter_bounds.py libro.pdf clean.md --sections secs.json --offset 4
+python3 chapter_bounds.py libro.pdf clean.md --sections secs.json --offset 4 \
+        --apply --out book_prepped.md
+python3 split_chapters.py book_prepped.md --by-heading 1 --out markdown
+```
+
+Run it without `--apply` first: it reports the anchor and line found for each section and
+whether they come out monotonic. Pages that are pure image/table (a dignities table) have
+no prose anchor and are reported as `SIN ANCLA` — place those by hand. With `--apply` it
+inserts the `#` headings and drops the spurious ones that repeat those titles.
+
+> **Filenames in decomposed Unicode (NFD).** "Öner Döser" can sit on disk as `O`+U+0308.
+> `pdfinfo`/`pdftotext` then fail even though `ls` displays it fine, and copying the path
+> out of `ls` does not help either. Always resolve by glob:
+> `F=$(ls *Financial*.pdf | head -1)`. This also hits the `.md` that
+> `docling_incremental.py` writes.
+
+---
+
 ## Files at a glance
 
 | File | Role | Language |
@@ -580,6 +642,8 @@ Two things may still need attention on an unusual book:
 | `morinus_directions_clean.py`  | Clean Morinus direction dumps → tidy monospace data lines | Python stdlib |
 | `md_to_pdf.py`                 | Per-chapter study markdown → print-ready PDF (memoir/starfont/LuaLaTeX) | Python + pandoc + TeX Live |
 | `astro_glyphs.py`              | Astro-glyph reference + garbled-cell flagger for OCR tables | Python stdlib |
+| `fix_ordinals.py`              | Repair OCR-mangled superscript ordinals (`4 lh`→`4th`, `ll' h`→`11th`) | Python stdlib |
+| `chapter_bounds.py`            | Find REAL chapter boundaries by opening-sentence anchor (unreliable Docling headings) | Python stdlib + poppler CLI |
 | `docling_incremental.py`       | Docling in page batches w/ checkpoint + resume + progress | Python stdlib + docling + qpdf + poppler |
 | `ocr_incremental.py`           | ocrmypdf in page batches w/ checkpoint + resume (best models) | Python stdlib + ocrmypdf + qpdf + poppler |
 | `ocr_preprocess.py`            | Pre-OCR image cleanup (grayscale, CLAHE, denoise, deskew, rescale) | Python + opencv-python + numpy (venv forja-ocr-venv) |
