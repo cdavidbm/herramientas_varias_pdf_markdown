@@ -591,6 +591,22 @@ python3 pdf_rich_to_markdown.py libro.pdf --out x.md --columns 1      # never sp
 
 Digital PDFs only — a scan has no font names, so there is no signal to read.
 
+**Footnotes by font size (`--footnotes`).** Where `footnotes_rebuild.py` has to *guess* from
+text patterns, a digital PDF states it outright: body 11.8pt, footnotes 9.4pt. So markers
+become `[^N]` and the page-bottom blocks become `[^N]:` definitions, by geometry, with no
+heuristic. Two things make it safe:
+
+* **Never pass the body size when composing a footnote** — inside a note *everything* is
+  small, so every year and degree in its text would turn into a marker.
+* **A new definition must be the exact successor of the counter**, not merely "a bigger
+  number". These notes cite years and folios: a line continuing note 99 that begins `1493`
+  reads as note 149 and derails everything after it. Requiring `n == expect` makes the
+  sequence **self-validating** — if it comes out `1..N` complete, the parse is right, and
+  the tool says so (or lists which notes are missing).
+
+Numbering usually restarts per work, so run it **once per work** with `--first/--last`:
+each file then carries its own notes and the strict rule needs no reset handling.
+
 **Parallel columns.** A parallel text (original left, translation right) is destroyed if you
 read it line by line: you get mongrel sentences welding the two versions together. So the
 tool finds the **gutter**. Three traps, each of which cost a wrong turn:
