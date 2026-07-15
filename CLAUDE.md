@@ -53,6 +53,15 @@ multicolumna, tablas, fórmulas, muy ilustrado (imágenes ≫ páginas) o extrac
 rota. Si es **prosa limpia a una columna** → bisturí (§3b). Ante la duda: 1
 capítulo con bisturí, revisa el `.md`; si quedó sucio, repite con Docling.
 
+> **PDF digital donde la CURSIVA importa** (texto académico: términos técnicos,
+> transliteraciones, títulos de obra) → `pdf_rich_to_markdown.py`, NO Docling.
+> Docling y `pdftotext` recuperan **0 cursivas**; la señal está en las fuentes
+> embebidas (`pdffonts x.pdf | grep -i italic` lo confirma en un segundo). Además
+> separa el texto **paralelo a 2 columnas** (original / traducción), que leído
+> línea a línea sale en frases mestizas. Es el único bisturí que hace ambas cosas,
+> así que «multicolumna → Docling» NO aplica si son columnas paralelas o hay
+> cursiva significativa.
+
 > **Escaneo largo o equipo que se puede cerrar:** usa
 > `python3 $T/docling_incremental.py x.pdf --out ./markdown` — procesa por lotes
 > de páginas con **checkpoint + resume + progreso** (no pierde el trabajo si se

@@ -574,6 +574,41 @@ Guards: only numbers 1-31; the junk must be adjacent; times (`8 41 00 PM`), date
 (`Feb 12 1966`) and plain figures are left alone. `docling_clean.py` already handles the
 *clean* born-digital case (`5 th` → `5th`); this one is for *corrupt* scans.
 
+### `pdf_rich_to_markdown.py` — keep the *italics* (and split parallel columns)
+
+`pdftotext` and Docling both throw away italics and bold. In an academic text that is not
+decoration: it marks technical terms, transliterations and work titles. Dykes italicises
+every technical term "so the reader can track them" — losing that loses the apparatus. The
+information *is* in the PDF (embedded `…-Italic` / `…-Bold` fonts); you just have to read
+it with pdfminer instead of asking for flat text.
+
+```bash
+python3 pdf_rich_to_markdown.py libro.pdf --out crudo.md
+python3 pdf_rich_to_markdown.py libro.pdf --out x.md --first 86 --last 92
+python3 pdf_rich_to_markdown.py libro.pdf --out x.md --mark-columns   # parallel text
+python3 pdf_rich_to_markdown.py libro.pdf --out x.md --columns 1      # never split
+```
+
+Digital PDFs only — a scan has no font names, so there is no signal to read.
+
+**Parallel columns.** A parallel text (original left, translation right) is destroyed if you
+read it line by line: you get mongrel sentences welding the two versions together. So the
+tool finds the **gutter**. Three traps, each of which cost a wrong turn:
+
+1. **pdfminer fuses the columns itself** into one line when the gutter is narrow. Look for
+   the gutter in the lines it hands you and it is already gone — so rows are rebuilt here
+   from the **characters**.
+2. **The gutter can be tiny.** In Sahl & Māshā'allāh it is **7pt** — narrower than some
+   justified word spaces. Filtering by gap width does not work.
+3. **Justified prose fakes gutters.** Justification stretches the spaces, so by chance
+   many rows have a wide gap at nearly the same x. Counting votes alone false-positives.
+
+What actually identifies a column is that **nothing crosses the gutter**: vote on the gap's
+x row by row, then require that inside the voting block almost no row crosses it. Titles and
+footnotes *do* cross, but they fall outside the block (above or below) and are emitted
+separately as full-width. A row crossing the gutter is never split — that would cut a word
+in half. Tested in `tests/test_forja.py::FindGutter`, including the justified-prose trap.
+
 ### `chapter_bounds.py` — when Docling's headings can't be trusted
 
 Splitting by heading assumes the headings are right. On scans they often aren't:
@@ -644,6 +679,7 @@ inserts the `#` headings and drops the spurious ones that repeat those titles.
 | `astro_glyphs.py`              | Astro-glyph reference + garbled-cell flagger for OCR tables | Python stdlib |
 | `fix_ordinals.py`              | Repair OCR-mangled superscript ordinals (`4 lh`→`4th`, `ll' h`→`11th`) | Python stdlib |
 | `chapter_bounds.py`            | Find REAL chapter boundaries by opening-sentence anchor (unreliable Docling headings) | Python stdlib + poppler CLI |
+| `pdf_rich_to_markdown.py`      | Digital PDF → markdown KEEPING italics/bold; splits parallel 2-column text | Python + pdfminer.six |
 | `docling_incremental.py`       | Docling in page batches w/ checkpoint + resume + progress | Python stdlib + docling + qpdf + poppler |
 | `ocr_incremental.py`           | ocrmypdf in page batches w/ checkpoint + resume (best models) | Python stdlib + ocrmypdf + qpdf + poppler |
 | `ocr_preprocess.py`            | Pre-OCR image cleanup (grayscale, CLAHE, denoise, deskew, rescale) | Python + opencv-python + numpy (venv forja-ocr-venv) |

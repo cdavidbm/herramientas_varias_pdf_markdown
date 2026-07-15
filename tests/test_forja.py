@@ -26,6 +26,7 @@ import clean_markdown
 import check_completeness
 import split_chapters
 import fix_ordinals
+import pdf_rich_to_markdown
 
 
 class LatexEscape(unittest.TestCase):
@@ -166,6 +167,74 @@ class FixOrdinals(unittest.TestCase):
     def test_count_reported(self):
         _, n = fix_ordinals.fix("the 4 lh and the 9' h houses")
         self.assertEqual(n, 2)
+
+
+class FakeChar:
+    """Un LTChar de mentira: a `find_gutter` solo le importan x0/x1/y0 y el texto,
+    así que se puede probar la geometría sin pdfminer ni un PDF de verdad."""
+
+    def __init__(self, ch: str, x0: float, y0: float, w: float = 5.0):
+        self.x0, self.x1, self.y0 = x0, x0 + w, y0
+        self.size, self.fontname = 10.0, "Times"
+        self._t = ch
+
+    def get_text(self):
+        return self._t
+
+
+def _run(y: float, x0: float, x1: float):
+    """Caracteres pegados de x0 a x1 (sin huecos internos)."""
+    return [FakeChar("a", float(x), y) for x in range(int(x0), int(x1), 5)]
+
+
+def _rows(specs):
+    """[(y, [(x0,x1), …]), …] -> filas como las arma cluster_rows."""
+    out = []
+    for y, runs in specs:
+        cs = [c for x0, x1 in runs for c in _run(y, x0, x1)]
+        out.append((float(y), sorted(cs, key=lambda c: c.x0)))
+    return out
+
+
+class FindGutter(unittest.TestCase):
+    """pdf_rich_to_markdown.find_gutter: separa texto a 2 columnas (original y
+    traducción en paralelo) sin fundirlas, y NO se inventa columnas en prosa."""
+
+    def test_two_columns_detected(self):
+        rows = _rows([(600 - 14 * i, [(100, 300), (310, 500)]) for i in range(20)])
+        g = pdf_rich_to_markdown.find_gutter(rows, 100.0, 500.0)
+        self.assertIsNotNone(g)
+        self.assertTrue(300 <= g <= 310, f"canal fuera del hueco: {g}")
+
+    def test_single_column_is_none(self):
+        rows = _rows([(600 - 14 * i, [(100, 500)]) for i in range(20)])
+        self.assertIsNone(pdf_rich_to_markdown.find_gutter(rows, 100.0, 500.0))
+
+    def test_justified_prose_is_not_a_gutter(self):
+        # El falso positivo real: al justificar se estiran los espacios y unas
+        # cuantas filas tienen un hueco ancho cerca del centro por casualidad.
+        # Lo que lo delata es que las DEMÁS filas cruzan esa x tan tranquilas.
+        specs = []
+        for i in range(20):
+            y = 600 - 14 * i
+            if i % 3 == 0:
+                specs.append((y, [(100, 300), (308, 500)]))   # hueco casual
+            else:
+                specs.append((y, [(100, 500)]))               # cruza el «canal»
+        self.assertIsNone(pdf_rich_to_markdown.find_gutter(_rows(specs), 100.0, 500.0))
+
+    def test_full_width_footnotes_below_columns_do_not_break_detection(self):
+        # Las notas al pie cruzan la página entera, pero van DEBAJO del bloque a
+        # dos columnas: no deben impedir que se detecte el canal.
+        specs = [(600 - 14 * i, [(100, 300), (310, 500)]) for i in range(20)]
+        specs += [(300 - 12 * j, [(100, 500)]) for j in range(4)]
+        g = pdf_rich_to_markdown.find_gutter(_rows(specs), 100.0, 500.0)
+        self.assertIsNotNone(g, "las notas al pie tumbaron la detección")
+
+    def test_gutter_must_be_central(self):
+        # Un hueco pegado al margen es sangría o una columna de cifras, no un canal.
+        rows = _rows([(600 - 14 * i, [(100, 140), (150, 500)]) for i in range(20)])
+        self.assertIsNone(pdf_rich_to_markdown.find_gutter(rows, 100.0, 500.0))
 
 
 class InlineRefRegexes(unittest.TestCase):

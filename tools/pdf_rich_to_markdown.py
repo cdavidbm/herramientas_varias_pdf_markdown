@@ -1,0 +1,366 @@
+#!/usr/bin/env python3
+"""
+pdf_rich_to_markdown.py — Extrae un PDF DIGITAL a markdown conservando las
+**cursivas y negritas**, que `pdftotext` y Docling tiran a la basura.
+
+Por qué
+-------
+En un texto académico la cursiva NO es decoración: marca términos técnicos,
+transliteraciones y títulos de obra. Dykes, por ejemplo, italiza los términos
+técnicos «so the reader can track them» — perder la cursiva es perder ese aparato.
+La información está en el PDF (fuentes `…-Italic` / `…-Bold` embebidas); solo hay
+que leerla con pdfminer en vez de pedir texto plano.
+
+Qué hace
+--------
+  * Lee cada línea carácter a carácter con pdfminer y agrupa los tramos por fuente:
+    los de fuente *Italic* salen como `*texto*`, los *Bold* como `**texto**`.
+  * Reconstruye los espacios por los huecos en x (los PDF de Calibre posicionan
+    palabra a palabra y `get_text()` a secas las pega o mete tabuladores).
+  * **Detecta las páginas a 2 columnas** y saca cada columna entera por separado,
+    en vez de fundirlas línea a línea (ver abajo). Con `--mark-columns` las etiqueta.
+  * Reflowa las líneas en párrafos por el salto vertical entre ellas (`--gap`).
+  * Ordena por posición (arriba→abajo) y no por el orden interno del PDF.
+
+Las columnas (por qué no basta con mirar el hueco)
+--------------------------------------------------
+Un texto paralelo (original a la izquierda, traducción a la derecha) se destruye si
+se lee línea a línea: salen frases mestizas que mezclan las dos versiones. Para
+evitarlo hay que encontrar el CANAL entre columnas, y ahí hay tres trampas:
+
+  1. **pdfminer ya fusiona las columnas** en una sola línea cuando el canal es
+     estrecho. Si buscas el canal en las líneas que él te da, ya no existe. Por eso
+     las filas se reconstruyen aquí desde los CARACTERES.
+  2. **El canal puede ser estrechísimo** (7pt en un libro compuesto apretado: menos
+     que algunos espacios entre palabras). Filtrar por ancho no sirve.
+  3. **La prosa justificada finge canales**: al justificar se estiran los espacios y,
+     por azar, muchas filas tienen un hueco ancho casi a la misma x.
+
+Lo que de verdad delata a una columna es que **nadie cruza el canal**: se vota la x
+del hueco fila a fila, y luego se exige que dentro del bloque que vota casi ninguna
+fila lo atraviese. Los títulos y las notas al pie sí lo cruzan, pero caen fuera del
+bloque (arriba o abajo) y se emiten aparte como «ancho completo». Una fila que cruza
+el canal NUNCA se parte, para no cortar una palabra por la mitad.
+
+Límites honestos
+----------------
+Solo PDF digitales (un escaneo no tiene nombres de fuente: ahí no hay señal).
+Solo 2 columnas: a 3+ (algunos índices) se queda en una y respeta el orden de lectura.
+No separa notas al pie; según cómo esté hecho el PDF irán al pie o intercaladas en el
+flujo — para reconstruirlas usa `footnotes_rebuild.py` después.
+
+Uso
+---
+    python3 pdf_rich_to_markdown.py libro.pdf --out crudo.md
+    python3 pdf_rich_to_markdown.py libro.pdf --out x.md --first 86 --last 92
+    python3 pdf_rich_to_markdown.py libro.pdf --out x.md --gap 1.6   # +/- párrafos
+    python3 pdf_rich_to_markdown.py libro.pdf --out x.md --mark-columns  # texto paralelo
+    python3 pdf_rich_to_markdown.py libro.pdf --out x.md --columns 1     # no separar
+"""
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+
+def _spans(chars):
+    """Agrupa caracteres consecutivos por estilo -> [(estilo, texto), …].
+    estilo: '' normal | 'i' cursiva | 'b' negrita | 'bi' negrita+cursiva."""
+    out = []
+    for c in chars:
+        fn = (c.fontname or "")
+        low = fn.lower()
+        st = ("b" if "bold" in low else "") + ("i" if ("italic" in low or "oblique" in low) else "")
+        ch = c.get_text()
+        if out and out[-1][0] == st:
+            out[-1][1].append(ch)
+        else:
+            out.append([st, [ch]])
+    return [(st, "".join(t)) for st, t in out]
+
+
+def _wrap(st: str, txt: str) -> str:
+    """Envuelve el tramo en su marca markdown, dejando fuera los espacios de los
+    bordes (`* texto *` no es cursiva en markdown; `*texto*` sí)."""
+    if not st or not txt.strip():
+        return txt
+    lead = txt[:len(txt) - len(txt.lstrip())]
+    trail = txt[len(txt.rstrip()):]
+    core = txt.strip()
+    mark = {"i": "*", "b": "**", "bi": "***"}[st]
+    return f"{lead}{mark}{core}{mark}{trail}"
+
+
+def line_markdown(chars) -> str:
+    """Texto de una línea con las cursivas/negritas marcadas y los espacios
+    reconstruidos por los huecos en x."""
+    # 1) reconstruir espacios: si el hueco supera ~1/4 del cuerpo, va un espacio
+    pieces, prev = [], None
+    for c in chars:
+        if prev is not None and c.x0 - prev > c.size * 0.25 and not c.get_text().isspace():
+            pieces.append(" ")
+        pieces.append(None)          # marcador de posición; el texto sale de _spans
+        prev = c.x1
+    # 2) estilos: se recorre en paralelo insertando los espacios calculados
+    out, i = [], 0
+    for st, txt in _spans(chars):
+        buf = []
+        for ch in txt:
+            while i < len(pieces) and pieces[i] == " ":
+                buf.append(" ")
+                i += 1
+            buf.append(ch)
+            i += 1
+        out.append(_wrap(st, "".join(buf)))
+    s = "".join(out)
+    s = s.replace("\t", " ")
+    return re.sub(r"[  ]{2,}", " ", s).strip()
+
+
+ROW_TOL = 3.0          # dos caracteres son de la misma línea si su base dista < esto
+MIN_GUTTER = 5.0       # hueco mínimo, en puntos, para considerarlo canal
+MIN_SUPPORT = 6        # FILAS que deben compartir el hueco a la misma x
+MAX_CROSSERS = 0.15    # fracción de filas del bloque que pueden cruzar el canal
+
+
+def cluster_rows(chars):
+    """Agrupa los caracteres de la página en filas por su línea base."""
+    rows: list[list] = []
+    for c in sorted(chars, key=lambda c: -c.y0):
+        if rows and abs(rows[-1][0] - c.y0) <= ROW_TOL:
+            rows[-1][1].append(c)
+        else:
+            rows.append([c.y0, [c]])
+    return [(y, sorted(cs, key=lambda c: c.x0)) for y, cs in rows]
+
+
+def find_gutter(rows, X0: float, X1: float) -> float | None:
+    """Centro del canal que separa dos columnas, o None si la página va a una sola.
+
+    NO se busca por el ANCHO del hueco: en un libro compuesto apretado el canal
+    puede medir 7pt, menos que algunos espacios entre palabras. Lo que delata a una
+    columna es que **muchas filas tengan el hueco a la MISMA x**; en la prosa cada
+    hueco cae donde quiera y no se repite. Así que se vota: cada fila con un hueco
+    suma un voto a las x que ese hueco cubre, y gana la x más votada.
+
+    De paso resuelve el caso de las notas al pie y los títulos, que cruzan la página
+    entera: esas filas simplemente no votan, y luego se tratan como ancho completo.
+    """
+    W = X1 - X0
+    if W < 100 or len(rows) < MIN_SUPPORT:
+        return None
+    n = int(W) + 1
+    support = [0] * n
+    for _y, cs in rows:
+        vis = [c for c in cs if c.get_text().strip()]
+        for a, b in zip(vis, vis[1:]):
+            if b.x0 - a.x1 >= MIN_GUTTER:
+                for k in range(max(0, int(a.x1 - X0)), min(n, int(b.x0 - X0) + 1)):
+                    support[k] += 1
+
+    lo, hi = int(0.30 * W), int(0.70 * W)   # un canal está en el centro, no en un margen
+    best = max(range(lo, min(hi + 1, n)), key=lambda k: support[k], default=None)
+    if best is None or support[best] < MIN_SUPPORT:
+        return None
+    a = b = best                            # centro de la meseta de voto máximo
+    while a > 0 and support[a - 1] == support[best]:
+        a -= 1
+    while b < n - 1 and support[b + 1] == support[best]:
+        b += 1
+    g = X0 + (a + b) / 2
+
+    # Descartar el FALSO POSITIVO de la prosa justificada: al justificar se estiran
+    # los espacios, y por azar unas cuantas filas tienen un hueco ancho a la misma x
+    # sin que haya columna ninguna. La diferencia es que en una columna de verdad
+    # NADIE cruza el canal: aquí se exige que, dentro del bloque que vota, casi
+    # ninguna fila lo atraviese. (Las notas al pie y los títulos sí lo cruzan, pero
+    # quedan FUERA del bloque, arriba o abajo, y por eso no cuentan.)
+    voters = [y for y, cs in rows
+              for vis in [[c for c in cs if c.get_text().strip()]]
+              if any(bb.x0 - aa.x1 >= MIN_GUTTER and aa.x1 <= g <= bb.x0
+                     for aa, bb in zip(vis, vis[1:]))]
+    if not voters:
+        return None
+    top, bot = max(voters), min(voters)
+    inside = crossers = 0
+    for y, cs in rows:
+        if not (bot <= y <= top):
+            continue
+        inside += 1
+        if any(c.x0 <= g <= c.x1 for c in cs if c.get_text().strip()):
+            crossers += 1
+    if inside and crossers > MAX_CROSSERS * inside:
+        return None
+    return g
+
+
+def iter_lines(pdf: Path, first: int | None, last: int | None, columns: str = "auto"):
+    """(página, columna, y0, x0, texto, cuerpo) por línea.
+
+    columna: 0 = izquierda, 1 = derecha, -1 = ancho completo (título/nota al pie).
+    En páginas a 2 columnas se emite la izquierda ENTERA y luego la derecha, para
+    que el reflujo no las funda línea a línea (que es justo lo que hace Calibre).
+
+    Las filas se reconstruyen desde los CARACTERES, no desde las líneas que da
+    pdfminer: pdfminer ya fusiona por su cuenta las dos columnas en una sola línea
+    cuando el canal es estrecho, y entonces el canal ya no existe cuando lo buscas.
+    """
+    try:
+        from pdfminer.high_level import extract_pages
+        from pdfminer.layout import LTTextContainer, LTChar
+    except ImportError:
+        sys.exit("error: falta pdfminer.six → python3 -m pip install --user "
+                 "--break-system-packages pdfminer.six   (o: bash setup.sh)")
+    pages = None
+    if first or last:
+        a = (first or 1) - 1
+        b = (last or first or 1)
+        pages = list(range(a, b))
+    for i, page in enumerate(extract_pages(str(pdf), page_numbers=pages)):
+        pno = (pages[i] if pages else i) + 1          # nº de página real, 1-based
+        chars = []
+        for el in page:
+            if not isinstance(el, LTTextContainer):
+                continue
+            for line in el:
+                if not hasattr(line, "__iter__"):
+                    continue
+                chars += [c for c in line if isinstance(c, LTChar)]
+        if not chars:
+            continue
+        rows = cluster_rows(chars)
+
+        def emit(cs, col):
+            txt = line_markdown(cs)
+            if txt:
+                return (pno, col, round(min(c.y0 for c in cs), 1),
+                        round(min(c.x0 for c in cs), 1), txt,
+                        round(sum(c.size for c in cs) / len(cs), 1))
+            return None
+
+        vis_all = [c for c in chars if c.get_text().strip()]
+        X0 = min(c.x0 for c in vis_all)
+        X1 = max(c.x1 for c in vis_all)
+        g = find_gutter(rows, X0, X1) if columns == "auto" else None
+        if g is None:
+            for _y, cs in rows:
+                r = emit(cs, -1)          # página normal: TODO es ancho completo
+                if r:
+                    yield r
+            continue
+
+        left, right, wide = [], [], []
+        for y, cs in rows:
+            vis = [c for c in cs if c.get_text().strip()]
+            if not vis:
+                continue
+            # ¿la fila tiene un hueco JUSTO en el canal? Si no lo tiene, cruza el
+            # canal de lado a lado (nota al pie, título): NO se puede partir sin
+            # cortar una palabra por la mitad.
+            split = any(b.x0 - a.x1 >= MIN_GUTTER and a.x1 <= g <= b.x0
+                        for a, b in zip(vis, vis[1:]))
+            if split:
+                left.append((y, [c for c in cs if c.x1 <= g]))
+                right.append((y, [c for c in cs if c.x0 >= g]))
+            elif max(c.x1 for c in vis) <= g:
+                left.append((y, cs))
+            elif min(c.x0 for c in vis) >= g:
+                right.append((y, cs))
+            else:
+                wide.append((y, cs))
+
+        colys = [y for y, _ in left + right]
+        top, bot = max(colys), min(colys)
+        for y, cs in [w for w in wide if w[0] > top]:      # encabezado de la página
+            r = emit(cs, -1)
+            if r:
+                yield r
+        for y, cs in left:
+            r = emit(cs, 0)
+            if r:
+                yield r
+        for y, cs in right:
+            r = emit(cs, 1)
+            if r:
+                yield r
+        for y, cs in [w for w in wide if w[0] <= top]:     # notas al pie y demás
+            r = emit(cs, -1)
+            if r:
+                yield r
+
+
+def dehyph(a: str, b: str) -> str:
+    """Une dos líneas resolviendo el guion de corte de línea."""
+    return a[:-1] + b if re.search(r"[A-Za-zÀ-ÿ]-$", a) else a + " " + b
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("pdf", type=Path)
+    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--first", type=int, help="primera página (1-based)")
+    ap.add_argument("--last", type=int, help="última página (1-based)")
+    ap.add_argument("--gap", type=float, default=1.5,
+                    help="salto vertical (en múltiplos del interlineado) que separa "
+                         "párrafos (def. 1.5; súbelo si trocea de más)")
+    ap.add_argument("--columns", choices=("auto", "1"), default="auto",
+                    help="auto = detecta el canal y saca las columnas por separado; "
+                         "1 = fuerza una columna (def. auto)")
+    ap.add_argument("--mark-columns", action="store_true",
+                    help="marca cada tramo de columna con «<!-- col N pág P -->» "
+                         "(útil en textos paralelos: original / traducción)")
+    a = ap.parse_args()
+    if not a.pdf.exists():
+        sys.exit(f"error: no existe {a.pdf}")
+
+    paras: list[str] = []
+    cur: list[str] = []
+    prev_y = prev_page = prev_col = None
+    leads: list[float] = []
+
+    rows = list(iter_lines(a.pdf, a.first, a.last, a.columns))
+    # interlineado típico = mediana de los saltos dentro de una misma página+columna
+    for i in range(1, len(rows)):
+        if rows[i][0] == rows[i - 1][0] and rows[i][1] == rows[i - 1][1]:
+            d = rows[i - 1][2] - rows[i][2]
+            if 0 < d < 60:
+                leads.append(d)
+    lead = sorted(leads)[len(leads) // 2] if leads else 16.0
+
+    ncol = 0
+    for pno, col, y, x, txt, size in rows:
+        newp = False
+        if prev_y is not None:
+            if pno != prev_page or col != prev_col:
+                newp = True                       # cambio de página o de columna
+            elif (prev_y - y) > lead * a.gap:
+                newp = True                       # salto grande: párrafo nuevo
+        if newp and cur:
+            paras.append(" ".join(cur))
+            cur = []
+        if a.mark_columns and col >= 0 and (col != prev_col or pno != prev_page):
+            paras.append(f"<!-- col {col + 1} pág {pno} -->")   # pno ya es 1-based
+        if col == 1 and col != prev_col:
+            ncol += 1
+        cur = [dehyph(" ".join(cur), txt)] if cur else [txt]
+        prev_y, prev_page, prev_col = y, pno, col
+    if cur:
+        paras.append(" ".join(cur))
+
+    md = "\n\n".join(p.strip() for p in paras if p.strip())
+    md = re.sub(r"\n{3,}", "\n\n", md).strip() + "\n"
+    a.out.write_text(md, encoding="utf-8")
+    it = len(re.findall(r"(?<!\*)\*(?!\*)[^*\n]+(?<!\*)\*(?!\*)", md))
+    print(f"{a.out}: {len(paras)} párrafos, {len(md.split())} palabras, "
+          f"~{it} tramos en cursiva  (interlineado={lead:.1f}, gap={a.gap})")
+    if ncol:
+        print(f"  2 columnas detectadas en {ncol} página(s); salen por separado "
+              f"(izquierda entera y luego derecha)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
