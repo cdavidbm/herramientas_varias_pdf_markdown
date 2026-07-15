@@ -49,6 +49,29 @@ class LatexEscape(unittest.TestCase):
                          "El arte de la astrología horaria")
 
 
+class FootnoteNumbering(unittest.TestCase):
+    """md_to_pdf.footnote_numbering: cuando el original numera las notas POR OBRA,
+    hay que reiniciarlas por capítulo para conservar su numeración (y poder citar
+    «On Questions, nota 115» sin que baile)."""
+
+    def test_page_default(self):
+        self.assertIn("MakePerPage", md_to_pdf.footnote_numbering("page"))
+
+    def test_chapter_resets_counter(self):
+        self.assertIn(r"\counterwithin*{footnote}{chapter}",
+                      md_to_pdf.footnote_numbering("chapter"))
+        # y NO debe reiniciar además por página: se pisarían
+        self.assertNotIn("MakePerPage", md_to_pdf.footnote_numbering("chapter"))
+
+    def test_book_is_latex_default(self):
+        self.assertEqual(md_to_pdf.footnote_numbering("book").strip(), "")
+
+    def test_mode_reaches_the_preamble(self):
+        pre = md_to_pdf.preamble("T", "A", "spanish", False, "", "chapter")
+        self.assertIn(r"\counterwithin*{footnote}{chapter}", pre)
+        self.assertNotIn("%%FOOTNOTE_NUMBERING%%", pre)   # el marcador se sustituyó
+
+
 class EndsTerminal(unittest.TestCase):
     """clean_markdown.ends_terminal: sin el "" espurio en TERMINAL, la detección
     de «el encabezado parte una frase» vuelve a funcionar."""

@@ -42,11 +42,28 @@ def latex_escape(s):
             out = out.replace(k, v)
     return out.replace("\x00", r"\textbackslash{}")
 
-def preamble(title, author, lang, toc, graphicspath=""):
+def footnote_numbering(mode: str) -> str:
+    """LaTeX para numerar las notas al pie.
+
+    `page` (def.) reinicia en cada página: bien para un libro de notas breves.
+    `chapter` reinicia en cada capítulo: es lo que hace falta cuando el original
+    numera por obra y se quiere CONSERVAR su numeración, para poder citar «*On
+    Questions*, nota 115» y que cuadre con el impreso.
+    `book` numera corrido de principio a fin.
+    """
+    if mode == "page":
+        return r"\usepackage{perpage}\MakePerPage{footnote}"
+    if mode == "chapter":
+        return r"\counterwithin*{footnote}{chapter}"
+    return ""                       # book: el contador de LaTeX ya es corrido
+
+
+def preamble(title, author, lang, toc, graphicspath="", fnmode="page"):
     unichars = "\n".join(
         r"\newunicodechar{%s}{{\normalfont\%s}}" % (u, c) for u, c in UNI2CMD.items())
     gpath = (r"\graphicspath{%s}" % "".join("{%s/}" % d for d in graphicspath)
              if graphicspath else "")
+    fn = footnote_numbering(fnmode)
     title = latex_escape(title) if title else title
     author = latex_escape(author) if author else author
     titleblock = ""
@@ -106,8 +123,8 @@ def preamble(title, author, lang, toc, graphicspath=""):
   {\ifnum\value{chapter}>0 \thechapter.\ \fi #1}{\ifnum\value{chapter}>0 \thechapter.\ \fi #1}}
 \renewcommand{\sectionmark}[1]{}
 
-%% notas al pie: numeración corrida por página
-\usepackage{perpage}\MakePerPage{footnote}
+%% notas al pie: la numeración la elige --footnotes (por página / obra / corrida)
+%(fn)s
 \renewcommand{\footnoterule}{\kern -3pt \hrule width 0.4\columnwidth \kern 2.6pt}
 
 %% pandoc: helpers que a veces exige el fragmento LaTeX
@@ -125,7 +142,7 @@ def preamble(title, author, lang, toc, graphicspath=""):
 %(titleblock)s
 \pagenumbering{roman}
 %(toctex)s""" % dict(lang=lang, unichars=unichars, titleblock=titleblock,
-                     toctex=toctex, gpath=gpath)
+                     toctex=toctex, gpath=gpath, fn=fn)
 
 # Detección del prefijo de capítulo numerado en el H1: «Capítulo N —», «Chapter N —»
 # o simplemente «NN —» (numeración por dígitos, p. ej. «# 05 — La Luna»).
@@ -293,6 +310,11 @@ def main():
     ap.add_argument("--image-dir", action="append", default=[], metavar="DIR",
                     help="carpeta donde buscar las imágenes (repetible); se añaden al graphicspath")
     ap.add_argument("--keep-tex", action="store_true", help="conservar el .tex intermedio junto al PDF")
+    ap.add_argument("--footnotes", choices=("page", "chapter", "book"), default="page",
+                    metavar="MODO",
+                    help="numeración de las notas: page = reinicia en cada página (def.); "
+                         "chapter = reinicia en cada capítulo, para CONSERVAR la del "
+                         "original cuando numera por obra; book = corrida de principio a fin")
     a = ap.parse_args()
 
     # graphicspath = carpetas de imágenes indicadas + carpeta de cada .md (rutas absolutas)
@@ -305,7 +327,7 @@ def main():
     texs = [md_to_latex(m, r) for m, r in zip(a.md, roles)]
     front = "\n\n".join(t for t, r in zip(texs, roles) if r == "front")
     mainb = "\n\n".join(t for t, r in zip(texs, roles) if r != "front")
-    doc = (preamble(a.title, a.author, a.lang, a.toc, gdirs)
+    doc = (preamble(a.title, a.author, a.lang, a.toc, gdirs, a.footnotes)
            + front + "\n\\mainmatter\n" + mainb + "\n\\end{document}\n")
 
     out = pathlib.Path(a.out).resolve()
