@@ -385,6 +385,11 @@ def iter_lines(pdf: Path, first: int | None, last: int | None, columns: str = "a
         if body:
             while rows and _msize(rows[-1][1]) <= body * SMALL:
                 foot.insert(0, rows.pop())
+            # El volado de llamada del CUERPO también forma fila propia (7.7pt sobre
+            # 11.8): sin fundirlo, el marcador no queda pegado a la palabra que anota
+            # sino suelto al principio de la línea de abajo. Es el mismo arreglo que
+            # el del pie, y hace falta igual aquí.
+            rows = merge_raised(rows, body)
 
         def emit_foot():
             """Las notas de esta página, con su número ya como [^N].
