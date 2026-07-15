@@ -52,6 +52,8 @@ def preamble(title, author, lang, toc, graphicspath=""):
 %(gpath)s
 \usepackage{pdflscape}                                  %% páginas apaisadas para tablas anchas
 \usepackage{longtable,booktabs,array}                  %% tablas de pandoc
+\usepackage{fvextra}                                   %% verbatim que ajusta líneas largas
+\RecustomVerbatimEnvironment{verbatim}{Verbatim}{breaklines,breakanywhere,fontsize=\small}
 \usepackage{amssymb}
 %% --- geometría idéntica a las ediciones janegca (Valens/Doroteo) ---
 \usepackage[top=2cm, bottom=2cm, outer=2.5cm, inner=2.5cm,

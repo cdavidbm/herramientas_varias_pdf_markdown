@@ -50,37 +50,74 @@ DEF_RE = re.compile(r"^(\d{1,3})\.\s+(\S.*)$")
 # lo maneja: acepta definiciones sólo si forman una secuencia 1,2,3,… (así los
 # números sueltos de prosa —años, páginas— no se confunden con notas).
 DEF_BARE_RE = re.compile(r"^(\d{1,3})\s+(\S.*)$")
+_LONE_NUM_RE = re.compile(r"^(\d{1,3}),?$")          # línea que es SOLO un número
+_MONTHS = (r"enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
+           r"septiembre|setiembre|octubre|noviembre|diciembre")
+
+
+def _merge_split_defs(lines):
+    """Une las definiciones PARTIDAS por el OCR: una línea que es solo un número
+    («19») seguida (tras posibles líneas en blanco) de la línea con el texto de la
+    cita («Lilly, p. 122,») -> «19 Lilly, p. 122,». Así la definición queda en una
+    sola línea y el número suelto no se confunde luego con un marcador."""
+    out, i = [], 0
+    while i < len(lines):
+        m = _LONE_NUM_RE.match(lines[i].strip())
+        if m:
+            j = i + 1
+            while j < len(lines) and not lines[j].strip():
+                j += 1
+            if j < len(lines):
+                nxt = lines[j].strip()
+                if nxt and not _LONE_NUM_RE.match(nxt) and nxt[0] not in "#|![":
+                    out.append(f"{m.group(1)} {nxt}")
+                    i = j + 1
+                    continue
+        out.append(lines[i]); i += 1
+    return out
+
+
+def _is_prose(line):
+    s = line.strip()
+    return bool(s) and s[0] not in "#|![" and not _LONE_NUM_RE.match(s) and not s.startswith("[^")
 
 
 def rebuild_bare(text):
-    lines = text.split("\n")
+    lines = _merge_split_defs(text.split("\n"))
     # Definiciones candidatas «N Texto» (número + espacio, SIN punto: así NO capta
     # los ítems de listas numeradas «1. …», que sí llevan punto). La numeración de
     # notas suele ser CONTINUA en todo el libro (un capítulo empieza en 14, otro en
-    # 109…), no reinicia en 1: tomamos la racha CONSECUTIVA (n == previo+1) más larga.
+    # 109…), no reinicia en 1, y es ESTRICTAMENTE CRECIENTE en orden de archivo (con
+    # huecos): nos quedamos con la mayor subsecuencia creciente contigua.
     cand = [(i, int(m.group(1)), m.group(2))
             for i, ln in enumerate(lines)
             if (m := DEF_BARE_RE.match(ln.strip()))]
-    # Las notas están numeradas de forma ESTRICTAMENTE CRECIENTE en orden de archivo
-    # (con huecos si el OCR fusionó alguna definición). Nos quedamos con la mayor
-    # subsecuencia creciente contigua: un número que rompa la monotonía (p. ej. un
-    # ítem de lista o un año al inicio de línea) inicia una racha nueva y se descarta
-    # si la suya es más corta.
-    best, cur = [], []
-    for c in cand:
-        if cur and c[1] > cur[-1][1]:
-            cur.append(c)
-        else:
-            if len(cur) > len(best): best = cur
-            cur = [c]
-    if len(cur) > len(best): best = cur
+    # Subsecuencia estrictamente creciente MÁS LARGA (LIS propia, no contigua): así
+    # un número duplicado (p. ej. dos notas «25» por un OCR que leyó «26» como «25»)
+    # o un candidato espurio intercalado NO trunca la serie; se salta y se conserva
+    # el resto (14…24 no se pierden por un tropiezo en 25).
+    N = len(cand)
+    if N < 2:
+        return None
+    dp = [1] * N
+    prev = [-1] * N
+    for i in range(N):
+        for j in range(i):
+            if cand[j][1] < cand[i][1] and dp[j] + 1 > dp[i]:
+                dp[i] = dp[j] + 1
+                prev[i] = j
+    end = max(range(N), key=lambda k: dp[k])
+    best = []
+    while end != -1:
+        best.append(cand[end])
+        end = prev[end]
+    best.reverse()
     if len(best) < 2:                           # no parece este estilo
         return None
-    defs = {n: (i, t) for (i, n, t) in best}    # n -> (idx_línea, texto)
+    defs = {n: (i, t) for (i, n, t) in best}
     def_idx = {i for (i, _n, _t) in best}
 
     body = "\n".join(lines)
-    # spans de las líneas-definición (para no tomarlas como marcadores)
     def_spans, off = [], 0
     for i, ln in enumerate(lines):
         if i in def_idx:
@@ -90,16 +127,24 @@ def rebuild_bare(text):
     def in_def(p):
         return any(a <= p < b for a, b in def_spans)
 
-    # Marcadores en el cuerpo, en orden: número suelto precedido de espacio o de
-    # puntuación/letra (no de otro dígito) y seguido de espacio/puntuación/fin (no
-    # de dígito). Así 1970, 30.13 o «casa 6.ª» NO cuentan como marcador.
+    # Marcadores: búsqueda GLOBAL hacia adelante en orden numérico (los marcadores
+    # aparecen en el texto en el mismo orden que su número). Guardas contra falsos
+    # positivos: fechas («17 de septiembre»), horas/grados («5:50», «17º»), y números
+    # pegados a otro dígito (años, decimales). El cursor `pos` sólo avanza al acertar.
     replacements, linked_ns, pos = [], set(), 0
-    for n in range(min(defs), max(defs) + 1):
-        if n not in defs:
-            continue
-        rx = re.compile(r"(?<=[\s.,;:)\]!?»”’]) ?" + str(n) + r"(?=[\s.,;:)\]]|$)")
-        found = next((m for m in rx.finditer(body)
-                      if m.start() >= pos and not in_def(m.start())), None)
+    for n in sorted(defs):
+        rx = re.compile(r"(?<![\d.,])(?<=[\s.,;:)\]!?»”’])" + str(n) + r"(?=[\s.;)\]!?»]|$)")
+        found = None
+        for m in rx.finditer(body):
+            if m.start() < pos or in_def(m.start()):
+                continue
+            after = body[m.end():m.end() + 20]
+            if re.match(r"\s+de\s+(" + _MONTHS + r")", after):    # fecha
+                continue
+            if re.match(r"\s*[:hº]\s*\d", after):                 # hora/grado
+                continue
+            found = m
+            break
         if found:
             replacements.append((found.start(), found.end(), n))
             pos = found.end()
@@ -107,23 +152,28 @@ def rebuild_bare(text):
 
     newbody = body
     for s, e, n in sorted(replacements, reverse=True):
-        # el span es « N» o «N» (la puntuación previa queda fuera, en el lookbehind);
-        # el espacio previo, si lo había, se descarta: «Lilly. 1 Guido» -> «Lilly.[^1] Guido»
         newbody = newbody[:s] + f"[^{n}]" + newbody[e:]
+    lines = newbody.split("\n")
 
-    # definiciones -> «[^N]: Texto», SOLO las notas cuyo marcador se enlazó (si no,
-    # quedaría un `[^N]:` huérfano que pandoc descarta = cita perdida). Las demás se
-    # quedan como número suelto en línea (sin pérdida de la referencia).
-    conv, out = 0, []
-    for i, ln in enumerate(newbody.split("\n")):
-        m = DEF_BARE_RE.match(ln.strip())
-        if i in def_idx and m and int(m.group(1)) in linked_ns:
-            out.append(f"[^{int(m.group(1))}]: {m.group(2)}"); conv += 1
-        else:
-            out.append(ln)
-    linked = len(linked_ns)
-    final = re.sub(r"\n{3,}", "\n\n", "\n".join(out))
-    stats = dict(blocks=1, defs=len(defs), linked=linked, converted=conv, unmatched=[])
+    # Respaldo: la nota sin marcador hallado se cuelga al final del último párrafo de
+    # prosa anterior a su definición (así nunca queda un `[^N]:` huérfano que pandoc
+    # descartaría; la cita va al pie, junto al párrafo que la referencia).
+    for n, (idx, _t) in defs.items():
+        if n in linked_ns:
+            continue
+        for w in range(idx - 1, -1, -1):
+            if _is_prose(lines[w]):
+                lines[w] = lines[w].rstrip() + f"[^{n}]"
+                linked_ns.add(n)
+                break
+
+    conv = 0
+    for i, ln in enumerate(lines):
+        if i in def_idx and (m := DEF_BARE_RE.match(ln.strip())):
+            lines[i] = f"[^{int(m.group(1))}]: {m.group(2)}"; conv += 1
+    final = re.sub(r"\n{3,}", "\n\n", "\n".join(lines))
+    stats = dict(blocks=1, defs=len(best), linked=len(replacements),
+                 converted=conv, unmatched=[])
     return final, stats
 
 
