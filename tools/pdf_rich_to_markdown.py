@@ -225,7 +225,7 @@ def cluster_rows(chars):
     return [(y, sorted(cs, key=lambda c: c.x0)) for y, cs in rows]
 
 
-def find_gutter(rows, X0: float, X1: float) -> float | None:
+def find_gutter(rows, X0: float, X1: float, force: bool = False) -> float | None:
     """Centro del canal que separa dos columnas, o None si la página va a una sola.
 
     NO se busca por el ANCHO del hueco: en un libro compuesto apretado el canal
@@ -238,7 +238,7 @@ def find_gutter(rows, X0: float, X1: float) -> float | None:
     entera: esas filas simplemente no votan, y luego se tratan como ancho completo.
     """
     W = X1 - X0
-    if W < 100 or len(rows) < MIN_SUPPORT:
+    if W < 100 or (not force and len(rows) < MIN_SUPPORT):
         return None
     n = int(W) + 1
     support = [0] * n
@@ -251,8 +251,10 @@ def find_gutter(rows, X0: float, X1: float) -> float | None:
 
     lo, hi = int(0.30 * W), int(0.70 * W)   # un canal está en el centro, no en un margen
     best = max(range(lo, min(hi + 1, n)), key=lambda k: support[k], default=None)
-    if best is None or support[best] < MIN_SUPPORT:
+    if best is None or (not force and support[best] < MIN_SUPPORT):
         return None
+    if best is not None and support[best] == 0:
+        return None                          # ni forzando: ahí no hay hueco ninguno
     a = b = best                            # centro de la meseta de voto máximo
     while a > 0 and support[a - 1] == support[best]:
         a -= 1
@@ -266,6 +268,13 @@ def find_gutter(rows, X0: float, X1: float) -> float | None:
     # NADIE cruza el canal: aquí se exige que, dentro del bloque que vota, casi
     # ninguna fila lo atraviese. (Las notas al pie y los títulos sí lo cruzan, pero
     # quedan FUERA del bloque, arriba o abajo, y por eso no cuentan.)
+    # Con `force` el operador YA SABE que la página va a dos columnas (p. ej. un
+    # tramo de texto paralelo que el índice del libro delimita). Entonces no hay
+    # nada que decidir: se usa el mejor candidato y se salta la guarda. Hace falta
+    # porque en un texto paralelo real el canal SE MUEVE de página a página y el
+    # bloque puede ocupar solo unas filas, así que la señal automática no llega.
+    if force:
+        return g
     voters = [y for y, cs in rows
               for vis in [[c for c in cs if c.get_text().strip()]]
               if any(bb.x0 - aa.x1 >= MIN_GUTTER and aa.x1 <= g <= bb.x0
@@ -321,7 +330,7 @@ def merge_raised(foot, tsz: float):
 
 
 def iter_lines(pdf: Path, first: int | None, last: int | None, columns: str = "auto",
-               body: float | None = None):
+               body: float | None = None, force_range: tuple | None = None):
     """(página, columna, y0, x0, texto, cuerpo) por línea.
 
     columna: 0 = izquierda, 1 = derecha, -1 = ancho completo, -2 = nota al pie.
@@ -402,7 +411,9 @@ def iter_lines(pdf: Path, first: int | None, last: int | None, columns: str = "a
         vis_all = [c for c in chars if c.get_text().strip()]
         X0 = min(c.x0 for c in vis_all)
         X1 = max(c.x1 for c in vis_all)
-        g = find_gutter(rows, X0, X1) if columns == "auto" else None
+        forced = bool(force_range and force_range[0] <= pno <= force_range[1])
+        g = (find_gutter(rows, X0, X1, forced)
+             if (columns == "auto" or forced) else None)
         if g is None:
             for _y, cs in rows:
                 r = emit(cs, -1, body)          # página normal: TODO es ancho completo
@@ -479,6 +490,11 @@ def main() -> int:
     ap.add_argument("--footnotes", action="store_true",
                     help="separa las notas al pie por CUERPO DE LETRA: los volados "
                          "salen como [^N] y las notas como definiciones [^N]: al final")
+    ap.add_argument("--force-columns", metavar="A-B",
+                    help="rango de páginas donde SE SABE que hay 2 columnas (texto "
+                         "paralelo): se salta la detección automática, que no llega "
+                         "cuando el canal se mueve de página a página o el bloque "
+                         "ocupa pocas filas. Ej: --force-columns 96-133")
     ap.add_argument("--body-size", type=float,
                     help="cuerpo del texto corrido en pt (def: se detecta solo)")
     a = ap.parse_args()
@@ -497,7 +513,14 @@ def main() -> int:
     prev_y = prev_page = prev_col = None
     leads: list[float] = []
 
-    rows = list(iter_lines(a.pdf, a.first, a.last, a.columns, body))
+    fr = None
+    if a.force_columns:
+        m = re.fullmatch(r"(\d+)-(\d+)", a.force_columns.strip())
+        if not m:
+            sys.exit("error: --force-columns quiere un rango A-B (ej. 96-133)")
+        fr = (int(m.group(1)), int(m.group(2)))
+        print(f"columnas FORZADAS en las páginas {fr[0]}-{fr[1]}")
+    rows = list(iter_lines(a.pdf, a.first, a.last, a.columns, body, fr))
     # interlineado típico = mediana de los saltos dentro de una misma página+columna
     for i in range(1, len(rows)):
         if rows[i][0] == rows[i - 1][0] and rows[i][1] == rows[i - 1][1]:
@@ -552,8 +575,8 @@ def main() -> int:
     print(f"{a.out}: {len(paras)} párrafos, {len(md.split())} palabras, "
           f"~{it} tramos en cursiva  (interlineado={lead:.1f}, gap={a.gap})")
     if ncol:
-        print(f"  2 columnas detectadas en {ncol} página(s); salen por separado "
-              f"(izquierda entera y luego derecha)")
+        print(f"  {ncol} bloque(s) a 2 columnas; cada uno sale con la izquierda "
+              f"entera y luego la derecha")
     if body:
         marks = len(re.findall(r"\[\^\d+\](?!:)", md))
         seq = [n for n, _ in notes]
