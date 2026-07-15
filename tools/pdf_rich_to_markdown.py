@@ -411,44 +411,47 @@ def iter_lines(pdf: Path, first: int | None, last: int | None, columns: str = "a
             yield from emit_foot()
             continue
 
-        left, right, wide = [], [], []
+        # Una página a dos columnas NO es un solo bloque: es una pila de BANDAS
+        # —rótulo a todo el ancho, bloque a dos columnas, rótulo, bloque…—. Si se
+        # trata como un bloque único y se sacan «primero la izquierda entera, luego
+        # la derecha», todo lo que cruza el canal (los rótulos de sección centrados
+        # §5.1, §5.2…) acaba amontonado al final de la página, separado del texto
+        # que titula. Así que una fila que cruza el canal CIERRA la banda en curso y
+        # se emite en su sitio.
+        band: list = []
+
+        def flush_band():
+            for y, cs, k in [b for b in band if b[2] == 0]:      # columna izquierda
+                r = emit(cs, 0, body)
+                if r:
+                    yield r
+            for y, cs, k in [b for b in band if b[2] == 1]:      # columna derecha
+                r = emit(cs, 1, body)
+                if r:
+                    yield r
+            band.clear()
+
         for y, cs in rows:
             vis = [c for c in cs if c.get_text().strip()]
             if not vis:
                 continue
-            # ¿la fila tiene un hueco JUSTO en el canal? Si no lo tiene, cruza el
-            # canal de lado a lado (nota al pie, título): NO se puede partir sin
-            # cortar una palabra por la mitad.
+            # ¿la fila tiene un hueco JUSTO en el canal? Si no lo tiene, lo cruza de
+            # lado a lado (rótulo, título): NO se puede partir sin cortar una palabra.
             split = any(b.x0 - a.x1 >= MIN_GUTTER and a.x1 <= g <= b.x0
                         for a, b in zip(vis, vis[1:]))
             if split:
-                left.append((y, [c for c in cs if c.x1 <= g]))
-                right.append((y, [c for c in cs if c.x0 >= g]))
+                band.append((y, [c for c in cs if c.x1 <= g], 0))
+                band.append((y, [c for c in cs if c.x0 >= g], 1))
             elif max(c.x1 for c in vis) <= g:
-                left.append((y, cs))
+                band.append((y, cs, 0))
             elif min(c.x0 for c in vis) >= g:
-                right.append((y, cs))
+                band.append((y, cs, 1))
             else:
-                wide.append((y, cs))
-
-        colys = [y for y, _ in left + right]
-        top, bot = max(colys), min(colys)
-        for y, cs in [w for w in wide if w[0] > top]:      # encabezado de la página
-            r = emit(cs, -1, body)
-            if r:
-                yield r
-        for y, cs in left:
-            r = emit(cs, 0, body)
-            if r:
-                yield r
-        for y, cs in right:
-            r = emit(cs, 1, body)
-            if r:
-                yield r
-        for y, cs in [w for w in wide if w[0] <= top]:     # lo que cruza el canal
-            r = emit(cs, -1, body)
-            if r:
-                yield r
+                yield from flush_band()          # el rótulo cierra la banda…
+                r = emit(cs, -1, body)
+                if r:
+                    yield r                      # …y va en su sitio, no al final
+        yield from flush_band()
         yield from emit_foot()
 
 
