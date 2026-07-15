@@ -83,7 +83,12 @@ def tesseract_batch(pdf, a, b, side, tmp, dpi, lang, env):
             raise RuntimeError(f"tesseract failed on page {p}: {r.stderr[-500:]}")
         texts.append(r.stdout)
         png.unlink(missing_ok=True)
-    side.write_text("\f".join(texts), encoding="utf-8")
+    # Escritura ATÓMICA: si el proceso muere a mitad del write, un `side` truncado
+    # existiría y el resume (side.exists() and st_size>0) lo daría por bueno,
+    # perdiendo páginas. Escribir a .tmp y os.replace (rename atómico) lo evita.
+    tmp_side = side.with_name(side.name + ".tmp")
+    tmp_side.write_text("\f".join(texts), encoding="utf-8")
+    os.replace(tmp_side, side)
 
 
 def main():
@@ -164,20 +169,28 @@ def main():
             r = sh(["qpdf", "--empty", "--pages", str(pdf), f"{a}-{b}", "--", str(batch_pdf)])
             if r.returncode != 0 or not batch_pdf.exists():
                 sys.exit(f"qpdf failed on pages {a}-{b}:\n{r.stderr}")
+            # Escritura ATÓMICA: ocrmypdf escribe directamente sobre el destino; si
+            # muere a mitad, un `part`/`side` truncado existiría y el resume lo daría
+            # por bueno (páginas perdidas). Escribir a .tmp y os.replace al terminar.
+            part_tmp = part.with_name(part.name + ".tmp")
+            side_tmp = side.with_name(side.name + ".tmp")
             cmd = ["ocrmypdf", MODE_FLAG[args.mode], "-l", args.lang]
             if args.jobs:
                 cmd += ["--jobs", str(args.jobs)]
             if args.optimize:
                 cmd += ["--optimize", str(args.optimize)]
             if want_text:
-                cmd += ["--sidecar", str(side)]
-            cmd += extra + [str(batch_pdf), str(part)]
+                cmd += ["--sidecar", str(side_tmp)]
+            cmd += extra + [str(batch_pdf), str(part_tmp)]
             r = sh(cmd, env=env)
             # ocrmypdf exit 6 = "some pages already had text and were skipped" (skip mode) — not fatal.
-            if r.returncode not in (0, 6) or not part.exists() or (want_text and not side.exists()):
-                part.unlink(missing_ok=True)
-                side.unlink(missing_ok=True)
+            if r.returncode not in (0, 6) or not part_tmp.exists() or (want_text and not side_tmp.exists()):
+                part_tmp.unlink(missing_ok=True)
+                side_tmp.unlink(missing_ok=True)
                 sys.exit(f"ocrmypdf failed on pages {a}-{b} (exit {r.returncode}):\n{r.stderr[-2000:]}")
+            os.replace(part_tmp, part)
+            if want_text:
+                os.replace(side_tmp, side)
             batch_pdf.unlink(missing_ok=True)
         done += 1
         eta = (time.time() - t0) * (len(batches) - done)

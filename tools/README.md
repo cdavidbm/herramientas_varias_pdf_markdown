@@ -277,6 +277,16 @@ heavily-annotated or glyph-bearing books (astrology, alchemy, scholarly monograp
       ocrmypdf's own rasterization, which can misread e.g. *oikos*→*otkos*.
     - Caveat: on recoded PDFs, `--mode redo` is a **no-op** (ocrmypdf keeps the
       unrecognised text layer) — use `force` or `--engine tesseract`.
+- `ocr_preprocess.py` — **pre-OCR image cleanup** for bad scans. Boosts tesseract
+  accuracy on low-quality originals: grayscale, contrast enhancement (CLAHE),
+  denoise, deskew (straighten) and rescale when the page is too small. Feed the
+  cleaned image to the OCR engine. **Requires OpenCV + numpy**, so it runs from the
+  OCR venv: `~/.local/share/forja-ocr-venv/bin/python tools/ocr_preprocess.py …`
+  (create it with `bash tools/ocr_setup.sh`).
+- `ocr_corruption.py` — **corruption detector** (no dictionary): flags OCR lines
+  that look mis-digitised so the agent can fix them *with judgment*. It corrects
+  nothing on its own (auto-correcting multilingual academic text does more harm
+  than good) — it just points at the suspect lines to check against the page image.
 - `pdf_headings.py book.pdf [--apply-md DIR]` — recover heading **hierarchy** from a
   DIGITAL pdf by **font size**. Text bisturíes lose font info and flatten everything
   to one `##` level (missing Title-Case subsections that aren't ALL-CAPS). This reads
@@ -331,6 +341,22 @@ conversion or handing it to translation.
   clean_openings over a whole folder. `--no-openings` for notes/index.
 
 See the `/qa-conversion` skill for the full checklist.
+
+### Navigating & searching a converted library (read only what you need)
+
+Once a book is converted to per-chapter markdown, these two orient the agent so it
+reads only the relevant passages instead of the whole book — saving tokens without
+losing quality.
+
+- `book_map.py <folder_or_file.md>` — **compact structural map**: for each `.md`
+  its title, word count, headings and footnote count. Cheap orientation with no
+  content read; the agent scans the map, then opens only what it needs.
+- `book_index.py {build|query|status} <folder> …` — **local full-text search
+  index** over a markdown folder, powered by SQLite **FTS5** (ships with Python,
+  nothing to install) and accent-insensitive. `query <folder> "melancolía
+  saturnina" [--top N]` returns the most relevant passages with their location
+  (file › heading) and a snippet, auto-(re)building the index when files change.
+  The index lives as `.forja_index.db` inside the folder (git-ignore it).
 
 ## System requirements
 
@@ -531,14 +557,24 @@ Two things may still need attention on an unusual book:
 | `detect_chapters.py`           | PDF chapter-marker scanner               | Python stdlib + poppler CLI |
 | `pdf_sections_to_markdown.py`  | Single-PDF → per-section markdown        | Python stdlib + poppler CLI |
 | `pdf_chapters_to_markdown.py`  | Multi-PDF (pre-split) → markdown w/ page-bottom footnotes | Python stdlib + poppler CLI |
+| `pdf_book_to_markdown.py`      | Single post-OCR PDF (Harvard cites + end biblio) → per-section markdown | Python stdlib + poppler CLI |
+| `ocr_text_to_markdown.py`      | Plain OCR text dump → per-chapter markdown by page range | Python stdlib |
 | `rtf_to_markdown.py`           | RTF → per-section markdown w/ pooled notes | Python + striprtf |
+| `latex_to_markdown.py`         | LaTeX classics (starfont/wasysym glyphs) → study markdown | Python + pandoc CLI |
 | `epub_to_markdown.py`          | EPUB → per-chapter markdown              | Python + beautifulsoup4 |
+| `epub_illustrated_to_markdown.py` | Image-heavy EPUB → per-section markdown w/ figures exported & embedded | Python + beautifulsoup4 |
 | `build_plan.py`                | Generates `plan.json` from ANY EPUB (spine+TOC, generic) | Python + beautifulsoup4 |
 | `attach_notes_by_chapter.py`   | Post-process to attach pooled notes per chapter | Python + beautifulsoup4 |
 | `yt_transcript.py`             | YouTube/local subs → clean, de-duplicated, timestamp-free text | Python stdlib + yt-dlp CLI |
 | `yt_media.py`                  | yt-dlp front door: audio/video/subs/info downloads | Python stdlib + yt-dlp CLI |
 | `yt_audio_transcribe.py`       | Video sin subtítulos → transcript por ASR (Whisper) | Python + faster-whisper (venv) + yt-dlp |
 | `clean_markdown.py`            | Post-OCR cleanup: running-headers, soft hyphens, images, spacing | Python stdlib |
+| `clean_openings.py`            | Strip scrambled chapter frontpieces + rejoin split drop-caps | Python stdlib |
+| `docling_clean.py`             | Clean Docling back-matter artifacts (2-col notes/index) | Python stdlib |
+| `fix_ligatures.py`             | Repair OUP ligature corruption (fi/ff/fl → W/V/X/Y/Z) | Python stdlib |
+| `fix_diacritics.py`            | Repair OUP/Distiller diacritic corruption + normalize to NFC | Python stdlib |
+| `limpiar_academico.py`         | Orchestrator: fix_ligatures + fix_diacritics + clean_openings over a folder | Python stdlib |
+| `check_completeness.py`        | Detect/repair text SILENTLY dropped in PDF→md conversion | Python stdlib + poppler CLI |
 | `split_chapters.py`            | Markdown → per-chapter files (plan or by-heading) | Python stdlib |
 | `footnotes_rebuild.py`         | Rebuild `[^N]` footnotes from OCR (2 styles: glued & bare/loose) | Python stdlib |
 | `morinus_directions_clean.py`  | Clean Morinus direction dumps → tidy monospace data lines | Python stdlib |
@@ -546,8 +582,12 @@ Two things may still need attention on an unusual book:
 | `astro_glyphs.py`              | Astro-glyph reference + garbled-cell flagger for OCR tables | Python stdlib |
 | `docling_incremental.py`       | Docling in page batches w/ checkpoint + resume + progress | Python stdlib + docling + qpdf + poppler |
 | `ocr_incremental.py`           | ocrmypdf in page batches w/ checkpoint + resume (best models) | Python stdlib + ocrmypdf + qpdf + poppler |
+| `ocr_preprocess.py`            | Pre-OCR image cleanup (grayscale, CLAHE, denoise, deskew, rescale) | Python + opencv-python + numpy (venv forja-ocr-venv) |
+| `ocr_corruption.py`            | Flag likely-corrupt OCR lines for manual review (no dictionary) | Python stdlib |
 | `pdf_headings.py`              | recover heading hierarchy by font size (digital PDFs) | pdfminer.six |
 | `pdf_blocks.py`                | recover block quotes by font size + indent (digital PDFs) | pdfminer.six |
+| `book_index.py`                | Local full-text (SQLite FTS5) search index over a markdown folder | Python stdlib (sqlite3) |
+| `book_map.py`                  | Compact structural map of a markdown folder/file (titles, word counts, headings, notes) | Python stdlib |
 | `README.md`                    | This file | — |
 
 ## Troubleshooting

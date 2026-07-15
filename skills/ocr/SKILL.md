@@ -22,7 +22,8 @@ Define al empezar:
 export TESSDATA_PREFIX=~/.local/share/forja-tessdata
 T=/mnt/c/ideas/_La_Forja/tools ; PYV=~/.local/share/forja-ocr-venv/bin/python
 ```
-Si falta algo: `bash $T/ocr_setup.sh`.
+Si esa ruta no existe (repo clonado en otra máquina), usa la ruta real del clon:
+desde la raíz del repo, `T=tools`. Si falta algo: `bash $T/ocr_setup.sh`.
 
 ## Paso 0 · Diagnostica el caso
 

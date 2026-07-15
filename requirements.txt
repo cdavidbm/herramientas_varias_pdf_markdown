@@ -1,0 +1,19 @@
+# requirements.txt — dependencias PyPI de terceros de los scripts de La Forja.
+#
+# Solo librerías de terceros importadas por tools/*.py (la stdlib de Python NO se
+# lista). Las herramientas de línea de comandos (pandoc, poppler, ocrmypdf,
+# tesseract, docling, markitdown, yt-dlp, ffmpeg) NO son paquetes PyPI y se
+# instalan aparte (ver setup.sh / README.md).
+#
+# --- Ligeras (setup.sh las instala con pip --user; sin venv) ------------------
+beautifulsoup4        # bs4 — epub_to_markdown.py, build_plan.py, epub_illustrated_to_markdown.py, attach_notes_by_chapter.py
+striprtf              # rtf_to_markdown.py
+pdfminer.six          # pdf_headings.py, pdf_blocks.py (jerarquía de títulos / citas por tamaño de fuente)
+
+# --- Pesadas / OPCIONALES (NO en pip --user: van en venvs aislados) -----------
+# Las instala tools/ocr_setup.sh (venv forja-ocr-venv) y tools/asr_setup.sh
+# (venv forja-asr-venv). Se listan aquí solo como inventario; NO las metas en el
+# entorno global.
+numpy                 # ocr_preprocess.py            [venv forja-ocr-venv]
+opencv-python         # cv2 — ocr_preprocess.py      [venv forja-ocr-venv; setup usa opencv-python-headless]
+faster-whisper        # yt_audio_transcribe.py       [venv forja-asr-venv]

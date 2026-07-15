@@ -55,7 +55,11 @@ Requiere `uv` y red a GitHub.
 **Base (casi todas las skills):**
 ```bash
 sudo apt-get install poppler-utils mupdf-tools pandoc ocrmypdf tesseract-ocr qpdf
-# Python 3 con su stdlib basta para los scripts .py (sin dependencias extra).
+# La mayoría de los scripts .py usan solo la stdlib, pero algunos necesitan
+# librerías ligeras de PyPI (EPUB, RTF, estructura por fuente). Instálalas con:
+#   python3 -m pip install --user beautifulsoup4 striprtf pdfminer.six
+# (o `bash setup.sh`, que lo hace por ti). Ver requirements.txt en la raíz del
+# repo para el inventario completo — opencv/faster-whisper van en venvs aparte.
 ```
 
 **Conversores de alta fidelidad (para `/forja` con PDF complejos / Office):**

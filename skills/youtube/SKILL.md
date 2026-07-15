@@ -21,6 +21,8 @@ se detecta). Pregunta SOLO lo que cambia el resultado y no puedes inferir:
 **traducirlo**.
 
 **Toolbox:** `/mnt/c/ideas/_La_Forja/tools/`. Define `T=/mnt/c/ideas/_La_Forja/tools`.
+Si esa ruta no existe (repo clonado en otra máquina), usa la ruta real del clon:
+desde la raíz del repo, `T=tools`.
 
 Tres scripts:
 - `yt_transcript.py` — URL → texto limpio, **sin timestamps y sin la
@@ -75,7 +77,7 @@ el video se "lee" transcribiendo su audio con **faster-whisper** (local, sin
 API). Requiere el venv de ASR una sola vez:
 
 ```bash
-bash $T/../tools/asr_setup.sh    # o: bash /mnt/c/ideas/_La_Forja/tools/asr_setup.sh
+bash $T/asr_setup.sh             # asr_setup.sh vive en el propio tools/ ($T)
 PY="$HOME/.local/share/forja-asr-venv/bin/python"
 ```
 

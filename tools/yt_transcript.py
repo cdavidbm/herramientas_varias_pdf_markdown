@@ -227,7 +227,15 @@ def download_subs(url: str, lang: str, auto: bool, outdir: Path,
            *(cookies or []), "-o", str(tmp / "%(id)s.%(ext)s"), url]
     subprocess.run(cmd, capture_output=True, text=True)
     files = sorted(list(tmp.glob("*.vtt")) + list(tmp.glob("*.srt")))
-    return files[0] if files else None
+    # Mover el resultado a outdir y BORRAR el tmp: antes el directorio temporal
+    # (con dir=outdir) quedaba huérfano en cada llamada, ensuciando la carpeta.
+    if not files:
+        shutil.rmtree(tmp, ignore_errors=True)
+        return None
+    dest = outdir / files[0].name
+    shutil.move(str(files[0]), str(dest))
+    shutil.rmtree(tmp, ignore_errors=True)
+    return dest
 
 
 def build_meta(info: dict, sub_kind: str | None, sub_lang: str | None) -> dict:

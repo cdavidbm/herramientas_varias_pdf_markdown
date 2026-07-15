@@ -271,6 +271,16 @@ def main():
     if st["unmatched"]:
         show = [f"b{bk+1}:{n}({why})" for bk, n, why in st["unmatched"][:25]]
         print("  unmatched:", show)
+    # Guarda anti-misfire: si se «convirtieron» definiciones pero NO se enlazó ningún
+    # marcador en el cuerpo, casi seguro que el patrón `N.` capturó una LISTA NUMERADA
+    # de prosa («1. Primer punto») en vez de notas reales. Reescribir destruiría la
+    # lista. Se rechaza la escritura aunque venga --apply.
+    if st["converted"] > 0 and st["linked"] == 0:
+        print("  ⚠️  MISFIRE probable: se detectaron 'definiciones' pero 0 marcadores en el "
+              "cuerpo\n     (¿una lista numerada «1. …», no notas?). NO se escribe. "
+              "Revisa el archivo; si de verdad son notas sin marcador, edítalas a mano.",
+              file=sys.stderr)
+        return
     if args.apply:
         src.write_text(final, encoding="utf-8")
         print("  written in place.")

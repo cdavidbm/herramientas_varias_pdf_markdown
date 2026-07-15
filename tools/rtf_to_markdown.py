@@ -174,7 +174,10 @@ def render_body(lines: list[str], ranges: list[tuple[int, int]], section_title: 
 
 
 def replace_inline_refs(text: str) -> str:
-    return re.sub(r'\[(\d+)\]', lambda m: f'[^{m.group(1)}]', text)
+    # Solo 1-3 dígitos: un `[2024]` (año entre corchetes) o `[123456]` NO es un
+    # marcador de nota. Y no delante de `(` o `:` para no romper enlaces markdown
+    # `[1](url)` ni definiciones `[1]:` que ya vinieran en el texto.
+    return re.sub(r'\[(\d{1,3})\](?![(:])', lambda m: f'[^{m.group(1)}]', text)
 
 
 def render_section(section: dict, lines: list[str], pool: list[dict[int, str]],

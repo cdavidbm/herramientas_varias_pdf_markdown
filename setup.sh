@@ -34,15 +34,23 @@ else
 fi
 echo
 
-# --- 2b) Librería Python para los tools de estructura (pdf_headings / pdf_blocks) ---
-echo "2b) pdfminer.six (jerarquía de títulos y citas por tamaño de fuente)"
-if python3 -c "import pdfminer" 2>/dev/null; then
-    echo "   ✓ pdfminer.six"
-else
-    python3 -m pip install --user pdfminer.six >/dev/null 2>&1 \
-        && echo "   ✓ pdfminer.six instalado" \
-        || echo "   ✗ pdfminer.six → python3 -m pip install --user pdfminer.six"
-fi
+# --- 2b) Librerías Python LIGERAS de los tools (requirements.txt, sin venv) ----
+# EPUB (beautifulsoup4), RTF (striprtf) y estructura por fuente (pdfminer.six).
+# Sin ellas, epub_to_markdown / rtf_to_markdown / pdf_headings crashean en una
+# máquina limpia. Las pesadas (opencv, faster-whisper) van en venvs (pasos 4/4b).
+echo "2b) Librerías Python ligeras (EPUB / RTF / estructura por fuente)"
+# import-name  paquete-pip
+pydeps=("bs4 beautifulsoup4" "striprtf striprtf" "pdfminer pdfminer.six")
+for pair in "${pydeps[@]}"; do
+    mod="${pair%% *}"; pkg="${pair##* }"
+    if python3 -c "import $mod" 2>/dev/null; then
+        echo "   ✓ $pkg"
+    elif python3 -m pip install --user "$pkg" >/dev/null 2>&1; then
+        echo "   ✓ $pkg instalado"
+    else
+        echo "   ✗ $pkg → python3 -m pip install --user $pkg"
+    fi
+done
 echo
 
 # --- 3) Skills → ~/.claude/skills --------------------------------------------

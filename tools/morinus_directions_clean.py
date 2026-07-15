@@ -16,7 +16,7 @@ son DATOS legítimos que el análisis siguiente comenta. Esta herramienta:
   * reconoce cada registro «<sig> <aspecto|(signo)planeta> D --> <punto> <arco> <fecha>»,
   * quita los glifos rotos (Z, D) y traduce planeta/signo/aspecto al español,
   * lo reescribe como una línea de dato limpia y uniforme, en monospace:
-        Asc  ·  sextil de la Luna          ·  13.93°  ·  1954.02.27
+        Asc  ·  sextil a la Luna           ·  13.93°  ·  1954.02.27
         Asc  ·  término de Júpiter en Virgo ·  29.71°  ·  1969.12.11
   * agrupa los registros contiguos en un solo bloque ``` ```; respeta cualquier
     otro bloque de código que no sea de direcciones.

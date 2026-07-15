@@ -119,6 +119,17 @@ def main() -> int:
     print(f"Sections: {len(sections)}")
     print()
 
+    # Acepta las DOS formas de plan.json de La Forja: la escalar (start/end) y la
+    # de lista `pages: [ini, fin]` (fin=null → hasta el final), que es la que
+    # documenta CLAUDE.md y usan los demás conversores. Se normaliza a start/end.
+    for i, sec in enumerate(sections):
+        if "pages" in sec and "start" not in sec:
+            pg = sec["pages"]
+            if not isinstance(pg, (list, tuple)) or not pg:
+                sys.exit(f"error: section #{i} 'pages' debe ser [ini, fin]")
+            sec["start"] = pg[0]
+            sec["end"] = (pg[1] if len(pg) > 1 and pg[1] is not None else total_pages)
+
     # Validate first
     for i, sec in enumerate(sections):
         for key in ("title", "start", "end"):

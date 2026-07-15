@@ -22,7 +22,9 @@ libro a markdown") y **tú diagnosticas y decides solo**. Por tanto:
   procesar el libro entero, y **anuncia la ruta elegida y por qué** en una línea.
 
 **Toolbox:** `/mnt/c/ideas/_La_Forja/tools/` (Windows: `C:\ideas\_La_Forja\tools\`).
-Define `T=/mnt/c/ideas/_La_Forja/tools` al empezar.
+Define `T=/mnt/c/ideas/_La_Forja/tools` al empezar. **Si esa ruta no existe** (repo
+clonado en otra máquina/ubicación), usa la ruta real del repo: desde su raíz,
+`T=tools` (o el `tools/` absoluto del clon).
 
 ---
 
@@ -73,7 +75,7 @@ pdftotext -layout -f $N -l $N archivo.pdf - | sed -n '1,40p'    # ¿columnas/tab
 pdfimages -list archivo.pdf | wc -l                            # nº de imágenes
 ```
 
-Usa **Docling** (`docling archivo.pdf --to md --output ./markdown/`) si detectas
+Usa **Docling** (`docling convert archivo.pdf --to md --output ./markdown/`) si detectas
 **cualquiera** de estas (los bisturíes las destrozan):
 
 - **Multicolumna:** líneas con un hueco grande de espacios en medio (dos bloques
@@ -141,7 +143,10 @@ python3 $T/epub_to_markdown.py plan.json
 ```
 
 Si el EPUB es **muy ilustrado** (figuras, glifos musicales) usa
-`epub_illustrated_to_markdown.py` en lugar de `epub_to_markdown.py`.
+`epub_illustrated_to_markdown.py` en lugar de `epub_to_markdown.py`. **Ojo: NO usa
+`plan.json`** — toma argumentos posicionales: `python3
+$T/epub_illustrated_to_markdown.py libro.epub OUT_DIR [--combined]` (exporta e
+incrusta las figuras; `--combined` = un solo `.md` en vez de uno por sección).
 
 ---
 

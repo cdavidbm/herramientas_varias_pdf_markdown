@@ -251,7 +251,10 @@ def render_section(
                 if n not in valid_locals:
                     return m.group(0)
                 return f'{prefix}[^{local_to_global[n]}]'
-            p = re.sub(r"([^\s\d])(\d{1,3})(?=\W|$)", repl, p)
+            # (?<!\d): NO tocar cifras que continúan un número (decimales, fechas
+            # «1970.01», «27.13°»): ahí el char previo al prefijo es un dígito. Sin
+            # esta guarda, «1970.01» → «1970.[^1]» si la nota 1 existe (falso marcador).
+            p = re.sub(r"(?<!\d)([^\s\d])(\d{1,3})(?=\W|$)", repl, p)
 
             def split_concat(m: re.Match[str]) -> str:
                 prefix = m.group(1)

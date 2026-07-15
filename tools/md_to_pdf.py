@@ -28,11 +28,27 @@ UNI2CMD = {
     "☊":"Ascnode","☋":"Descnode","℞":"Retrograde","⊗":"Fortune",
 }
 
+def latex_escape(s):
+    """Escapa los metacaracteres de LaTeX en texto plano (título/autor de portada).
+    Sin esto, un `&`, `%`, `_`, `#`, `$`, `~`, `^`, `{`, `}`, `\\` en el título
+    rompe la compilación con un error críptico de LaTeX."""
+    repl = {"\\": r"\textbackslash{}", "&": r"\&", "%": r"\%", "$": r"\$",
+            "#": r"\#", "_": r"\_", "{": r"\{", "}": r"\}",
+            "~": r"\textasciitilde{}", "^": r"\textasciicircum{}"}
+    # el backslash primero para no re-escapar los que introducimos
+    out = s.replace("\\", "\x00")
+    for k, v in repl.items():
+        if k != "\\":
+            out = out.replace(k, v)
+    return out.replace("\x00", r"\textbackslash{}")
+
 def preamble(title, author, lang, toc, graphicspath=""):
     unichars = "\n".join(
         r"\newunicodechar{%s}{{\normalfont\%s}}" % (u, c) for u, c in UNI2CMD.items())
     gpath = (r"\graphicspath{%s}" % "".join("{%s/}" % d for d in graphicspath)
              if graphicspath else "")
+    title = latex_escape(title) if title else title
+    author = latex_escape(author) if author else author
     titleblock = ""
     if title:
         authorline = (r"{\small\scshape %s} \\" % author) if author else ""

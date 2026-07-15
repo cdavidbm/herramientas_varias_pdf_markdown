@@ -29,6 +29,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import time
@@ -89,7 +90,12 @@ def main():
         produced = tmp / f"{batch_pdf.stem}.md"
         if r.returncode != 0 or not produced.exists():
             sys.exit(f"docling failed on pages {a}-{b}:\n{r.stderr[-2000:]}")
-        part.write_text(produced.read_text(encoding="utf-8"), encoding="utf-8")
+        # Escritura ATÓMICA: si el proceso muere a mitad del write, un `part`
+        # truncado existiría y el resume (part.exists() and st_size>0) lo daría por
+        # bueno, perdiendo páginas. Escribir a .tmp y os.replace (rename atómico).
+        part_tmp = part.with_name(part.name + ".tmp")
+        part_tmp.write_text(produced.read_text(encoding="utf-8"), encoding="utf-8")
+        os.replace(part_tmp, part)
         produced.unlink(missing_ok=True)
         batch_pdf.unlink(missing_ok=True)
         print(f"  [{k}/{len(batches)}] pages {a}-{b}  ✓ {time.time()-t0:.0f}s "

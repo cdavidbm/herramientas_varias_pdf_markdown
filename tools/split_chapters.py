@@ -59,6 +59,20 @@ def find_start(lines, sec):
 def split_by_plan(lines, plan):
     secs = plan["sections"]
     starts = [find_start(lines, s) for s in secs]
+    # find_start devuelve la PRIMERA coincidencia del heading. Si un título se repite
+    # (índice + cuerpo) o el plan está desordenado, starts[k] > starts[k+1] daría una
+    # rebanada de longitud NEGATIVA → capítulo vacío y texto PERDIDO en silencio.
+    # Abortar señalando qué secciones colisionan en vez de escribir basura.
+    for k in range(len(starts) - 1):
+        if starts[k] > starts[k + 1]:
+            a = secs[k].get("title", secs[k].get("slug", f"#{k}"))
+            b = secs[k + 1].get("title", secs[k + 1].get("slug", f"#{k+1}"))
+            raise SystemExit(
+                f"ERROR: los encabezados no van en orden en el documento: "
+                f"«{a}» (línea {starts[k]}) aparece DESPUÉS de «{b}» (línea {starts[k+1]}).\n"
+                "  Causa típica: un título repetido (índice + cuerpo) o el plan.json "
+                "desordenado.\n  Ajusta el 'heading' de esas secciones para que sean "
+                "únicos, o reordena el plan. No se escribe nada para no perder texto.")
     starts.append(len(lines))
     out = []
     for k, sec in enumerate(secs):

@@ -93,7 +93,11 @@ def clean_ref(text: str) -> str:
 
 
 def toks(s: str):
-    return [(m.group(0).lower(), m.start(), m.end()) for m in re.finditer(r"[A-Za-z0-9]+", s)]
+    # `\w` Unicode: incluye griego, cirílico y letras acentuadas. Con el antiguo
+    # [A-Za-z0-9] el texto no-ASCII era INVISIBLE a la verificación y un capítulo
+    # entero en griego podía «faltar» sin que se detectara (falso ✅ sin lagunas).
+    return [(m.group(0).lower(), m.start(), m.end())
+            for m in re.finditer(r"[^\W_]+", s, re.UNICODE)]
 
 
 def layout_text(pdf: Path, pages: str | None) -> str:
@@ -102,7 +106,17 @@ def layout_text(pdf: Path, pages: str | None) -> str:
         a, _, b = pages.partition("-")
         cmd += ["-f", a, "-l", (b or a)]
     cmd += [str(pdf), "-"]
-    return subprocess.run(cmd, capture_output=True, text=True).stdout
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    # Si pdftotext falla (PDF cifrado, dañado, binario ausente) devolvería stdout
+    # vacío → difflib no vería «lagunas» → falso «✅ sin lagunas». Abortar claro.
+    if r.returncode != 0:
+        sys.stderr.write(
+            f"ERROR: pdftotext falló (returncode={r.returncode}) sobre {pdf}\n"
+            f"{r.stderr[:500]}\n"
+            "  No se puede verificar la completitud: revisa el PDF (¿cifrado? "
+            "¿dañado? ¿poppler instalado?).\n")
+        raise SystemExit(2)
+    return r.stdout
 
 
 def main() -> int:
@@ -124,7 +138,12 @@ def main() -> int:
 
     inserts, replaces = [], []
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
-        if i1 == 0 or (i2 - i1) < args.min:
+        # (i2-i1)<min = tramo demasiado corto (ruido). El i1==0 se salta SOLO cuando
+        # es corto (un título/encabezado que el md reformatea); si al principio del
+        # capítulo faltan ≥15 palabras es pérdida real de texto y SÍ debe reportarse.
+        if (i2 - i1) < args.min:
+            continue
+        if i1 == 0 and (i2 - i1) < 15:
             continue
         span = ref_str[rt[i1][1]:rt[i2 - 1][2]]
         if any(x in span for x in args.exclude):

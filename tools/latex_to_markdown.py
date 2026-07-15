@@ -96,15 +96,28 @@ def preprocess(tex, imgdir):
 def expand_inputs(bookfile, root):
     """Devuelve el .tex del maestro con los \\input{...} expandidos en orden."""
     text = bookfile.read_text(encoding="utf-8", errors="replace")
+    missing = []
     def repl(m):
         rel = m.group(1).strip()
         p = (root/rel)
         if p.suffix != ".tex": p = p.with_suffix(".tex")
-        return p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
+        if p.exists():
+            return p.read_text(encoding="utf-8", errors="replace")
+        # Un \input que no resuelve descartaba SILENCIOSAMENTE un capítulo entero.
+        # Registrarlo y avisar: casi siempre es --root mal puesto o un typo de ruta.
+        missing.append(rel)
+        return ""
     for _ in range(3):                       # \input no anidan hondo aquí
         new = re.sub(r"\\input\{([^}]+)\}", repl, text)
         if new == text: break
         text = new
+    if missing:
+        uniq = list(dict.fromkeys(missing))
+        sys.stderr.write(
+            f"AVISO: {len(uniq)} \\input NO resuelto(s) — se DESCARTAN (posible "
+            f"pérdida de capítulos). Revisa --root='{root}':\n")
+        for rel in uniq:
+            sys.stderr.write(f"  - {rel}\n")
     return text
 
 def main():

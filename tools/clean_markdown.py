@@ -42,7 +42,10 @@ from pathlib import Path
 
 DEFAULT_KEEP = ("[COMMENT]", "[QUOTE", "[END OF QUOTE]", "[TEXT]", "[NATURES")
 IMG_RE = re.compile(r"!\[[^\]]*\]\(data:image/(png|jpeg|jpg);base64,([^)]+)\)")
-TERMINAL = (".", "!", "?", ":", '"', "”", ")", "-", "—", "")
+# OJO: sin el "" final. `str.endswith("")` es SIEMPRE True, así que incluirlo hacía
+# que ends_terminal() devolviera True para cualquier línea y anulaba la detección de
+# «el encabezado parte una frase». El caso de línea vacía ya lo cubre `s == ""`.
+TERMINAL = (".", "!", "?", ":", '"', "”", ")", "-", "—")
 
 
 def extract_images(lines, outdir):

@@ -30,7 +30,7 @@ relevantes, los lees y sintetizas con citas.
 ## Procedimiento — corpus / carpeta (índice FTS5)
 
 ```bash
-T=/mnt/c/ideas/_La_Forja/tools
+T=/mnt/c/ideas/_La_Forja/tools   # si no existe, usa la ruta real del clon: T=tools
 python3 $T/book_index.py query "RUTA/markdown" "reed flute, nay, longing" --top 8
 ```
 - Construye el índice solo si falta o cambió (se guarda como `.forja_index.db`

@@ -126,6 +126,13 @@ EPUB muy ilustrado → `epub_illustrated_to_markdown.py`.
 `pages: [ini, fin]` 1-based, `null` = hasta el final. `pdf:` en vez de `pages:` =
 un PDF entero como sección.
 
+> **Nota de compatibilidad:** algunos scripts (`split_pdf.py`,
+> `pdf_sections_to_markdown.py`) nacieron con la forma escalar
+> `{"title": …, "start": 11, "end": 20}`. **Ambos aceptan ya también
+> `pages: [ini, fin]`** (con `fin: null` = hasta el final), así que puedes usar
+> SIEMPRE la forma `pages` de arriba con cualquier conversor. La forma escalar
+> `start`/`end` sigue funcionando en esos dos por retrocompatibilidad.
+
 ## Salida / siguiente paso
 - Markdown → NotebookLM (fuente) o traducción con la skill **`/traducir-md`**
   (preserva `[^N]`, encabezados, glosario).
