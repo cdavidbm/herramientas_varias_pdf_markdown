@@ -49,6 +49,8 @@ import sys
 import time
 from pathlib import Path
 
+from forja_common import pdf_page_count as page_count
+
 MODE_FLAG = {"redo": "--redo-ocr", "force": "--force-ocr", "skip": "--skip-text"}
 
 
@@ -56,12 +58,7 @@ def sh(cmd, env=None):
     return subprocess.run(cmd, capture_output=True, text=True, env=env)
 
 
-def page_count(pdf):
-    out = sh(["pdfinfo", str(pdf)]).stdout
-    for line in out.splitlines():
-        if line.startswith("Pages:"):
-            return int(line.split(":")[1].strip())
-    raise SystemExit("could not read page count (pdfinfo failed)")
+
 
 
 def tesseract_batch(pdf, a, b, side, tmp, dpi, lang, env):

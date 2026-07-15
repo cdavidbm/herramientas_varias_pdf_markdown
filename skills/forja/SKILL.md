@@ -1,6 +1,6 @@
 ---
 name: forja
-description: Convierte cualquier libro/documento (PDF, EPUB, RTF, Office) a markdown limpio por capítulo. Diagnostica el documento AUTOMÁTICAMENTE y elige la herramienta correcta (scripts de La Forja, OCR o Docling) sin que el usuario tenga que saber cuál. Activa con "/forja" o intención como "convierte este PDF a markdown", "pasa este libro a markdown", "prepáralo para NotebookLM".
+description: Convierte UN libro/documento (PDF, EPUB, RTF, Office) a markdown limpio por capítulo — el paso de conversión, no el flujo entero. Diagnostica el documento AUTOMÁTICAMENTE y elige la herramienta correcta (scripts de La Forja, OCR o Docling) sin que el usuario tenga que saber cuál. Activa con "/forja" o intención como "convierte este PDF a markdown", "pasa este libro a markdown", "prepáralo para NotebookLM". Si además hay que traducir/revisar/maquetar, el encadenado lo lleva `/forja-flujo`.
 ---
 
 # La Forja — Conversión automática a Markdown
@@ -75,8 +75,26 @@ pdftotext -layout -f $N -l $N archivo.pdf - | sed -n '1,40p'    # ¿columnas/tab
 pdfimages -list archivo.pdf | wc -l                            # nº de imágenes
 ```
 
+> **ANTES de decidir, comprueba la CURSIVA** (1 segundo, evita pérdida irreversible):
+>
+> ```bash
+> pdffonts archivo.pdf | grep -i "italic\|oblique"    # ¿hay cursiva embebida?
+> ```
+>
+> Si sale algo **y el texto es académico** (términos técnicos, transliteraciones del
+> griego/árabe/sánscrito, títulos de obra), usa **`pdf_rich_to_markdown.py`**, NO
+> Docling. Docling y `pdftotext` recuperan **0 cursivas**: la señal solo está en las
+> fuentes embebidas y se pierde para siempre, en silencio. Es además el único bisturí
+> que separa el **texto paralelo a 2 columnas** (original / traducción), que leído
+> línea a línea sale en frases mestizas.
+>
+> **Por eso la regla «multicolumna → Docling» de abajo NO aplica** si las columnas son
+> paralelas o si la cursiva es significativa. `--force-columns` fuerza la separación
+> cuando la detección automática duda.
+
 Usa **Docling** (`docling convert archivo.pdf --to md --output ./markdown/`) si detectas
-**cualquiera** de estas (los bisturíes las destrozan):
+**cualquiera** de estas (los bisturíes las destrozan) **y no se aplica la excepción de
+cursiva/columnas paralelas de arriba**:
 
 - **Multicolumna:** líneas con un hueco grande de espacios en medio (dos bloques
   de texto por línea) en el volcado `-layout`.
@@ -94,9 +112,11 @@ si quedó sucio, repite con Docling. Anuncia qué elegiste.
 
 | Situación | Script |
 |---|---|
+| **La cursiva importa** (académico) o **2 columnas paralelas** original/traducción | `pdf_rich_to_markdown.py` |
 | Carpeta con **un PDF por capítulo** (típico de compartidos académicos), notas a pie de página | `pdf_chapters_to_markdown.py plan.json` |
 | **Un solo PDF digital limpio** (p. ej. de Calibre), con índice/outline | `detect_chapters.py` → arma `plan.json` → `pdf_sections_to_markdown.py plan.json` |
 | **Libro escaneado ya OCR-eado** con citas Harvard | `pdf_book_to_markdown.py` |
+| `pdftotext` **no extrae nada** y ya tienes un sidecar `.txt` de OCR | `ocr_text_to_markdown.py` |
 | Solo necesito **partir el PDF** en PDFs por capítulo | `detect_chapters.py` → `plan.json` → `split_pdf.py` |
 
 `detect_chapters.py` **no escribe** el plan: lista páginas candidatas; con eso
@@ -170,7 +190,13 @@ incrusta las figuras; `--combined` = un solo `.md` en vez de uno por sección).
 
 Markdown limpio → se puede entregar en otro formato con **pandoc**:
 `pandoc cap.md -o cap.epub` (o `.docx`, `.pdf`). Útil tras traducir con
-[[traducir-md]]. El `.md` también va directo a NotebookLM ([[notebooklm-setup]]).
+[[traducir-md]]. El `.md` también va directo a NotebookLM ([[notebooklm]]).
+
+**Libro entero a PDF maquetado** → `md_to_pdf.py`, NO pandoc: da memoir + starfont
+(glifos ☉♄♃ de verdad), portada, índice y `--footnotes page|chapter|book`.
+```bash
+python3 $T/md_to_pdf.py libro.pdf ./markdown-es/*.md --title "T" --toc --footnotes chapter
+```
 
 ## Referencia detallada
 

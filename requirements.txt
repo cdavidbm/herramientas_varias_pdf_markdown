@@ -6,9 +6,12 @@
 # instalan aparte (ver setup.sh / README.md).
 #
 # --- Ligeras (setup.sh las instala con pip --user; sin venv) ------------------
-beautifulsoup4        # bs4 — epub_to_markdown.py, build_plan.py, epub_illustrated_to_markdown.py, attach_notes_by_chapter.py
+beautifulsoup4        # bs4 — epub_to_markdown.py, build_plan.py, epub_illustrated_to_markdown.py
 striprtf              # rtf_to_markdown.py
-pdfminer.six          # pdf_headings.py, pdf_blocks.py (jerarquía de títulos / citas por tamaño de fuente)
+pdfminer.six          # pdf_rich_to_markdown.py (CURSIVAS + columnas paralelas), pdf_headings.py, pdf_blocks.py
+                      # OJO: pdf_rich_to_markdown depende de esto. Es el bisturí que
+                      # recomienda CLAUDE.md para texto académico: sin pdfminer no hay
+                      # cursivas, y ningún otro conversor las recupera.
 
 # --- Pesadas / OPCIONALES (NO en pip --user: van en venvs aislados) -----------
 # Las instala tools/ocr_setup.sh (venv forja-ocr-venv) y tools/asr_setup.sh
@@ -16,4 +19,8 @@ pdfminer.six          # pdf_headings.py, pdf_blocks.py (jerarquía de títulos /
 # entorno global.
 numpy                 # ocr_preprocess.py            [venv forja-ocr-venv]
 opencv-python         # cv2 — ocr_preprocess.py      [venv forja-ocr-venv; setup usa opencv-python-headless]
+pillow                # dependencia de rapidocr      [venv forja-ocr-venv]
+rapidocr-onnxruntime  # motor OCR alternativo de la skill /ocr, vía snippet inline
+                      # (ningún tools/*.py lo importa: se usa a mano cuando tesseract
+                      #  falla con buena imagen)   [venv forja-ocr-venv; best-effort]
 faster-whisper        # yt_audio_transcribe.py       [venv forja-asr-venv]

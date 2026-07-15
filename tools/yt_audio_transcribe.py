@@ -56,11 +56,7 @@ import tempfile
 import textwrap
 from pathlib import Path
 
-
-def slugify(text: str, maxlen: int = 60) -> str:
-    text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip()
-    text = re.sub(r"[\s_-]+", "_", text)
-    return text[:maxlen].strip("_") or "transcript"
+from forja_common import slugify
 
 
 def secs(t: str) -> str:
@@ -240,7 +236,7 @@ def run_resumable(args) -> None:
                  "ejecuta este script con ~/.local/share/forja-asr-venv/bin/python.")
     info = probe(args.source, args)
     title = info.get("title") or info.get("id") or "transcript"
-    slug = slugify(title)
+    slug = slugify(title, 60, fallback="transcript")
     outdir = Path(args.output_dir)
     total = info.get("duration") or 0
     partial = outdir / f".{slug}.partial.jsonl"
@@ -355,7 +351,7 @@ def main() -> None:
         out_text = textwrap.fill(text, width=args.wrap)
     else:
         out_text = text
-    slug = slugify(info.get("title") or "transcript")
+    slug = slugify(info.get("title") or "transcript", 60, fallback="transcript")
     (outdir / f"{slug}.txt").write_text(out_text + "\n", encoding="utf-8")
     (outdir / f"{slug}.meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")

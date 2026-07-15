@@ -53,6 +53,8 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString, Tag
 
+from forja_common import slugify
+
 
 # ---------------------------------------------------------------------------
 # Utility
@@ -76,15 +78,6 @@ def _attr(node: Tag, name: str) -> str:
     if isinstance(raw, (list, tuple)):
         return " ".join(str(x) for x in raw)
     return str(raw)
-
-
-def slugify(text: str, maxlen: int = 90) -> str:
-    """ASCII-safe, filesystem-friendly slug; keeps leading numeric prefix."""
-    # Decompose accents then strip non-ASCII
-    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-    ascii_text = re.sub(r"[^\w\s-]", " ", ascii_text)
-    ascii_text = re.sub(r"\s+", "_", ascii_text.strip())
-    return ascii_text[:maxlen] or "section"
 
 
 # ---------------------------------------------------------------------------
@@ -603,7 +596,7 @@ def main() -> int:
             if args.only and args.only.lower() not in title.lower():
                 continue
 
-            slug = sec.get("slug") or f"{i:03d}_{slugify(title)}"
+            slug = sec.get("slug") or f"{i:03d}_{slugify(title, 90)}"
             out_path = output_dir / f"{slug}.md"
 
             # One converter per section so footnote numbering restarts.

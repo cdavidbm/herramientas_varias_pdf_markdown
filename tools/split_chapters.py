@@ -37,11 +37,7 @@ import json
 import re
 from pathlib import Path
 
-
-def slugify(text, maxlen=40):
-    s = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip()
-    s = re.sub(r"\s+", "_", s)
-    return s[:maxlen] or "section"
+from forja_common import slugify
 
 
 def find_start(lines, sec):
@@ -78,7 +74,7 @@ def split_by_plan(lines, plan):
     for k, sec in enumerate(secs):
         body = "\n".join(lines[starts[k]:starts[k + 1]]).strip("\n")
         title = sec.get("title", sec.get("slug", f"section {k}"))
-        slug = sec.get("slug", f"{k:02d}_{slugify(title)}")
+        slug = sec.get("slug", f"{k:02d}_{slugify(title, 40)}")
         if k == 0 and "heading" not in sec and "line" not in sec:
             content = body + "\n"           # front matter as-is
         else:
@@ -99,7 +95,7 @@ def split_by_heading(lines, level):
         if not body:
             continue
         head = lines[a].lstrip("#").strip() if lines[a].startswith(marker) else "front"
-        slug = f"{seq:02d}_{slugify(head)}"
+        slug = f"{seq:02d}_{slugify(head, 40)}"
         out.append((slug, body + "\n", len(body.split())))
         seq += 1
     return out

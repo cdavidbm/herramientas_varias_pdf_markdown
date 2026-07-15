@@ -24,7 +24,8 @@ diagnosticas el documento y eliges la herramienta correcta tú mismo**.
 Define `T=tools` (o ruta absoluta `/mnt/c/ideas/_La_Forja/tools`).
 
 ### 1. Enrutar por formato
-- `.epub` → §EPUB.  `.rtf` → `python3 $T/rtf_to_markdown.py x.rtf`.
+- `.epub` → §EPUB.  `.rtf` → `python3 $T/rtf_to_markdown.py x.rtf --dry-run` (deriva
+  las secciones del layout; `--emit-plan p.json` si hay que corregirlas a mano).
 - `.docx .pptx .xlsx .html .png .jpg` → `markitdown x` (NO es trabajo de los scripts).
 - `.pdf` → §PDF.
 
@@ -72,17 +73,14 @@ capítulo con bisturí, revisa el `.md`; si quedó sucio, repite con Docling.
 Tras convertir, dejar el markdown listo para leer/traducir:
 - `clean_markdown.py` — quita running-headers de página (sin borrar contenido
   repetido legítimo), guion suave, saca imágenes base64 a archivo, normaliza espacios.
-- `split_chapters.py plan.json` (o `--by-heading 2`) — trocea en capítulos.
+- `split_chapters.py libro.md --plan plan.json` (o `--by-heading 2`) — trocea en
+  capítulos. Exige UNA de las dos banderas; el `.md` va siempre como posicional.
 - `footnotes_rebuild.py cap.md --apply` — reconstruye notas `[^N]` **por capítulo**.
   Detecta 2 estilos de OCR: *pegado* (marcador partido `1 3 8`→`[^138]` + def. `114. …`)
   y *suelto* (marcador ` N ` con espacio + def. `N Texto` sin punto, incluso partida en
   dos líneas; numeración continua en todo el libro; libros AstroArt/Döser). NO en
   índices/bibliografía. Para rehacer un archivo ya convertido: revierte con regex
   (`^\[\^N\]:`→`N `, `\s*\[\^N\]`→` N`) y reaplica.
-- `morinus_directions_clean.py cap.md --apply` — limpia los volcados de direcciones de
-  **Morinus** que el OCR riega en la prosa (`Z (Virgo)Jupiter D --> Asc 29.71 1969.12.11`):
-  quita los glifos rotos, traduce planeta/signo/aspecto (inglés y alemán), y los reescribe
-  como dato limpio en monospace. Conserva toda la info (punto, promisor, arco, fecha).
 - `astro_glyphs.py --flag cap.md` — señala celdas de glifos astrológicos corruptas
   por OCR (♄♃♂ y signos) para corregirlas a mano contra la imagen; `--reference` = chuleta.
 - `fix_ordinals.py ./markdown --apply` — ordinales volados que el OCR destroza en
@@ -134,13 +132,20 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
 ### 3b. Elegir bisturí PDF
 | Situación | Script |
 |---|---|
+| **Cursiva significativa** o **2 columnas paralelas** original/traducción | `pdf_rich_to_markdown.py` (ver recuadro arriba) |
 | Carpeta de **un PDF por capítulo**, notas a pie | `pdf_chapters_to_markdown.py plan.json` |
 | **Un PDF digital limpio** (Calibre, con outline) | `detect_chapters.py` → `plan.json` → `pdf_sections_to_markdown.py plan.json` |
 | Libro **escaneado ya OCR-eado** con citas Harvard | `pdf_book_to_markdown.py` |
+| `pdftotext` **no extrae nada** pero tienes sidecar `.txt` de OCR | `ocr_text_to_markdown.py` |
 | Solo **partir** el PDF en PDFs por capítulo | `detect_chapters.py` → `plan.json` → `split_pdf.py` |
 
 `detect_chapters.py` lista páginas candidatas (no escribe el plan); con eso
 **redactas el `plan.json`** y corres el conversor con `--dry-run` primero.
+
+**Sondas de tipografía** (no convierten; te dicen qué hay antes de elegir):
+`pdf_headings.py x.pdf` lista los tamaños de fuente y qué líneas serían encabezado;
+`pdf_blocks.py x.pdf` vuelca los bloques con su fuente/tamaño/posición. Úsalas cuando
+dudes de si un título es título o de dónde está el corte de columna.
 
 ### EPUB
 ```bash
@@ -174,7 +179,21 @@ un PDF entero como sección.
 ## Salida / siguiente paso
 - Markdown → NotebookLM (fuente) o traducción con la skill **`/traducir-md`**
   (preserva `[^N]`, encabezados, glosario).
-- Entregar en otro formato: `pandoc cap.md -o cap.epub|.docx|.pdf`.
+- **Libro completo a PDF bonito → `md_to_pdf.py`, NO `pandoc`.** Es la herramienta
+  con la que se maquetaron Valens, Doroteo y Hephaistio:
+  ```bash
+  python3 $T/md_to_pdf.py libro.pdf ./markdown-es/*.md \
+      --title "Título" --author "Trad. ..." --toc --footnotes chapter
+  ```
+  Da `memoir` + **starfont** (glifos astrológicos ☉♄♃ de verdad), portada, índice y
+  `--footnotes page|chapter|book` para elegir la numeración de notas. `pandoc` no da
+  nada de eso. Requiere **lualatex + memoir + starfont** (`setup.sh` NO lo comprueba;
+  si falta, instala TeX Live). **Compila bajo `systemd-run --user -p MemoryMax=4G`**:
+  un bucle de lualatex puede congelar el equipo.
+- Entregar un capítulo suelto en otro formato: `pandoc cap.md -o cap.epub|.docx`.
+- **Libro fuente en LaTeX** (ediciones tipo janegca de Valens y clásicos helenísticos)
+  → `python3 $T/latex_to_markdown.py maestro.tex --root ./src --out libro.md`.
+  Expande los `\input`, mapea starfont/wasysym a Unicode (`\Saturn`→♄) y pasa por pandoc.
 
 ## YouTube → markdown de estudio (skill `/youtube`)
 

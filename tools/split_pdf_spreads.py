@@ -31,10 +31,10 @@ import sys
 import tempfile
 from pathlib import Path
 
+from forja_common import require_tool
 
-def require_tool(name: str) -> None:
-    if shutil.which(name) is None:
-        sys.exit(f"error: required tool '{name}' is not installed")
+
+
 
 
 def page_sizes(pdf: Path) -> list[tuple[float, float]]:

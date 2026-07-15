@@ -46,6 +46,8 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
+from forja_common import slugify
+
 
 # Spine idrefs / filename stems that are almost never substantive content.
 SKIP_ID_PATTERNS = re.compile(
@@ -74,13 +76,6 @@ SKIP_TITLE_PATTERNS = re.compile(
 _PREFIX = re.compile(r"^[\d\s_\-]+")
 
 FOOTNOTE_NAME = re.compile(r"(footnote|endnote|\bnotas?\b|\bnotes?\b)", re.IGNORECASE)
-
-
-def slugify(text: str, maxlen: int = 70) -> str:
-    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-    ascii_text = re.sub(r"[^\w\s-]", " ", ascii_text)
-    ascii_text = re.sub(r"\s+", "_", ascii_text.strip())
-    return ascii_text[:maxlen].strip("_") or "section"
 
 
 def _norm(base_dir: str, href: str) -> str:
@@ -341,7 +336,7 @@ def build(epub: Path, footnotes: str, keep_frontmatter: bool) -> dict:
 
         # Assign slugs in final order.
         for i, sec in enumerate(sections, 1):
-            sec["slug"] = f"{i:02d}_{slugify(sec['title'])}"
+            sec["slug"] = f"{i:02d}_{slugify(sec['title'], 70)}"
             # Reorder keys: title, files, slug.
             sec_files = sec.pop("files")
             sec_slug = sec.pop("slug")

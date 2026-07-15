@@ -25,6 +25,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from forja_common import pdf_page_count as page_count
+
 DEFAULT_PATTERN = (
     r"^\s*("
     r"INTRODUCTION|CONCLUSION|EPILOGUE|PREFACE|FOREWORD|ACKNOWLEDGEMENTS?|"
@@ -36,12 +38,7 @@ DEFAULT_PATTERN = (
 )
 
 
-def page_count(pdf: Path) -> int:
-    out = subprocess.check_output(["pdfinfo", str(pdf)], text=True)
-    for line in out.splitlines():
-        if line.startswith("Pages:"):
-            return int(line.split(":", 1)[1].strip())
-    raise RuntimeError("page count not found")
+
 
 
 def page_text(pdf: Path, n: int) -> str:

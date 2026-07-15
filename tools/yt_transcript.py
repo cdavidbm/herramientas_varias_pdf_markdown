@@ -62,6 +62,8 @@ import tempfile
 import textwrap
 from pathlib import Path
 
+from forja_common import slugify
+
 # ---- regexes -----------------------------------------------------------------
 TS_LINE = re.compile(r"-->")                       # cue timing line
 INLINE_TS = re.compile(r"<\d{2}:\d{2}:\d{2}[.,]\d{3}>")   # <00:00:04.400>
@@ -69,12 +71,6 @@ TAG = re.compile(r"</?[cibuv](?:\.[\w\-]+)?[^>]*>|</?[^>]+>")  # <c>, </c>, <v .
 SRT_INDEX = re.compile(r"^\d+$")
 SRT_TS = re.compile(r"^\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->")
 VTT_NOTE = re.compile(r"^(WEBVTT|Kind:|Language:|NOTE\b|STYLE\b|REGION\b)")
-
-
-def slugify(text: str, maxlen: int = 60) -> str:
-    text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip()
-    text = re.sub(r"[\s_-]+", "_", text)
-    return text[:maxlen].strip("_") or "transcript"
 
 
 # ---- VTT / SRT parsing -------------------------------------------------------
@@ -324,7 +320,7 @@ def emit(text: str, meta: dict, title: str, args) -> None:
         print(text)
     if args.no_files:
         return
-    slug = slugify(title)
+    slug = slugify(title, 60, fallback="transcript")
     txt_path = args._outdir / f"{slug}.txt"
     txt_path.write_text(text + "\n", encoding="utf-8")
     meta_path = args._outdir / f"{slug}.meta.json"

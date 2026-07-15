@@ -131,24 +131,64 @@ python3 tools/pdf_sections_to_markdown.py plan.json
 
 ```
 tools/
+├── forja_common.py               slugify / plan.json / require_tool comunes
+│
+│  ── Partir y sondear el PDF ──
 ├── split_pdf.py                  PDF → PDFs por capítulo (poppler)
 ├── split_pdf_spreads.py          escaneo 2-up → 1-up (mutool)
 ├── detect_chapters.py            detecta marcadores de capítulo en un PDF
+├── pdf_headings.py               sonda: jerarquía de títulos por tamaño de fuente
+├── pdf_blocks.py                 sonda: bloques con fuente/tamaño/posición
 │
+│  ── PDF → markdown (elige según la señal que necesites) ──
+├── pdf_rich_to_markdown.py       ⭐ CURSIVAS + columnas paralelas (académico)
 ├── pdf_sections_to_markdown.py   PDF digital limpio   → markdown por sección
 ├── pdf_chapters_to_markdown.py   PDFs pre-partidos    → markdown + notas a pie
 ├── pdf_book_to_markdown.py       PDF escaneado (OCR)  → markdown saneado
+├── ocr_text_to_markdown.py       sidecar .txt de OCR  → markdown
 │
+│  ── EPUB / RTF / LaTeX ──
 ├── build_plan.py                 EPUB → plan.json (genérico, spine + índice)
 ├── epub_to_markdown.py           EPUB → markdown por capítulo (notas → [^N])
 ├── epub_illustrated_to_markdown.py  EPUB con figuras → markdown + imágenes
+├── rtf_to_markdown.py            RTF → markdown (deriva las secciones solo)
+├── latex_to_markdown.py          libro en LaTeX → markdown (starfont → Unicode)
 │
-├── rtf_to_markdown.py            RTF (notas agrupadas) → markdown por sección
-├── attach_notes_by_chapter.py    adjunta notas agrupadas a cada capítulo
+│  ── OCR ──
+├── ocr_setup.sh                  venv + modelos tessdata_best multilingües
+├── ocr_incremental.py            OCR por lotes con checkpoint + resume
+├── ocr_preprocess.py             deskew / contraste / binarización
+├── ocr_corruption.py             señala texto que el OCR dejó corrupto
 │
+│  ── Docling ──
+├── docling_incremental.py        Docling por lotes con checkpoint + resume
+├── docling_clean.py              artefactos propios de Docling
+│
+│  ── Limpieza y estructura ──
+├── clean_markdown.py             running-heads, guion suave, base64 → archivo
+├── split_chapters.py             trocea un .md en capítulos
+├── chapter_bounds.py             límite REAL del capítulo contra el PDF
+├── footnotes_rebuild.py          reconstruye las notas [^N] de un escaneo
+├── limpiar_academico.py          orquesta los 3 fix_* de abajo
+├── fix_ligatures.py              corrupción de ligaduras (fi→W) de OUP/Distiller
+├── fix_diacritics.py             diacríticos rotos + NFC
+├── fix_ordinals.py               ordinales volados: 4 lh → 4th (casas, siglos)
+├── clean_openings.py             portadillas y capitulares
+├── astro_glyphs.py               señala celdas de glifos ♄♃♂ rotos por OCR
+│
+│  ── QA y exploración ──
+├── check_completeness.py         ¿se perdió texto? (md vs pdftotext -layout)
+├── book_index.py                 índice FTS5 para buscar en una carpeta
+├── book_map.py                   mapa de un markdown ya convertido
+│
+│  ── Salida ──
+├── md_to_pdf.py                  ⭐ libro → PDF maquetado (memoir + starfont)
+│
+│  ── YouTube ──
 ├── yt_transcript.py              YouTube/local subs → texto limpio sin timestamps
 ├── yt_audio_transcribe.py        video sin subtítulos → transcript por ASR (Whisper)
 ├── yt_media.py                   yt-dlp: baja audio/video/subtítulos/metadatos
+├── asr_setup.sh                  venv de faster-whisper
 └── README.md                     📖 manual detallado (formatos, plan.json, flujos)
 ```
 

@@ -14,6 +14,7 @@ scripts que dependen de terceros se prueban replicando su regex, no importándol
 """
 import re
 import sys
+import unicodedata
 import unittest
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
+import forja_common
 import md_to_pdf
 import clean_markdown
 import check_completeness
@@ -291,6 +293,157 @@ class InlineRefRegexes(unittest.TestCase):
     def test_decimals_and_dates_untouched(self):
         self.assertEqual(self._glued("valor 1970.01 grados"), "valor 1970.01 grados")
         self.assertEqual(self._glued("27.11 grados"), "27.11 grados")
+
+
+class ForjaCommonSlugify(unittest.TestCase):
+    """UNA slugify para todo el repo. Antes eran 11 copias en 3 variantes
+    incompatibles: el mismo capítulo salía `Bhāva_` o `Bhava_` según el script."""
+
+    def test_transliterations_survive(self):
+        # El bug que motivó el módulo: NFKD→ASCII destruía el sánscrito/griego.
+        self.assertEqual(forja_common.slugify("Bhāva"), "Bhāva")
+        self.assertEqual(forja_common.slugify("Περὶ κράσεως"), "Περὶ_κράσεως")
+
+    def test_ascii_only_is_opt_in(self):
+        self.assertEqual(forja_common.slugify("Bhāva", ascii_only=True), "Bhava")
+
+    def test_nfc_normalised(self):
+        # «Döser» en DESCOMPUESTO (O + U+0308) hace fallar a pdfinfo/pdftotext.
+        nfd = "Do" + "̈" + "ser"
+        out = forja_common.slugify(nfd)
+        self.assertEqual(out, "Döser")
+        self.assertEqual(out, unicodedata.normalize("NFC", out))
+        self.assertNotIn("̈", out)
+
+    def test_idempotent(self):
+        for s in ("1. Judío de Galilea", "ANEXO  2 — Criterios", "a - b"):
+            once = forja_common.slugify(s)
+            self.assertEqual(forja_common.slugify(once), once, f"no idempotente: {s}")
+
+    def test_separators_and_punctuation(self):
+        self.assertEqual(forja_common.slugify("1. Judío de Galilea"),
+                         "1_Judío_de_Galilea")
+        self.assertEqual(forja_common.slugify("a   b"), "a_b")
+
+    def test_hyphen_kept_inside_arabic_transliteration(self):
+        # En `al-Mawālīd` el guion es parte del nombre, no un separador.
+        self.assertEqual(forja_common.slugify("Kitāb al-Mawālīd"), "Kitāb_al-Mawālīd")
+        self.assertEqual(forja_common.slugify("al-Bīrūnī"), "al-Bīrūnī")
+
+    def test_fallback_when_nothing_survives(self):
+        # Un título de puros glifos astrológicos no puede dar nombre vacío.
+        self.assertEqual(forja_common.slugify("♄♃♂"), "section")
+        self.assertEqual(forja_common.slugify(""), "section")
+        self.assertEqual(forja_common.slugify("♄", fallback="cap"), "cap")
+
+    def test_maxlen_and_no_trailing_separator(self):
+        self.assertEqual(forja_common.slugify("a" * 200, maxlen=10), "a" * 10)
+        self.assertFalse(forja_common.slugify("Capítulo uno", maxlen=9).endswith("_"))
+
+    def test_lower(self):
+        self.assertEqual(forja_common.slugify("Judío DE Galilea", lower=True),
+                         "judío_de_galilea")
+
+
+class ForjaCommonLoadPlan(unittest.TestCase):
+    """load_plan normaliza el esquema: `pages` ⇄ `start`/`end`, y RESPETA `slug`."""
+
+    def _plan(self, obj):
+        import json as _json
+        import tempfile
+        d = Path(tempfile.mkdtemp())
+        p = d / "plan.json"
+        p.write_text(_json.dumps(obj), encoding="utf-8")
+        return forja_common.load_plan(p)
+
+    def test_pages_to_scalar(self):
+        plan = self._plan({"source": "x.pdf",
+                           "sections": [{"title": "T", "pages": [11, 20]}]})
+        sec = plan["sections"][0]
+        self.assertEqual((sec["start"], sec["end"]), (11, 20))
+
+    def test_scalar_to_pages(self):
+        plan = self._plan({"source": "x.pdf",
+                           "sections": [{"title": "T", "start": 11, "end": 20}]})
+        self.assertEqual(plan["sections"][0]["pages"], [11, 20])
+
+    def test_null_end_means_to_the_end(self):
+        plan = self._plan({"source": "x.pdf",
+                           "sections": [{"title": "T", "pages": [4, None]}]})
+        self.assertIsNone(plan["sections"][0]["end"])
+
+    def test_explicit_slug_is_honoured(self):
+        # split_pdf/pdf_sections lo descartaban: pedías 01_Prefacio, salía 00_Prefacio.
+        plan = self._plan({"source": "x.pdf",
+                           "sections": [{"slug": "01_Prefacio", "title": "Prefacio",
+                                         "pages": [9, 10]}]})
+        self.assertEqual(plan["sections"][0]["slug"], "01_Prefacio")
+
+    def test_slug_derived_when_absent(self):
+        plan = self._plan({"source": "x.pdf",
+                           "sections": [{"title": "Bhāva", "pages": [1, 2]}]})
+        self.assertEqual(plan["sections"][0]["slug"], "01_Bhāva")
+
+
+class RtfDeriveSections(unittest.TestCase):
+    """`rtf_to_markdown.py libro.rtf` deriva las secciones del layout del RTF (lo
+    que CLAUDE.md promete). El plan a mano es opcional. Se stubbea striprtf porque
+    la lógica de derivación no lo necesita y la suite no debe pedir terceros."""
+
+    @classmethod
+    def setUpClass(cls):
+        import types
+        if "striprtf.striprtf" not in sys.modules:
+            pkg = types.ModuleType("striprtf")
+            mod = types.ModuleType("striprtf.striprtf")
+            mod.rtf_to_text = lambda *a, **k: ""
+            pkg.striprtf = mod
+            sys.modules.setdefault("striprtf", pkg)
+            sys.modules["striprtf.striprtf"] = mod
+        import rtf_to_markdown
+        cls.rtf = rtf_to_markdown
+
+    # Layout ePubLibre: cap = número suelto + título en MAYÚSCULAS; cuerpo con tab.
+    LINES = [
+        "PRESENTACIÓN",
+        "\tProsa sin notas.",
+        "1",
+        "JUDÍO DE GALILEA",
+        "\tPárrafo con nota[1].",
+        "2",
+        "LA VÍA DEL ORO",
+        "\tOtro capítulo, nota[1].",
+        "Notas",
+        "[1]", "Nota del uno. <<",
+        "[1]", "Nota del dos. <<",
+    ]
+
+    def _derive(self, pool=(({1: "a"}), ({1: "b"}))):
+        return self.rtf.derive_sections(self.LINES, "Notas", list(pool))
+
+    def test_finds_every_section(self):
+        titles = [s["title"] for s in self._derive()]
+        self.assertEqual(titles, ["Presentación", "1. Judío de Galilea",
+                                  "2. La Vía del Oro"])
+
+    def test_pool_stops_the_body(self):
+        # Ninguna sección puede alcanzar la línea del pool: sería aparato como prosa.
+        pool_at = self.LINES.index("Notas")
+        for sec in self._derive():
+            self.assertLess(sec["ranges"][0][1], pool_at)
+
+    def test_notes_go_to_the_chapters_that_cite_them(self):
+        secs = self._derive()
+        self.assertEqual([s["notes"] for s in secs], [[], [1], [2]])
+
+    def test_titlecase_keeps_function_words_lowercase(self):
+        self.assertEqual(self.rtf.titlecase("LA VÍA DEL ORO"), "La Vía del Oro")
+        self.assertEqual(self.rtf.titlecase("JUDÍO DE GALILEA"), "Judío de Galilea")
+
+    def test_unknown_layout_derives_nothing(self):
+        # Sin señales, mejor 0 secciones (error claro) que una falsa.
+        self.assertEqual(self.rtf.derive_sections(["\tsolo prosa suelta."],
+                                                  "Notas", []), [])
 
 
 if __name__ == "__main__":

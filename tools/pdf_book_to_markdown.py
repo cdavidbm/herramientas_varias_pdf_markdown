@@ -51,6 +51,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from forja_common import slugify, require_tool
+
 
 _PAGE_NUM = re.compile(r'^[\s•·\.\-]*(\d{1,3}|[ivxIVX]{1,5})[\s•·\.\-]*$')
 _CHAPTER_HEADING = re.compile(r'^[IVX]+$')
@@ -156,15 +158,7 @@ def is_garbage_paragraph(p: str) -> bool:
     return False
 
 
-def require_tool(name: str) -> None:
-    if shutil.which(name) is None:
-        sys.exit(f"error: required tool '{name}' is not installed (apt: poppler-utils)")
 
-
-def slugify(text: str) -> str:
-    text = re.sub(r"[^\w\s\-]", "", text.strip(), flags=re.UNICODE)
-    text = re.sub(r"\s+", "_", text)
-    return text[:80] or "section"
 
 
 def extract_pages(pdf: Path) -> list[str]:

@@ -1,11 +1,30 @@
 # Document Toolbox — PDF & EPUB
 
 Reusable scripts for slicing book-length documents into per-chapter pieces that
-are easier to work with (NotebookLM ingestion, targeted reading, RAG sources).
+are easier to work with (NotebookLM ingestion, targeted reading, translation,
+RAG sources).
 
-This folder lives inside the `[ALQUIMIA] The Alchemical Virgin Mary` book folder
-but is intended as a **shared toolbox**: run the scripts from any book folder by
-pointing at them directly, or copy the folder next to a new book.
+This is the `tools/` folder of **La Forja**, a standalone repo. Run the scripts
+from any book folder by pointing at them directly:
+
+```bash
+T=/home/chris/herramientas_varias_pdf_markdown/tools
+python3 $T/detect_chapters.py libro.pdf
+```
+
+The **operating manual** — which tool to reach for, and why — is the repo's
+`CLAUDE.md`. This file is the per-script reference: heuristics, flags and limits.
+
+### Shared module
+
+- `forja_common.py` — the one copy of what every converter used to re-implement:
+  `slugify`, `require_tool`, `pdf_page_count`, `load_plan`. Import it from any
+  script in this folder (`from forja_common import slugify`).
+  **`slugify` preserves Unicode and normalises to NFC**: `Bhāva` stays `Bhāva`
+  (it used to become `Bhava` or `Bhāva` depending on which script sliced the
+  book), and `Döser` can never come out decomposed — NFD filenames break
+  `pdfinfo`/`pdftotext`. Pass `ascii_only=True` if you really need ASCII.
+  `load_plan` normalises `pages: [a, b]` ⇄ `start`/`end` and honours `slug`.
 
 ## Scripts
 
@@ -103,10 +122,22 @@ pointing at them directly, or copy the folder next to a new book.
 ### RTF → per-section Markdown (ePubLibre/Titivillus-style)
 
 - `rtf_to_markdown.py` — for RTF books exported from ePubLibre/Titivillus
-  where notes live in a pool at the end of the file. Reads a `plan.json`
-  with section ranges (line numbers in the rtf-to-text output) + which note
-  pool group each section uses. Requires `striprtf`:
+  where notes live in a pool at the end of the file. Requires `striprtf`:
   `pip install --user --break-system-packages striprtf`.
+
+  **Point it at the RTF; the plan is optional.**
+  ```bash
+  python3 rtf_to_markdown.py book.rtf --dry-run          # preview the sections
+  python3 rtf_to_markdown.py book.rtf                    # convert
+  python3 rtf_to_markdown.py book.rtf --emit-plan p.json # tweak, then run `p.json`
+  ```
+  In auto mode it derives the sections from the **same layout signals** listed
+  below (lone number + ALL-CAPS title = chapter; named/numbered front- and
+  back-matter; the notes pool ends the body), and hands out pool groups in
+  reading order to the sections that actually cite `[N]`. Hand-write a plan only
+  when that's wrong — `--emit-plan` gives you one to edit, with `ranges` as
+  0-based line numbers into the rtf-to-text output.
+
   RTF layout heuristics:
     - `' \t...'` = paragraph body (any leading whitespace then a tab)
     - `' Sub-Heading'` (single-space indent, no tab) = sub-section heading
@@ -159,7 +190,7 @@ pointing at them directly, or copy the folder next to a new book.
     roles (chapters too, not just appendices) and tables with ≥8 columns are rotated
     to a `landscape` page at ~7 pt; images are capped to `0.72\linewidth`; long URLs
     break anywhere (`xurl`); and verbatim/code blocks wrap + go `\small` (`fvextra`)
-    so pasted data lines (e.g. cleaned Morinus directions) never run past the margin.
+    so pasted data lines never run past the margin.
   - **Two known footguns, both handled:** a `[^n]` note ON a heading line is relocated
     to the first prose/verse line (a self-referential footnote → infinite lualatex loop
     → RAM exhaustion → machine freeze); and a 300 s per-pass timeout aborts any other
@@ -243,16 +274,6 @@ heavily-annotated or glyph-bearing books (astrology, alchemy, scholarly monograp
   write. Don't run on indexes/bibliographies (page numbers look like definitions).
   To redo a file already converted: revert with regex (`^\[\^N\]:`→`N `,
   `\s*\[\^N\]`→` N`) then re-apply.
-- `morinus_directions_clean.py` — normalises the **Morinus** primary/symbolic
-  **direction dumps** that OCR strews through the prose of predictive-astrology
-  books (`Z (Virgo)Jupiter D --> Asc 29.71 1969.12.11`). It strips the broken
-  glyphs (the leading `Z` significator, the `D`), translates planet/sign/aspect to
-  Spanish (English **and** German Morinus labels: `Trigon`, `Quadrat`, `Sextil`),
-  makes the arc optional (some listings give only a date), and rewrites each record
-  as one clean monospace data line grouped in a code block
-  (`Asc · término de Júpiter en Virgo · 29.71° · 1969.12.11`). Keeps ALL the data
-  (point, promissor, arc, date); only removes the OCR artifacts. Reports; `--apply`
-  to write. (These blocks wrap/shrink at PDF time via `md_to_pdf.py`'s fvextra.)
 - `astro_glyphs.py` — astrological-glyph crib sheet (`--reference`) and a
   garbled-cell flagger (`--flag FILE`) for OCR'd tables. No engine reads ♄♃♂ etc.,
   so it points you at the exact table cells to fix by hand against the page image
@@ -672,12 +693,12 @@ inserts the `#` headings and drops the spurious ones that repeat those titles.
 | `pdf_chapters_to_markdown.py`  | Multi-PDF (pre-split) → markdown w/ page-bottom footnotes | Python stdlib + poppler CLI |
 | `pdf_book_to_markdown.py`      | Single post-OCR PDF (Harvard cites + end biblio) → per-section markdown | Python stdlib + poppler CLI |
 | `ocr_text_to_markdown.py`      | Plain OCR text dump → per-chapter markdown by page range | Python stdlib |
-| `rtf_to_markdown.py`           | RTF → per-section markdown w/ pooled notes | Python + striprtf |
+| `rtf_to_markdown.py`           | RTF → per-section markdown w/ pooled notes (auto-derives sections) | Python + striprtf |
+| `forja_common.py`              | Shared slugify / plan.json / require_tool / page_count | Python stdlib |
 | `latex_to_markdown.py`         | LaTeX classics (starfont/wasysym glyphs) → study markdown | Python + pandoc CLI |
 | `epub_to_markdown.py`          | EPUB → per-chapter markdown              | Python + beautifulsoup4 |
 | `epub_illustrated_to_markdown.py` | Image-heavy EPUB → per-section markdown w/ figures exported & embedded | Python + beautifulsoup4 |
 | `build_plan.py`                | Generates `plan.json` from ANY EPUB (spine+TOC, generic) | Python + beautifulsoup4 |
-| `attach_notes_by_chapter.py`   | Post-process to attach pooled notes per chapter | Python + beautifulsoup4 |
 | `yt_transcript.py`             | YouTube/local subs → clean, de-duplicated, timestamp-free text | Python stdlib + yt-dlp CLI |
 | `yt_media.py`                  | yt-dlp front door: audio/video/subs/info downloads | Python stdlib + yt-dlp CLI |
 | `yt_audio_transcribe.py`       | Video sin subtítulos → transcript por ASR (Whisper) | Python + faster-whisper (venv) + yt-dlp |
@@ -690,7 +711,6 @@ inserts the `#` headings and drops the spurious ones that repeat those titles.
 | `check_completeness.py`        | Detect/repair text SILENTLY dropped in PDF→md conversion | Python stdlib + poppler CLI |
 | `split_chapters.py`            | Markdown → per-chapter files (plan or by-heading) | Python stdlib |
 | `footnotes_rebuild.py`         | Rebuild `[^N]` footnotes from OCR (2 styles: glued & bare/loose) | Python stdlib |
-| `morinus_directions_clean.py`  | Clean Morinus direction dumps → tidy monospace data lines | Python stdlib |
 | `md_to_pdf.py`                 | Per-chapter study markdown → print-ready PDF (memoir/starfont/LuaLaTeX) | Python + pandoc + TeX Live |
 | `astro_glyphs.py`              | Astro-glyph reference + garbled-cell flagger for OCR tables | Python stdlib |
 | `fix_ordinals.py`              | Repair OCR-mangled superscript ordinals (`4 lh`→`4th`, `ll' h`→`11th`) | Python stdlib |

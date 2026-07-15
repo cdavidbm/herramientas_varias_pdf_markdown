@@ -35,25 +35,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-
-def slugify(text: str) -> str:
-    text = text.strip()
-    text = re.sub(r"[^\w\s\-]", "", text, flags=re.UNICODE)
-    text = re.sub(r"\s+", "_", text)
-    return text[:80] or "section"
+from forja_common import slugify, require_tool, pdf_page_count
 
 
-def require_tool(name: str) -> None:
-    if shutil.which(name) is None:
-        sys.exit(f"error: required tool '{name}' is not installed (apt: poppler-utils)")
 
 
-def pdf_page_count(pdf_path: Path) -> int:
-    out = subprocess.check_output(["pdfinfo", str(pdf_path)], text=True)
-    for line in out.splitlines():
-        if line.startswith("Pages:"):
-            return int(line.split(":", 1)[1].strip())
-    raise RuntimeError("Could not determine page count")
+
+
 
 
 def split_section(
@@ -145,7 +133,10 @@ def main() -> int:
     width = len(str(len(sections) - 1))
     planned: list[tuple[Path, int, int]] = []
     for i, sec in enumerate(sections):
-        name = f"{str(i).zfill(max(2, width))}_{slugify(sec['title'])}.pdf"
+        # Respeta el `slug` del plan si lo trae: pedir `01_Prefacio` y recibir
+        # `00_Prefacio` rompe los nombres que el resto del flujo espera.
+        name = f"{sec['slug']}.pdf" if sec.get("slug") else \
+               f"{str(i).zfill(max(2, width))}_{slugify(sec['title'])}.pdf"
         out = output_dir / name
         planned.append((out, sec["start"], sec["end"]))
         print(f"  [{i:02d}] p.{sec['start']:>4}-{sec['end']:<4} -> {name}")

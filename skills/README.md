@@ -25,6 +25,9 @@ externas que este repo NO contiene; instálalas (abajo).
 | `/explorar-libro` | "Mira tal libro y busca qué hay sobre X": localiza pasajes con su página/capítulo (o índice FTS5 en carpetas) | `book_explore.py`, `tools/book_index.py` |
 | `/forja-flujo` | **Orquestación automática**: detecta la intención y encadena las skills solo (sin invocar nada) | — |
 | `/ocr` | OCR de máxima calidad para escaneos malos y OCRs corruptos: preprocesado, modelos best multilingües, RapidOCR, detección de corrupción | `tools/ocr_*.py` |
+| `/qa-conversion` | Verifica que la conversión PDF→md NO perdió texto, **antes** de traducir | `tools/check_completeness.py` |
+| `/reconstruir-notas` | Rehace el aparato de notas `[^N]` de un escaneo cuyo OCR rompió los marcadores | `tools/footnotes_rebuild.py` |
+| `/youtube` | Video de YouTube → markdown de estudio (subs manuales/auto, o ASR local si no hay) | `tools/yt_*.py` |
 
 Patrón: **lo mecánico → script determinista**; **lo de criterio → la skill**.
 
@@ -82,7 +85,8 @@ playwright, `notebooklm skill install`, `notebooklm login`.
 ## Comprobación
 
 ```bash
-for s in forja traducir-md qa-traduccion revisar-prosa citas explorar-libro; do
+for s in forja forja-flujo traducir-md qa-conversion qa-traduccion revisar-prosa \
+         citas explorar-libro ocr reconstruir-notas youtube; do
   test -f ~/.claude/skills/$s/SKILL.md && echo "✅ $s" || echo "❌ $s"
 done
 ```

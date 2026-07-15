@@ -1,6 +1,6 @@
 ---
 name: forja-flujo
-description: Orquestación AUTOMÁTICA del flujo de libros de La Forja. Detecta la intención del usuario y encadena solo las skills necesarias (convertir, indexar, explorar, traducir, QA, prosa, citas) sin que el usuario invoque nada. Activa con intención de trabajo con libros/documentos de principio a fin ("procesa este libro", "prepáralo para estudio", "traduce y revisa esta carpeta").
+description: Orquestación AUTOMÁTICA de VARIOS pasos del flujo de libros: encadena las skills necesarias (convertir → notas → traducir → QA → prosa → citas → PDF) sin que el usuario invoque nada. Úsala SOLO cuando la petición abarca más de un paso ("procesa este libro", "prepáralo para estudio", "traduce y revisa esta carpeta", "de este PDF sácame un PDF español"). Si solo hay que CONVERTIR un documento a markdown y nada más, usa `/forja` directamente, no esta.
 ---
 
 # La Forja — Orquestación automática del flujo
@@ -47,6 +47,9 @@ tokens (leer solo lo necesario).
 ## Herramientas del repo (fuente de verdad)
 
 `tools/`: conversión (build_plan, epub_to_markdown, pdf_*_to_markdown, split_*,
-detect_chapters), **`book_index.py`** (búsqueda FTS5), **`book_map.py`** (mapa).
-`skills/`: forja, traducir-md, qa-traduccion, revisar-prosa, citas, explorar-libro,
-forja-flujo. Se instalan con `install-skills.sh`. Ver `CLAUDE.md` del repo.
+detect_chapters), **`pdf_rich_to_markdown.py`** (cursivas / columnas paralelas),
+**`book_index.py`** (búsqueda FTS5), **`book_map.py`** (mapa),
+**`md_to_pdf.py`** (libro → PDF maquetado), **`forja_common.py`** (slugify/plan comunes).
+`skills/` (11): forja, forja-flujo, traducir-md, qa-conversion, qa-traduccion,
+revisar-prosa, citas, explorar-libro, ocr, reconstruir-notas, youtube.
+Se instalan con `install-skills.sh`. Ver `CLAUDE.md` del repo.

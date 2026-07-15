@@ -22,6 +22,8 @@ import sys, re, shutil, zipfile, tempfile, html
 from pathlib import Path
 from bs4 import BeautifulSoup, NavigableString, Tag
 
+from forja_common import slugify
+
 # ---- heading class -> markdown level ----------------------------------------
 H1 = {"title-chapter", "title-appendix", "title-glossary", "title-forewordPage",
       "title-acknowPage", "title-aboutAuthorPage", "title-toc"}
@@ -41,12 +43,6 @@ def heading_level(classes):
         if c in H3: return 3
         if c in H4: return 4
     return None
-
-
-def slugify(text, fallback):
-    text = re.sub(r"[^\w\s-]", "", text.lower()).strip()
-    text = re.sub(r"[\s_-]+", "_", text)
-    return (text[:50] or fallback).strip("_")
 
 
 class Converter:
@@ -357,7 +353,7 @@ def main():
         first_h = re.search(r"^#\s+(.+)$", md, re.M)
         title = first_h.group(1) if first_h else key
         title = re.sub(r"[*`]", "", title)
-        fname = f"{idx:02d}_{slugify(title, key)}.md"
+        fname = f"{idx:02d}_{slugify(title, 50, lower=True, fallback=key)}.md"
         (out_dir / fname).write_text(md + "\n", encoding="utf-8")
         combined_parts.append(md)
         print(f"  {fname}  ({len(md.split())} words)")
