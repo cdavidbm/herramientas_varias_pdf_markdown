@@ -294,8 +294,15 @@ heavily-annotated or glyph-bearing books (astrology, alchemy, scholarly monograp
       separated), resumable — use it when the OCR'd PDF's text layer isn't
       pdftotext-extractable (recoded/LuraDocument scans embed text without ToUnicode).
     - `--engine tesseract` renders each page with pdftoppm and runs tesseract
-      **directly** (needs `--sidecar-out`, text only). More accurate on italics than
-      ocrmypdf's own rasterization, which can misread e.g. *oikos*→*otkos*.
+      **directly**. More accurate on italics than ocrmypdf's own rasterization,
+      which can misread e.g. *oikos*→*otkos*. Emits text with `--sidecar-out`
+      and/or a searchable PDF with `--tess-pdf` (at least one required).
+    - `--tess-pdf` (with `--engine tesseract`) builds a **searchable PDF** by
+      laying tesseract's text layer over the poppler-rendered image (pdfunite
+      stitches the pages). Use it when `ocrmypdf` yields a **BLANK** text layer —
+      split/recoded scans whose object structure chokes Ghostscript, so
+      `pdftotext` reports empty even after a clean ocrmypdf run, though poppler
+      renders the pages fine. Sidesteps Ghostscript entirely.
     - Caveat: on recoded PDFs, `--mode redo` is a **no-op** (ocrmypdf keeps the
       unrecognised text layer) — use `force` or `--engine tesseract`.
 - `ocr_preprocess.py` — **pre-OCR image cleanup** for bad scans. Boosts tesseract

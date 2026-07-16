@@ -36,6 +36,10 @@ Usage:
   python3 ocr_incremental.py scan.pdf --mode skip --lang spa+lat
   python3 ocr_incremental.py book.pdf                         # re-run = resume
   python3 ocr_incremental.py book.pdf --mode force --extra "--deskew --clean"
+  # searchable PDF via tesseract when ocrmypdf's Ghostscript rasterizes BLANK
+  # (odd/split/recoded scans that pdftotext reports empty after a clean run):
+  python3 ocr_incremental.py book.pdf --engine tesseract --tess-pdf --out book_ocr.pdf
+  python3 ocr_incremental.py book.pdf --engine tesseract --tess-pdf --sidecar-out book.txt
 
 Requires: `ocrmypdf`, `qpdf`, `pdfinfo` (poppler) on PATH.
 """
@@ -61,11 +65,22 @@ def sh(cmd, env=None):
 
 
 
-def tesseract_batch(pdf, a, b, side, tmp, dpi, lang, env):
+def tesseract_batch(pdf, a, b, side, part, tmp, dpi, lang, env, want_text, want_pdf):
     """Render pages a..b with pdftoppm and OCR each directly with tesseract.
-    Writes the concatenated text (pages \\f-separated) to `side`. More accurate on
-    italics than ocrmypdf's rasterization for some scans."""
+
+    Produces, per request, the concatenated TEXT (pages \\f-separated → `side`)
+    and/or a searchable PDF for the batch (`part`), built by OCRing each page to
+    its own text-layer PDF (`tesseract png stem pdf`) and stitching them with
+    `pdfunite`. A single tesseract call emits both outputs at once
+    (`tesseract png stem txt pdf`), so asking for the PDF too costs no extra OCR.
+
+    Why a tesseract-native PDF instead of ocrmypdf: on some scans ocrmypdf's
+    Ghostscript rasterization silently yields a BLANK text layer (e.g. PDFs whose
+    images survive `pdftoppm`/poppler but choke Ghostscript — split/​recoded
+    scans with an odd object structure). Rendering with poppler and letting
+    tesseract lay the text over the image sidesteps Ghostscript entirely."""
     texts = []
+    page_pdfs = []
     for p in range(a, b + 1):
         stem = tmp / f"pg_{p:04d}"
         r = sh(["pdftoppm", "-f", str(p), "-l", str(p), "-r", str(dpi), "-png",
@@ -74,18 +89,45 @@ def tesseract_batch(pdf, a, b, side, tmp, dpi, lang, env):
         if r.returncode != 0 or not pngs:
             raise RuntimeError(f"pdftoppm failed on page {p}: {r.stderr}")
         png = pngs[0]
-        r = sh(["tesseract", str(png), "stdout", "-l", lang], env=env)
+        if want_pdf:
+            # Set the output renderers with -c flags rather than the `txt`/`pdf`
+            # CONFIG-FILE args: those config files live under a system tessdata's
+            # configs/ dir, which a best-models TESSDATA_PREFIX (only .traineddata)
+            # does not have — tesseract would abort with "Can't open pdf". The -c
+            # variables need no config file. tesseract writes <stem>.txt/.pdf.
+            cflags = ["-c", "tessedit_create_pdf=1"]
+            if want_text:
+                cflags += ["-c", "tessedit_create_txt=1"]
+            r = sh(["tesseract", str(png), str(stem), "-l", lang] + cflags, env=env)
+            if want_text:
+                txt_f = stem.with_suffix(".txt")
+                texts.append(txt_f.read_text(encoding="utf-8", errors="replace")
+                             if txt_f.exists() else "")
+                txt_f.unlink(missing_ok=True)
+            page_pdfs.append(stem.with_suffix(".pdf"))
+        else:
+            r = sh(["tesseract", str(png), "stdout", "-l", lang], env=env)
+            texts.append(r.stdout)
         if r.returncode != 0:
             png.unlink(missing_ok=True)
             raise RuntimeError(f"tesseract failed on page {p}: {r.stderr[-500:]}")
-        texts.append(r.stdout)
         png.unlink(missing_ok=True)
-    # Escritura ATÓMICA: si el proceso muere a mitad del write, un `side` truncado
-    # existiría y el resume (side.exists() and st_size>0) lo daría por bueno,
-    # perdiendo páginas. Escribir a .tmp y os.replace (rename atómico) lo evita.
-    tmp_side = side.with_name(side.name + ".tmp")
-    tmp_side.write_text("\f".join(texts), encoding="utf-8")
-    os.replace(tmp_side, side)
+    # Escritura ATÓMICA: si el proceso muere a mitad del write, un `side`/`part`
+    # truncado existiría y el resume lo daría por bueno, perdiendo páginas.
+    # Escribir a .tmp y os.replace (rename atómico) lo evita.
+    if want_text:
+        tmp_side = side.with_name(side.name + ".tmp")
+        tmp_side.write_text("\f".join(texts), encoding="utf-8")
+        os.replace(tmp_side, side)
+    if want_pdf:
+        tmp_part = part.with_name(part.name + ".tmp")
+        r = sh(["pdfunite"] + [str(x) for x in page_pdfs] + [str(tmp_part)])
+        for x in page_pdfs:
+            x.unlink(missing_ok=True)
+        if r.returncode != 0 or not tmp_part.exists():
+            tmp_part.unlink(missing_ok=True)
+            raise RuntimeError(f"pdfunite failed on pages {a}-{b}: {r.stderr[-500:]}")
+        os.replace(tmp_part, part)
 
 
 def main():
@@ -107,12 +149,17 @@ def main():
     ap.add_argument("--engine", choices=["ocrmypdf", "tesseract"], default="ocrmypdf",
                     help="OCR engine. 'ocrmypdf' (default) builds a searchable PDF. 'tesseract' renders each "
                     "page with pdftoppm and runs tesseract DIRECTLY — noticeably more accurate on some scans "
-                    "(ocrmypdf's own rasterization can misread italics, e.g. oikos→otkos), outputs TEXT only "
-                    "(requires --sidecar-out), no PDF.")
+                    "(ocrmypdf's own rasterization can misread italics, e.g. oikos→otkos). Emits TEXT with "
+                    "--sidecar-out and/or a searchable PDF with --tess-pdf (at least one required).")
+    ap.add_argument("--tess-pdf", action="store_true",
+                    help="with --engine tesseract, ALSO build a searchable PDF at --out (tesseract lays a text "
+                    "layer over the poppler-rendered image and pdfunite stitches the pages). Use this when "
+                    "ocrmypdf's Ghostscript rasterization yields a BLANK text layer (odd/split/recoded scans "
+                    "that pdftotext reports as empty even after a clean ocrmypdf run).")
     ap.add_argument("--dpi", type=int, default=300, help="render DPI for --engine tesseract (default 300)")
     args = ap.parse_args()
-    if args.engine == "tesseract" and not args.sidecar_out:
-        sys.exit("--engine tesseract outputs text only; pass --sidecar-out PATH")
+    if args.engine == "tesseract" and not (args.sidecar_out or args.tess_pdf):
+        sys.exit("--engine tesseract needs an output: pass --sidecar-out PATH and/or --tess-pdf")
 
     pdf = Path(args.pdf).resolve()
     if not pdf.is_file():
@@ -141,15 +188,15 @@ def main():
     extra = shlex.split(args.extra)
     want_text = bool(args.sidecar_out)
     tess = args.engine == "tesseract"
+    want_pdf = args.tess_pdf if tess else True
     done = 0
     for k, (a, b) in enumerate(batches, 1):
         part = parts / f"part_{k:04d}.pdf"
         side = parts / f"part_{k:04d}.txt"
-        # checkpoint: tesseract engine keys on the TEXT part; ocrmypdf on the PDF part
-        if tess:
-            resumed = side.exists() and side.stat().st_size > 0
-        else:
-            resumed = part.exists() and part.stat().st_size > 0 and (not want_text or side.exists())
+        # checkpoint: a batch is done when all its requested outputs exist.
+        pdf_ok = (not want_pdf) or (part.exists() and part.stat().st_size > 0)
+        txt_ok = (not want_text) or (side.exists() and side.stat().st_size > 0)
+        resumed = pdf_ok and txt_ok
         if resumed:
             print(f"  [{k}/{len(batches)}] pages {a}-{b}  ✓ resume (already done)")
             done += 1
@@ -157,9 +204,11 @@ def main():
         t0 = time.time()
         if tess:
             try:
-                tesseract_batch(pdf, a, b, side, tmp, args.dpi, args.lang, env)
+                tesseract_batch(pdf, a, b, side, part, tmp, args.dpi, args.lang, env,
+                                want_text, want_pdf)
             except RuntimeError as e:
                 side.unlink(missing_ok=True)
+                part.unlink(missing_ok=True)
                 sys.exit(f"tesseract engine failed on pages {a}-{b}:\n{e}")
         else:
             batch_pdf = tmp / f"batch_{k:04d}.pdf"
@@ -194,12 +243,14 @@ def main():
         print(f"  [{k}/{len(batches)}] pages {a}-{b}  ✓ {time.time()-t0:.0f}s "
               f"(~{eta/60:.0f} min left)", flush=True)
 
-    # merge all part PDFs (ocrmypdf engine only)
-    if not tess:
+    # merge all part PDFs into the searchable PDF (both engines can produce one)
+    if want_pdf:
         part_files = [str(parts / f"part_{k:04d}.pdf") for k in range(1, len(batches) + 1)]
-        merge = ["qpdf", "--empty", "--pages"] + part_files + ["--", str(out)]
+        merge = ["qpdf", "--empty", "--warning-exit-0", "--pages"] + part_files + ["--", str(out)]
         r = sh(merge)
-        if r.returncode != 0 or not out.exists():
+        # qpdf exit 3 = succeeded-with-warnings (e.g. object-count mismatch from
+        # pdfunite/tesseract output); --warning-exit-0 forces 0, but tolerate 3 too.
+        if r.returncode not in (0, 3) or not out.exists():
             sys.exit(f"qpdf merge failed:\n{r.stderr}")
         print(f"\nDONE -> {out}  ({out.stat().st_size//1024} KB, {total} pages)")
     else:

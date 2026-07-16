@@ -41,7 +41,16 @@ chars=$(pdftotext -f 1 -l 5 x.pdf - 2>/dev/null | wc -c); echo "chars/5pp=$chars
     escaneos largos o si hay que **pausar**, usa `python3 $T/ocr_incremental.py x.pdf
     --lang eng` (lotes con checkpoint + resume + modelos best; `ocrmypdf` a secas no
     es reanudable). Modo `redo` sustituye la capa mala conservando la imagen.
+  - **`ocrmypdf` deja la capa de texto EN BLANCO** (el PDF buscable resultante da
+    `pdftotext` vacío pese a correr sin error): pasa con escaneos partidos/recodificados
+    cuya estructura de objetos atasca a Ghostscript, aunque poppler renderice bien. Usa
+    `ocr_incremental.py x.pdf --engine tesseract --tess-pdf --out x_ocr.pdf` — renderiza
+    con poppler y deja que tesseract ponga la capa de texto (esquiva Ghostscript). Añade
+    `--sidecar-out x.txt` si quieres además el texto plano.
 - **Páginas apaisadas (ancho/alto > ~1.3)** → escaneo 2-up → `python3 $T/split_pdf_spreads.py x.pdf` (deja `x_1up.pdf`) ANTES de OCR/troceo.
+  - **OJO rotación:** si `pdfinfo` da `Page rot: 90/270`, el ratio ancho/alto que ve
+    `split_pdf_spreads` es el del MediaBox SIN rotar y no detecta el 2-up. Hornea la
+    rotación primero: `qpdf --flatten-rotation x.pdf x_flat.pdf`.
 
 ### 3. ¿Bisturí o Docling?
 Mira layout en una página de cuerpo:
