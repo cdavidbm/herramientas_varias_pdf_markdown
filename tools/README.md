@@ -352,6 +352,18 @@ conversion or handing it to translation.
   `--exclude "…"` skips false positives (removed front-matter, image-wrapped
   reading-order scrambles). Exit 1 if gaps found. Also wired into
   `pdf_chapters_to_markdown.py --verify`.
+- `audit_conversion.py spec.json [--out R.md] [--sample N] [--render-dir D]` —
+  **whole-book audit gate** for a scanned+OCR'd+sectioned conversion. One report,
+  4 layers, honest about *provable* vs *estimable*: **[A]** deterministic
+  completeness per section (md/PDF word ratio, prose gaps, `[^N]` footnote balance
+  — refs↔defs, zero orphans), **[B]** OCR-noise upper bound via aspell (isolates
+  clear garbage), **[C]** renders N pages so a human/agent reads them **against the
+  image** (the only layer that grounds OCR truth), **[D]** second-engine cross-OCR
+  (system vs best tessdata) to flag where to look. `spec.json` = `{pdf, md_dir,
+  sections:[{md, pages:[a,b]}]}`. NOTE: layer D OCRs both engines via `tesseract
+  stdout` at the same dpi — comparing the PDF's `-layout` layer against tesseract
+  stdout measures reading-order, not errors, and inflates the %. Disagreement
+  concentrates in 2-column index/bibliography (known limit), not prose.
 - `fix_ligatures.py` — repairs the OUP ligature bug where fi/ff/fl/ffi/ffl were
   extracted as capitals `W V X Y Z` (`conWrmation` → `confirmation`).
   Dictionary-guarded, and **protects CamelCase proper nouns** (LaVey, RavenWolf)

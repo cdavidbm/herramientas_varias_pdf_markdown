@@ -133,6 +133,18 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
 - `check_completeness.py cap.pdf cap.md [--pages A-B] [--repair]` — alinea el
   markdown contra `pdftotext -layout` y lista/repara el texto perdido. También
   como bandera del conversor: `pdf_chapters_to_markdown.py plan.json --verify`.
+- **Auditoría de un LIBRO entero (escaneo OCR-eado y troceado):**
+  `audit_conversion.py spec.json --out INFORME.md --sample 40 --render-dir ./pngs`.
+  Un informe por libro con 4 capas, separando lo **demostrable** de lo **estimable**:
+  [A] completitud determinista (ratio md/PDF por sección, lagunas, **balance de
+  notas `[^N]`**: refs↔defs, cero huérfanas), [B] ruido OCR por diccionario (cota
+  superior, aísla *garbage*), [C] renderiza N páginas para leerlas **contra la
+  imagen** (única capa que ancla la verdad del OCR), [D] contraste con un 2º motor
+  (tesseract sistema vs best) para señalar dónde MIRAR. **Nota clave aprendida:** el
+  contraste debe OCR-ear ambos motores por `tesseract stdout` al MISMO dpi; comparar
+  la capa `-layout` del PDF contra `tesseract stdout` mide orden de lectura, no
+  errores, e infla el %. La discrepancia se concentra siempre en índice/bibliografía
+  a 2 columnas (límite conocido), no en la prosa.
 - Corrupción OUP/Distiller (ligaduras y diacríticos, parecen erratas pero son
   texto roto): `fix_ligatures.py` (fi→W… con guarda de diccionario y protección de
   nombres propios CamelCase), `fix_diacritics.py` (ı/€/acentos + NFC),
