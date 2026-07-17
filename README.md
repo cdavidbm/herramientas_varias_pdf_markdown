@@ -87,6 +87,8 @@ front-matter descartar). Lo demás se detecta.
 | EPUB **ilustrado** (figuras, glifos musicales) | `epub_illustrated_to_markdown.py` |
 | RTF de ePubLibre/Titivillus con notas agrupadas | `rtf_to_markdown.py` |
 | **Office** (docx, pptx, xlsx), html o imágenes → markdown | `markitdown` (o su MCP) |
+| **Limpiar un libro ya convertido** (running-heads, ordinales, romanos, ligaduras, diacríticos, versos, notas) | `forja_limpiar.py` (puerta única; compone los fixers en orden) |
+| **Corrección OCR puntual** (ordinales/romanos/ligaduras/diacríticos/ortografía) | `fix_ocr.py <sub>` (fachada de los 5 arregladores) |
 | **Video de YouTube** → markdown de estudio (subtítulos, incl. auto-generados) | `yt_transcript.py` + skill `/youtube` |
 | Video de YouTube **sin subtítulos** → transcript por audio (ASR local) | `yt_audio_transcribe.py` (faster-whisper) |
 | Bajar **audio/video/subtítulos** de YouTube | `yt_media.py` (yt-dlp) |
