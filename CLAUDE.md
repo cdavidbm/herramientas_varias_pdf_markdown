@@ -101,7 +101,24 @@ capítulo con bisturí, revisa el `.md`; si quedó sucio, repite con Docling.
 > (acelera mucho). `--image-export-mode placeholder` evita incrustar imágenes.
 
 ### 3c. Limpieza post-conversión (OCR/Docling → estudio)
-Tras convertir, dejar el markdown listo para leer/traducir:
+Tras convertir, dejar el markdown listo para leer/traducir.
+
+> **DOS PUERTAS ÚNICAS (empieza por aquí, no por los fixers sueltos):**
+> - **`forja_limpiar.py ./markdown [--apply]`** — orquestador: aplica EN ORDEN el
+>   núcleo determinista (ordinales→romanos→ligaduras→diacríticos, todos con guarda,
+>   así que componerlos es seguro) y termina con el informe de artefactos a revisar.
+>   Toggles según el libro: `--verses` (un párrafo por verso), `--notas` (rehace
+>   `[^N]`), `--openings` (portadillas OUP), `--docling`, `--spell`. Dry-run por
+>   defecto. Es la receta de esta sección ENCAPSULADA; generaliza a `limpiar_academico.py`.
+> - **`fix_ocr.py <sub> FILE... [--apply]`** — correcciones OCR puntuales bajo un
+>   comando: `ordinals·romans·ligatures·diacritics·spell·all`. Reúne los cinco
+>   arregladores sueltos con una sola convención (dry-run, guardas intactas).
+>
+> Los scripts de abajo son las PIEZAS que esas dos puertas componen; córrelos sueltos
+> solo para un caso muy concreto. La lógica y las guardas viven en ellos (y se testean
+> ahí); las primitivas compartidas (diccionario, subproceso, pdftotext) están en
+> `forja_common.py`.
+
 - `clean_markdown.py` — quita running-headers de página (sin borrar contenido
   repetido legítimo), guion suave, saca imágenes base64 a archivo, normaliza espacios.
 - `split_chapters.py libro.md --plan plan.json` (o `--by-heading 2`) — trocea en

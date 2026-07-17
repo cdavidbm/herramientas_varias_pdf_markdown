@@ -40,7 +40,63 @@ import sys
 import unicodedata
 from pathlib import Path
 
-__all__ = ["slugify", "require_tool", "pdf_page_count", "load_plan"]
+__all__ = ["slugify", "require_tool", "pdf_page_count", "load_plan",
+           "load_dict", "run", "pdftext"]
+
+# Diccionarios del sistema, en orden de preferencia. La unión de british+american
+# es lo que quiere el material (ortografía mixta en ediciones clásicas).
+_DICT_PATHS = ["/usr/share/dict/british-english", "/usr/share/dict/american-english",
+               "/usr/share/dict/words"]
+_DICT_CACHE: set[str] | None = None
+
+
+def load_dict() -> set[str]:
+    """Palabras del diccionario del sistema (minúsculas), cacheadas.
+
+    UNA sola versión de lo que `fix_ligatures.load_words`, `ocr_spellfix.load_dict`
+    y `limpiar_academico` cargaban por su cuenta —con listas de rutas distintas, y
+    por tanto vocabularios distintos—. Devuelve la UNIÓN de los diccionarios que
+    existan; vacío si no hay ninguno (el llamador decide si eso es fatal)."""
+    global _DICT_CACHE
+    if _DICT_CACHE is None:
+        words: set[str] = set()
+        for p in _DICT_PATHS:
+            try:
+                with open(p, encoding="utf-8", errors="ignore") as fh:
+                    words |= {w.strip().lower() for w in fh if w.strip()}
+            except FileNotFoundError:
+                pass
+        _DICT_CACHE = words
+    return _DICT_CACHE
+
+
+def run(cmd: list[str], *, check: bool = True, quiet: bool = True) -> str:
+    """Ejecuta un comando y devuelve su stdout (texto). La versión única de los
+    `def sh(...)` que estaban copiados en varios conversores."""
+    out = subprocess.run(cmd, text=True, capture_output=True)
+    if check and out.returncode != 0:
+        msg = out.stderr.strip() or f"exit {out.returncode}"
+        sys.exit(f"error: {cmd[0]} failed: {msg}")
+    return out.stdout
+
+
+def pdftext(pdf: Path | str, first: int | None = None, last: int | None = None,
+            *, layout: bool = False, raw: bool = False) -> str:
+    """Extrae texto de un PDF con pdftotext. `layout` conserva columnas; `raw`
+    respeta el orden de lectura interno del OCR (mejor en escaneos MUY degradados,
+    donde `-layout` dispersa la prosa). Sin ninguno, modo por defecto de poppler."""
+    require_tool("pdftotext")
+    cmd = ["pdftotext"]
+    if layout:
+        cmd.append("-layout")
+    if raw:
+        cmd.append("-raw")
+    if first is not None:
+        cmd += ["-f", str(first)]
+    if last is not None:
+        cmd += ["-l", str(last)]
+    cmd += [str(pdf), "-"]
+    return run(cmd, check=False)
 
 
 def slugify(text: str, maxlen: int = 80, *, ascii_only: bool = False,
