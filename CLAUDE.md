@@ -51,6 +51,15 @@ chars=$(pdftotext -f 1 -l 5 x.pdf - 2>/dev/null | wc -c); echo "chars/5pp=$chars
   - **OJO rotación:** si `pdfinfo` da `Page rot: 90/270`, el ratio ancho/alto que ve
     `split_pdf_spreads` es el del MediaBox SIN rotar y no detecta el 2-up. Hornea la
     rotación primero: `qpdf --flatten-rotation x.pdf x_flat.pdf`.
+  - **Cuadernillo de anillas escaneado ABIERTO (spread rotado 90° DENTRO de la
+    imagen, `Page rot: 0`):** aquí `qpdf`/`split_pdf_spreads` NO sirven (el MediaBox es
+    portrait y la rotación está en el contenido de la imagen, no en `/Rotate`; OSD de
+    tesseract da baja confianza). Resuélvelo por imagen: `pdftoppm -r 300` → PIL
+    `Image.rotate(-90, expand=True)` (prueba los 4 ángulos y OCR-ea para ver cuál da
+    inglés real) → parte en mitad izquierda/derecha (descarta las mitades en blanco por
+    densidad de tinta) → tesseract *best* por mitad (texto + `-c tessedit_create_pdf=1`)
+    → `pdfunite` para el buscable upright. Orden de lectura: izquierda antes que derecha
+    por hoja. Medido en «Project Hindsight Companion» (33 hojas → 65 páginas upright).
 
 ### 3. ¿Bisturí o Docling?
 Mira layout en una página de cuerpo:
