@@ -38,6 +38,23 @@ class TestForjaLimpiar(unittest.TestCase):
         self.assertIn("**2**", after)
         self.assertIn("**3**", after)
 
+    def test_notas_toggle_rebuilds_footnotes(self):
+        # regresión: rebuild() devuelve (texto, stats); el orquestador debe
+        # desempaquetar o crashea al pasar la tupla a la siguiente etapa.
+        text = "## Chapter I.1: On things\n\n1 A verse here.\n\n114. A note, cf. Ptolemy.\n"
+        r, after = self._run(text, "--notas", "--apply")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("[^114]", after)
+
+    def test_all_toggles_compose_without_crash(self):
+        text = ("## Chapter I.1: On the 4 lh house\n\n"
+                "In Volume IT T will note. 1 First. 2 Second.\n\n114. Note, cf. X.\n")
+        r, after = self._run(text, "--verses", "--notas", "--docling", "--apply")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("4th", after)
+        self.assertIn("**2**", after)
+        self.assertIn("[^114]", after)
+
     def test_final_report_present(self):
         r, _ = self._run("Plain clean prose without artifacts.\n")
         self.assertIn("revisar a mano", r.stdout)

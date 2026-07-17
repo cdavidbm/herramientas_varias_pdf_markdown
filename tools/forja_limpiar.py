@@ -73,9 +73,9 @@ def main() -> int:
         # 1) reflow versificado (antes que nada: cambia la estructura de párrafos)
         if a.verses:
             text, n = verse_paragraphs.process(text, 199); bump("versos", n)
-        # 2) notas [^N]
+        # 2) notas [^N]  (rebuild devuelve (texto, stats))
         if a.notas:
-            new = footnotes_rebuild.rebuild(text)
+            new, _stats = footnotes_rebuild.rebuild(text)
             if new != text:
                 bump("notas", 1); text = new
         # 3) núcleo determinista de OCR (ordinales, romanos, ligaduras, diacríticos)
