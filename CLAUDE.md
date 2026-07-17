@@ -106,6 +106,14 @@ Tras convertir, dejar el markdown listo para leer/traducir:
   repetido legítimo), guion suave, saca imágenes base64 a archivo, normaliza espacios.
 - `split_chapters.py libro.md --plan plan.json` (o `--by-heading 2`) — trocea en
   capítulos. Exige UNA de las dos banderas; el `.md` va siempre como posicional.
+- `verse_paragraphs.py libro/*.md [--apply]` — texto **VERSIFICADO** (Abū Maʿshar,
+  Valens, Doroteo…) que quedó como UN párrafo gigante por capítulo con los números
+  de verso inline → los pone **un párrafo por verso** con el nº en negrita. Señal de
+  verso = número 1..MAX SOLO seguido de MAYÚSCULA (descarta cantidades «30 signs» en
+  minúscula; permite el reset por capítulo). No toca `#`/tablas/código/notas; es
+  idempotente. Arregla de paso el caso «encabezado que se tragó el capítulo entero y
+  renderiza todo en negrita». Dry-run por defecto. (Medido en Persian Nativities IV:
+  líneas de 45.719 → ~2.600 chars.)
 - `footnotes_rebuild.py cap.md --apply` — reconstruye notas `[^N]` **por capítulo**.
   Detecta 2 estilos de OCR: *pegado* (marcador partido `1 3 8`→`[^138]` + def. `114. …`)
   y *suelto* (marcador ` N ` con espacio + def. `N Texto` sin punto, incluso partida en
