@@ -157,6 +157,24 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
   prosa (p. ej. 0.961 global). **Mide en un tramo SIN figuras** (glosario, un capítulo de
   prosa densa): si ahí sale ~0.98-0.99, no hay pérdida. Un ratio bajo en un tramo de prosa
   pura sí es alarma real.
+- **El ratio se DERRUMBA (0.6-0.8) en libros BILINGÜES con notas en otro alfabeto**
+  (p. ej. ediciones de Dykes con el árabe original al pie): tesseract con modelo
+  inglés convierte ese árabe en torrentes de basura que `pdftotext` sí extrae pero el
+  conversor descarta → el **denominador** se dobla sin faltar prosa (medido: ~25 % de
+  los tokens del PDF eran basura en Persian Nativities IV, con la prosa íntegra).
+  NO te fíes del ratio de cuerpo aquí; ni siquiera la «cobertura de tipos» sirve (la
+  hunden la flexión y los cortes de palabra del OCR). Lo que PRUEBA la completitud es:
+  (1) el **control de prosa** —una sección moderna sin notas ajenas, típ. la
+  introducción del traductor, que debe dar ~0.97; (2) el **muestreo visual** de 4-5
+  páginas de cuerpo de capítulos distintos leídas contra la imagen. Las **tablas y
+  cartas** OCR-eadas se CONSERVAN (son contenido real, no se borran), pero son
+  aproximadas: la imagen/PDF buscable es la fuente autoritativa de sus cifras.
+- **PDF buscable de tesseract enorme (GB):** la salida cruda embebe las imágenes a
+  300 dpi RGB sin comprimir (2 GB para ~700 pp). Recomprime antes de entregar:
+  `gs -sDEVICE=pdfwrite -dPDFSETTINGS=/ebook -dColorImageResolution=150
+  -dGrayImageResolution=150 -dNOPAUSE -dBATCH x.pdf` → ~65 MB, conserva la capa de
+  texto (verifícalo con `pdftotext` en 1 página). Córrelo bajo `systemd-run --user
+  -p MemoryMax=4G` (el input de 2 GB es pesado).
 - Skills de QA: **`/qa-conversion`** (markdown vs PDF) antes de traducir;
   **`/qa-traduccion`** (incluye detección de truncamiento por ratio de palabras)
   después.
