@@ -9,6 +9,12 @@ diagnosticas el documento y eliges la herramienta correcta tú mismo**.
 > archivo lo replica para que el repo sea autoexplicativo aunque se use en otra
 > máquina o sin la skill cargada.
 
+> **¿Qué herramientas hay? → [`tools/CATALOG.md`](tools/CATALOG.md).** Es el índice
+> ÚNICO de las 46 tools, agrupadas y con su propósito, **autogenerado desde los
+> docstrings** (`python3 tools/catalog.py --write`), así que no se desincroniza.
+> Ante un libro difícil, consúltalo para no reinventar lo que ya existe. Este
+> CLAUDE.md da la RECETA (qué usar y en qué orden); el catálogo da el INVENTARIO.
+
 ## Principio rector
 
 1. **Sondea, no preguntes lo inferible.** Formato, escaneo vs digital, columnas,
@@ -317,6 +323,10 @@ un PDF entero como sección.
 > `start`/`end` sigue funcionando en esos dos por retrocompatibilidad.
 
 ## Salida / siguiente paso
+- **Explorar/buscar un libro ya convertido** (antes de traducir o para orientarte):
+  `book_map.py ./markdown` da el **mapa estructural** (capítulos, tamaños, encabezados)
+  y `book_index.py ./markdown` monta un **índice full-text LOCAL** para buscar términos
+  sin releer todo. Útiles para diagnosticar troceos raros o localizar un pasaje.
 - Markdown → NotebookLM (fuente) o traducción con la skill **`/traducir-md`**
   (preserva `[^N]`, encabezados, glosario).
 - **Libro completo a PDF bonito → `md_to_pdf.py`, NO `pandoc`.** Es la herramienta
