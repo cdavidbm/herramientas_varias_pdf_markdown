@@ -136,6 +136,16 @@ Tras convertir, dejar el markdown listo para leer/traducir:
   —puede errar en latín/árabe sin diacríticos y fragmentos de OCR—, así que va en
   **dry-run por defecto: revisa la lista antes de `--apply`**. Para la corrección fina
   de verdad, una pasada de agente que lee en contexto sigue siendo lo más fiable.
+- `flag_ocr_artifacts.py libro/*.md [--only tipo,tipo]` — **DETECTOR** (no corrige) de
+  ruido de OCR camuflado que es fácil pasar por alto, para que TÚ lo arregles a mano
+  contra la imagen. Marca: `garbage` (basura pura de tabla «010 OQ Fo…»), `glued`
+  (entrada de glosario pegada a otra o a basura), `split` (párrafo cortado por salto de
+  página sin unir), `dash` (guion espurio al inicio «- such a manner…»), `bracket`/
+  `stray` (corchete colgando, cola basura «… . ] Bt»), `pagenum` (nº de página
+  incrustado «29 more the sense…»). Estos defectos aparecen SOBRE TODO **debajo de las
+  tablas** (restos que sobrevivieron al troceo) y en glosarios (entradas que el filtro
+  de basura pegó o borró). Úsalo tras convertir un libro-diccionario para no dejar
+  cabos: corre el detector, revisa cada marca contra la imagen y corrige con criterio.
 - `chapter_bounds.py libro.pdf clean.md --sections secs.json --offset N [--apply]` —
   cuando **no puedes fiarte de los encabezados** de Docling: título repetido como
   running header y promovido a encabezado en sitio equivocado (¡a mitad de frase!),
