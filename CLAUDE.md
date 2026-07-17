@@ -117,6 +117,25 @@ Tras convertir, dejar el markdown listo para leer/traducir:
   sufijo del NÚMERO (no adivina la corrupción), solo 1-31, y no toca horas/fechas/cifras.
   Crítico en libros de **casas** astrológicas o siglos: cambia el sentido y ningún
   corrector lo ve. (`docling_clean.py` ya cubre el caso LIMPIO `5 th`→`5th`.)
+- `fix_roman_numerals.py cap.md [--apply]` — el OCR confunde numerales romanos con
+  letras/dígitos y con el pronombre inglés «I»: `Volume IT`→`Volume II`, `Ch. IIL`→
+  `Ch. III`, `1V`→`IV`, y el clásico `In Volume IT T will`→`In Volume II I will`.
+  DOS reglas CON CONTEXTO: (1) numeral tras palabra-contador (Book/Volume/Chapter/
+  Part…); (2) pronombre «I» leído `T/l/|` seguido de verbo de 1ª persona — NO toca
+  las **siglas de manuscrito** («T reads», «P reads») porque exige verbo no-3ª-pers.
+  Conservador: omite los ambiguos `IIL9`/`IL6` (¿`III` o `II.9`?) y los números
+  arábigos («chapter 16»). Dry-run por defecto.
+- `ocr_spellfix.py libro/*.md [--apply] [--max-edits 2]` — corrección ortográfica
+  CONSERVADORA de erratas de OCR usando **el propio libro como modelo de frecuencia**
+  (así protege transliteraciones y términos de dominio: lo que sale muchas veces es
+  correcto y es buen destino de corrección — `Bosk`/`boks`→`Book`, `Centuty`→`Century`,
+  `tather`→`father`). Pasa TODOS los .md juntos (mejor corpus). Reglas de seguridad:
+  solo corrige a un destino MUY común, prioriza distancia 1 (edit-2 opcional y solo en
+  minúsculas), protege MAYÚSCULAS/no-ASCII/≤3 letras y exige más frecuencia si el
+  original va capitalizado (nombres propios). **Límite honesto:** ni así es perfecto
+  —puede errar en latín/árabe sin diacríticos y fragmentos de OCR—, así que va en
+  **dry-run por defecto: revisa la lista antes de `--apply`**. Para la corrección fina
+  de verdad, una pasada de agente que lee en contexto sigue siendo lo más fiable.
 - `chapter_bounds.py libro.pdf clean.md --sections secs.json --offset N [--apply]` —
   cuando **no puedes fiarte de los encabezados** de Docling: título repetido como
   running header y promovido a encabezado en sitio equivocado (¡a mitad de frase!),
