@@ -60,6 +60,19 @@ chars=$(pdftotext -f 1 -l 5 x.pdf - 2>/dev/null | wc -c); echo "chars/5pp=$chars
     densidad de tinta) → tesseract *best* por mitad (texto + `-c tessedit_create_pdf=1`)
     → `pdfunite` para el buscable upright. Orden de lectura: izquierda antes que derecha
     por hoja. Medido en «Project Hindsight Companion» (33 hojas → 65 páginas upright).
+  - **Escaneo MUY degradado donde `pdftotext -layout` REMEZCLA la prosa:** en algunos
+    escaneos (bordes curvos de cuadernillo, bleed, columnas mal detectadas) el
+    `-layout` dispersa el cuerpo en fragmentos de margen derecho («each», «es», «oth-»,
+    «ers» → nativit**ies**, oth**ers**) y unir línea a línea top-to-bottom **descoloca
+    el orden de lectura** (versos y frases salen entremezclados). Extrae entonces con
+    **`pdftotext` en modo RAW (SIN `-layout`)**: respeta el orden de lectura interno del
+    OCR y sale limpio en el grueso de páginas. Medido en Persian Nativities IV: `-layout`
+    daba cuerpo remezclado + texto principal disfrazado de nota; raw lo arregló. Con raw,
+    el running-head + nº de página quedan como líneas 1-2 (fáciles de quitar) y las notas
+    al pie abren con marcador inequívoco (`' " * ®` o dígito+pista «cf./reads»); sepáralas
+    de forma CONSERVADORA (mejor nota inline que verso de cuerpo disfrazado de nota). Los
+    encabezados de capítulo y el TOC muy garbleados NO se recuperan del todo: su texto
+    sigue presente pero algún corte falta → límite honesto, el PDF buscable manda.
 
 ### 3. ¿Bisturí o Docling?
 Mira layout en una página de cuerpo:
