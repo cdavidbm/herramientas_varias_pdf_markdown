@@ -115,6 +115,20 @@ Tras convertir, dejar el markdown listo para leer/traducir:
   límite REAL de cada capítulo por la **frase de apertura** de su página en el PDF
   (índice → página del libro + `--offset` = página PDF). Determinista. `--apply` inserta
   los `#` y borra los encabezados espurios → luego `split_chapters.py --by-heading 1`.
+- **VERIFICA los límites de sección/Libro contra el PDF antes de dar el troceo por
+  bueno.** Los números de página de un `plan.json` armado a ojo pueden estar MUY mal
+  (medido: 25-32 páginas de desfase en los Libros I-IV de Persian Nativities IV, con
+  el «Libro I» arrastrando el arranque del II). Localiza cada límite por un marcador
+  robusto en el texto OCR: el preámbulo de apertura del Libro (p. ej. «…is in N
+  chapters») y el primer capítulo real («Chapter N.1») en página >front-matter. Un
+  archivo que contiene capítulos de OTRO Libro (numeración que salta) es la señal.
+- **Límite honesto del escaneo MUY degradado:** cuando el OCR pierde los
+  **delimitadores estructurales** (superíndices de nota, saltos de línea, tamaños de
+  fuente), encabezados + notas + cuerpo quedan fundidos SIN frontera fiable. Un reflow
+  posterior (unir fragmentos, párrafos por verso, quitar basura MAYÚS, promover
+  «Chapter N.M:») mejora mucho la lectura, pero **la separación de notas y de parte de
+  los encabezados NO es automatizable**: eso pide corrección manual contra la imagen.
+  No lo vendas como perfecto.
 
 > **Orden del flujo (importante):** en un escaneo con notas, hazlo
 > **convertir → RECONSTRUIR NOTAS → traducir → PDF**. Si traduces antes, hay que rehacer
