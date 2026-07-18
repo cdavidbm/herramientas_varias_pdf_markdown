@@ -74,6 +74,33 @@ class FootnoteNumbering(unittest.TestCase):
         self.assertNotIn("%%FOOTNOTE_NUMBERING%%", pre)   # el marcador se sustituyó
 
 
+class StarSections(unittest.TestCase):
+    """md_to_pdf.star_sections: las secciones de apéndice van SIN numerar (no
+    arrastran el contador de capítulo) pero SÍ entran al índice con su página."""
+
+    def test_stars_and_keeps_in_toc(self):
+        out = md_to_pdf.star_sections(r"\section{Términos según los egipcios}")
+        self.assertIn(r"\section*{Términos según los egipcios}", out)
+        self.assertIn(r"\addcontentsline{toc}{section}{Términos según los egipcios}", out)
+
+    def test_short_title_form_with_footnote(self):
+        # pandoc emite \section[corto]{...} cuando el encabezado lleva una nota;
+        # antes escapaba al starrado y salía numerado («0.4»).
+        out = md_to_pdf.star_sections(r"\subsection[Cap 24]{Del capítulo 24\footnote{x}}")
+        self.assertIn(r"\subsection*{", out)
+        self.assertNotIn(r"\subsection[", out)
+        self.assertIn(r"\addcontentsline{toc}{subsection}", out)
+
+    def test_nested_braces_in_title(self):
+        out = md_to_pdf.star_sections(r"\section{Tabla de \textit{monomoiria}}")
+        self.assertIn(r"\section*{Tabla de \textit{monomoiria}}", out)
+
+    def test_paragraph_not_in_toc(self):
+        out = md_to_pdf.star_sections(r"\paragraph{Nota al margen}")
+        self.assertIn(r"\paragraph*{Nota al margen}", out)
+        self.assertNotIn(r"\addcontentsline", out)
+
+
 class EndsTerminal(unittest.TestCase):
     """clean_markdown.ends_terminal: sin el "" espurio en TERMINAL, la detección
     de «el encabezado parte una frase» vuelve a funcionar."""

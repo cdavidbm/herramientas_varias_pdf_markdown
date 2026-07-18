@@ -73,7 +73,9 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
             "\\begin{titlingpage}\n\\centering\n"
             "{\\Huge\\scshape \\textsl{%s}\\\\ [1in]}\n%s\n"
             "\\end{titlingpage}\n" % (title, authorline))
-    toctex = "\\tableofcontents\\clearpage\n" if toc else ""
+    # tocdepth=subsection: el índice incluye las tablas/subsecciones de apéndices
+    # (que van «starred» pero con \addcontentsline), no solo los capítulos.
+    toctex = "\\settocdepth{subsection}\n\\tableofcontents\\clearpage\n" if toc else ""
     return r"""\documentclass[extrafontsizes,ebook,12pt,oneside]{memoir}
 \usepackage{fontspec}                                  %% LuaLaTeX: Unicode nativo (no inputenc/T1)
 %(fallback)s
@@ -196,12 +198,18 @@ def make_unnumbered(tex):
 
 def star_sections(tex):
     """Vuelve sin numerar las secciones de un fragmento (front-matter/apéndices), para
-    que no arrastren el contador de capítulo (p.ej. «25.11» en un apéndice sin número).
-    Maneja también `\\section[título-corto]{...}` — la forma que emite pandoc cuando el
-    encabezado lleva una NOTA AL PIE u otro móvil; si no, esas secciones escapaban al
-    starrado y salían numeradas («0.4») pese a ir en un apéndice."""
-    return re.sub(r"\\(section|subsection|subsubsection|paragraph)(?:\[[^\]]*\])?\{",
-                  r"\\\1*{", tex)
+    que no arrastren el contador de capítulo (p.ej. «25.11» en un apéndice sin número),
+    PERO las mantiene en el índice general con su nº de página (`\\addcontentsline`) —
+    si no, `--toc` de un libro de apéndices salía casi vacío. Maneja también la forma
+    `\\section[título-corto]{...}` que pandoc emite cuando el encabezado lleva una NOTA
+    (esas escapaban al starrado y salían numeradas «0.4»)."""
+    def repl(m):
+        cmd, title = m.group(1), m.group(3)
+        toc = "" if cmd == "paragraph" else r"\addcontentsline{toc}{%s}{%s}" % (cmd, title)
+        return r"\%s*{%s}%s" % (cmd, title, toc)
+    return re.sub(
+        r"\\(section|subsection|subsubsection|paragraph)(\[[^\]]*\])?"
+        r"\{((?:[^{}]|\{[^{}]*\})*)\}", repl, tex)
 
 _COLALIGN = {"l": r"\raggedright", "c": r"\centering", "r": r"\raggedleft"}
 
