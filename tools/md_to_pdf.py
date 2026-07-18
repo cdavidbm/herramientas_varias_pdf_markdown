@@ -230,13 +230,14 @@ def center_images(tex, maxw=r"0.72\linewidth"):
                 % (maxw, path))
     return re.sub(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}", repl, tex)
 
-def typeset_wide_tables(tex, min_cols=7):
+def typeset_wide_tables(tex, min_cols=6):
     """Ajusta la densidad de cada tabla por su nº de columnas:
-      · ≥ min_cols columnas → página APAISADA (`landscape`) a ~7 pt: las tablas de
-        muchas cifras (ascensiones, términos, monomoiria) no caben legibles vertical.
-      · 5..min_cols-1 columnas → vertical pero a `\\small` (evita que los encabezados
-        se hifenen —«Tér-mino»— y que las cifras se aprieten/solapen).
-      · ≤4 columnas → tamaño normal.
+      · ≥ min_cols (6) columnas → página APAISADA (`landscape`) a ~7 pt: las tablas de
+        muchas cifras (ascensiones, términos, faces, monomoiria) no caben legibles en
+        vertical —los encabezados «Término N» se hifenan («Tér-mino») en columna
+        estrecha aunque se achique la fuente, así que se rotan.
+      · 5 columnas → vertical pero a `\\footnotesize` (compacta sin hifenar).
+      · ≤4 columnas → tamaño normal (Lotes, combustión: caben cómodas vertical).
     Corre DESPUÉS de wrap_table_columns (que reparte el ancho): en apaisado
     `\\linewidth` es mayor, así que las columnas se ensanchan solas."""
     def _wrap(m):
@@ -250,7 +251,7 @@ def typeset_wide_tables(tex, min_cols=7):
             return ("\\begin{landscape}\n{\\fontsize{7pt}{8.4pt}\\selectfont\n"
                     + tbl + "\n}\n\\end{landscape}")
         if ncol >= 5:
-            return "{\\small\n" + tbl + "\n}"
+            return "{\\footnotesize\n" + tbl + "\n}"
         return tbl
     return re.sub(r"\\begin\{longtable\}.*?\\end\{longtable\}", _wrap, tex, flags=re.S)
 
