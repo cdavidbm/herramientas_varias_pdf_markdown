@@ -58,7 +58,7 @@ def footnote_numbering(mode: str) -> str:
     return ""                       # book: el contador de LaTeX ya es corrido
 
 
-def preamble(title, author, lang, toc, graphicspath="", fnmode="page"):
+def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=""):
     unichars = "\n".join(
         r"\newunicodechar{%s}{{\normalfont\%s}}" % (u, c) for u, c in UNI2CMD.items())
     gpath = (r"\graphicspath{%s}" % "".join("{%s/}" % d for d in graphicspath)
@@ -76,6 +76,7 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page"):
     toctex = "\\tableofcontents\\clearpage\n" if toc else ""
     return r"""\documentclass[extrafontsizes,ebook,12pt,oneside]{memoir}
 \usepackage{fontspec}                                  %% LuaLaTeX: Unicode nativo (no inputenc/T1)
+%(fallback)s
 \usepackage[shorthands=off, greek, english, main=%(lang)s]{babel}
 \usepackage{wasysym}
 \usepackage{starfont}                                  %% glifos astrológicos
@@ -142,7 +143,7 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page"):
 %(titleblock)s
 \pagenumbering{roman}
 %(toctex)s""" % dict(lang=lang, unichars=unichars, titleblock=titleblock,
-                     toctex=toctex, gpath=gpath, fn=fn)
+                     toctex=toctex, gpath=gpath, fn=fn, fallback=fallback)
 
 # Detección del prefijo de capítulo numerado en el H1: «Capítulo N —», «Chapter N —»
 # o simplemente «NN —» (numeración por dígitos, p. ej. «# 05 — La Luna»).
@@ -310,6 +311,10 @@ def main():
     ap.add_argument("--image-dir", action="append", default=[], metavar="DIR",
                     help="carpeta donde buscar las imágenes (repetible); se añaden al graphicspath")
     ap.add_argument("--keep-tex", action="store_true", help="conservar el .tex intermedio junto al PDF")
+    ap.add_argument("--font-fallback", metavar="FUENTE", default="",
+                    help="fuente de reserva para caracteres que la principal (Latin Modern) no tenga "
+                         "—p. ej. 'Noto Naskh Arabic' para escritura árabe, 'Noto Sans CJK SC' para CJK—. "
+                         "Opt-in: sin esta bandera, nada cambia. Requiere la fuente instalada (fc-list).")
     ap.add_argument("--footnotes", choices=("page", "chapter", "book"), default="page",
                     metavar="MODO",
                     help="numeración de las notas: page = reinicia en cada página (def.); "
@@ -327,7 +332,14 @@ def main():
     texs = [md_to_latex(m, r) for m, r in zip(a.md, roles)]
     front = "\n\n".join(t for t, r in zip(texs, roles) if r == "front")
     mainb = "\n\n".join(t for t, r in zip(texs, roles) if r != "front")
-    doc = (preamble(a.title, a.author, a.lang, a.toc, gdirs, a.footnotes)
+    fallback = ""
+    if a.font_fallback:
+        # LuaLaTeX: los glifos que Latin Modern no tenga (árabe, CJK…) caen a la
+        # fuente de reserva, con shaping HarfBuzz (mode=harf) para la escritura árabe.
+        fallback = (r"\usepackage{luaotfload}" "\n"
+                    r'\directlua{luaotfload.add_fallback("forjafb", {"%s:mode=harf;"})}' "\n"
+                    r"\setmainfont{Latin Modern Roman}[RawFeature={fallback=forjafb}]") % a.font_fallback
+    doc = (preamble(a.title, a.author, a.lang, a.toc, gdirs, a.footnotes, fallback)
            + front + "\n\\mainmatter\n" + mainb + "\n\\end{document}\n")
 
     out = pathlib.Path(a.out).resolve()
