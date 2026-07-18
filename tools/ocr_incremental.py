@@ -65,7 +65,8 @@ def sh(cmd, env=None):
 
 
 
-def tesseract_batch(pdf, a, b, side, part, tmp, dpi, lang, env, want_text, want_pdf, psm=None):
+def tesseract_batch(pdf, a, b, side, part, tsvf, tmp, dpi, lang, env,
+                    want_text, want_pdf, want_tsv=False, psm=None):
     """Render pages a..b with pdftoppm and OCR each directly with tesseract.
 
     Produces, per request, the concatenated TEXT (pages \\f-separated → `side`)
@@ -80,7 +81,9 @@ def tesseract_batch(pdf, a, b, side, part, tmp, dpi, lang, env, want_text, want_
     scans with an odd object structure). Rendering with poppler and letting
     tesseract lay the text over the image sidesteps Ghostscript entirely."""
     texts = []
+    tsvs = []
     page_pdfs = []
+    files_mode = want_pdf or want_tsv          # ¿salida a archivo (stem) o a stdout?
     for p in range(a, b + 1):
         stem = tmp / f"pg_{p:04d}"
         r = sh(["pdftoppm", "-f", str(p), "-l", str(p), "-r", str(dpi), "-png",
@@ -89,25 +92,32 @@ def tesseract_batch(pdf, a, b, side, part, tmp, dpi, lang, env, want_text, want_
         if r.returncode != 0 or not pngs:
             raise RuntimeError(f"pdftoppm failed on page {p}: {r.stderr}")
         png = pngs[0]
-        if want_pdf:
-            # Set the output renderers with -c flags rather than the `txt`/`pdf`
-            # CONFIG-FILE args: those config files live under a system tessdata's
-            # configs/ dir, which a best-models TESSDATA_PREFIX (only .traineddata)
-            # does not have — tesseract would abort with "Can't open pdf". The -c
-            # variables need no config file. tesseract writes <stem>.txt/.pdf.
-            cflags = ["-c", "tessedit_create_pdf=1"]
+        pflags = ["--psm", str(psm)] if psm is not None else []
+        if files_mode:
+            # Renderers por -c (no por los args CONFIG-FILE `txt`/`pdf`/`tsv`, que
+            # viven en el configs/ de un tessdata de sistema y NO en un TESSDATA_
+            # PREFIX best-models → tesseract abortaría). Los -c no necesitan config.
+            cflags = []
+            if want_pdf:
+                cflags += ["-c", "tessedit_create_pdf=1"]
             if want_text:
                 cflags += ["-c", "tessedit_create_txt=1"]
-            pflags = ["--psm", str(psm)] if psm is not None else []
+            if want_tsv:
+                cflags += ["-c", "tessedit_create_tsv=1"]
             r = sh(["tesseract", str(png), str(stem), "-l", lang] + pflags + cflags, env=env)
             if want_text:
                 txt_f = stem.with_suffix(".txt")
                 texts.append(txt_f.read_text(encoding="utf-8", errors="replace")
                              if txt_f.exists() else "")
                 txt_f.unlink(missing_ok=True)
-            page_pdfs.append(stem.with_suffix(".pdf"))
+            if want_tsv:
+                tsv_f = stem.with_suffix(".tsv")
+                tsvs.append(tsv_f.read_text(encoding="utf-8", errors="replace")
+                            if tsv_f.exists() else "")
+                tsv_f.unlink(missing_ok=True)
+            if want_pdf:
+                page_pdfs.append(stem.with_suffix(".pdf"))
         else:
-            pflags = ["--psm", str(psm)] if psm is not None else []
             r = sh(["tesseract", str(png), "stdout", "-l", lang] + pflags, env=env)
             texts.append(r.stdout)
         if r.returncode != 0:
@@ -121,6 +131,10 @@ def tesseract_batch(pdf, a, b, side, part, tmp, dpi, lang, env, want_text, want_
         tmp_side = side.with_name(side.name + ".tmp")
         tmp_side.write_text("\f".join(texts), encoding="utf-8")
         os.replace(tmp_side, side)
+    if want_tsv:
+        tmp_tsv = tsvf.with_name(tsvf.name + ".tmp")
+        tmp_tsv.write_text("\f".join(tsvs), encoding="utf-8")
+        os.replace(tmp_tsv, tsvf)
     if want_pdf:
         tmp_part = part.with_name(part.name + ".tmp")
         r = sh(["pdfunite"] + [str(x) for x in page_pdfs] + [str(tmp_part)])
@@ -158,6 +172,9 @@ def main():
                     "layer over the poppler-rendered image and pdfunite stitches the pages). Use this when "
                     "ocrmypdf's Ghostscript rasterization yields a BLANK text layer (odd/split/recoded scans "
                     "that pdftotext reports as empty even after a clean ocrmypdf run).")
+    ap.add_argument("--tsv-out", help="también escribe la TSV de tesseract (caja+tamaño de fuente de "
+                    "cada palabra, \\f por página) — geometría para separar cuerpo/notas/párrafos con "
+                    "ocr_geometry.py (--engine tesseract). Resumible por lote igual que --sidecar-out.")
     ap.add_argument("--dpi", type=int, default=300, help="render DPI for --engine tesseract (default 300)")
     ap.add_argument("--psm", type=int, default=None,
                     help="tesseract page-segmentation mode (--engine tesseract). Default = auto. "
@@ -165,8 +182,10 @@ def main():
                          "DESCOLOCA el orden de lectura en el tercio inferior de la página (medido en "
                          "escaneos de página estrecha con notas a pie: psm 3 revuelve versos+notas).")
     args = ap.parse_args()
-    if args.engine == "tesseract" and not (args.sidecar_out or args.tess_pdf):
-        sys.exit("--engine tesseract needs an output: pass --sidecar-out PATH and/or --tess-pdf")
+    if args.engine == "tesseract" and not (args.sidecar_out or args.tess_pdf or args.tsv_out):
+        sys.exit("--engine tesseract needs an output: pass --sidecar-out PATH, --tsv-out PATH and/or --tess-pdf")
+    if args.tsv_out and args.engine != "tesseract":
+        sys.exit("--tsv-out solo con --engine tesseract")
 
     pdf = Path(args.pdf).resolve()
     if not pdf.is_file():
@@ -194,16 +213,19 @@ def main():
 
     extra = shlex.split(args.extra)
     want_text = bool(args.sidecar_out)
+    want_tsv = bool(args.tsv_out)
     tess = args.engine == "tesseract"
     want_pdf = args.tess_pdf if tess else True
     done = 0
     for k, (a, b) in enumerate(batches, 1):
         part = parts / f"part_{k:04d}.pdf"
         side = parts / f"part_{k:04d}.txt"
+        tsvf = parts / f"part_{k:04d}.tsv"
         # checkpoint: a batch is done when all its requested outputs exist.
         pdf_ok = (not want_pdf) or (part.exists() and part.stat().st_size > 0)
         txt_ok = (not want_text) or (side.exists() and side.stat().st_size > 0)
-        resumed = pdf_ok and txt_ok
+        tsv_ok = (not want_tsv) or (tsvf.exists() and tsvf.stat().st_size > 0)
+        resumed = pdf_ok and txt_ok and tsv_ok
         if resumed:
             print(f"  [{k}/{len(batches)}] pages {a}-{b}  ✓ resume (already done)")
             done += 1
@@ -211,11 +233,12 @@ def main():
         t0 = time.time()
         if tess:
             try:
-                tesseract_batch(pdf, a, b, side, part, tmp, args.dpi, args.lang, env,
-                                want_text, want_pdf, args.psm)
+                tesseract_batch(pdf, a, b, side, part, tsvf, tmp, args.dpi, args.lang, env,
+                                want_text, want_pdf, want_tsv, args.psm)
             except RuntimeError as e:
                 side.unlink(missing_ok=True)
                 part.unlink(missing_ok=True)
+                tsvf.unlink(missing_ok=True)
                 sys.exit(f"tesseract engine failed on pages {a}-{b}:\n{e}")
         else:
             batch_pdf = tmp / f"batch_{k:04d}.pdf"
@@ -271,6 +294,14 @@ def main():
                 t = (parts / f"part_{k:04d}.txt").read_text(encoding="utf-8", errors="replace")
                 fh.write(t if t.endswith("\f") else t + "\f")
         print(f"TEXT -> {side_out}  ({side_out.stat().st_size//1024} KB, all pages, \\f-separated)")
+    # concatenate per-batch TSV (geometría: caja de cada palabra) when requested
+    if want_tsv:
+        tsv_out = Path(args.tsv_out).resolve()
+        with tsv_out.open("w", encoding="utf-8") as fh:
+            for k in range(1, len(batches) + 1):
+                t = (parts / f"part_{k:04d}.tsv").read_text(encoding="utf-8", errors="replace")
+                fh.write(t if t.endswith("\f") else t + "\f")
+        print(f"TSV  -> {tsv_out}  (geometría por palabra; úsala con ocr_geometry.py)")
     print(f"(batch parts kept in {parts}/ for resume; delete {work}/ when satisfied)")
 
 

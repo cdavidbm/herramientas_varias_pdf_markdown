@@ -67,3 +67,6 @@
 - `catalog.py` — genera el CATÁLOGO ÚNICO de todas las tools de La Forja.
 - `forja_common.py` — Lo que TODOS los conversores de La Forja hacían por su cuenta.
 
+## Otros
+- `ocr_geometry.py` — separa CUERPO / NOTAS AL PIE / running-head y reconstruye
+

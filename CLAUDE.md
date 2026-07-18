@@ -79,6 +79,19 @@ chars=$(pdftotext -f 1 -l 5 x.pdf - 2>/dev/null | wc -c); echo "chars/5pp=$chars
     de forma CONSERVADORA (mejor nota inline que verso de cuerpo disfrazado de nota). Los
     encabezados de capítulo y el TOC muy garbleados NO se recuperan del todo: su texto
     sigue presente pero algún corte falta → límite honesto, el PDF buscable manda.
+  - **Escaneo con NOTAS AL PIE densas donde el OCR las INTERCALA con el cuerpo** (la
+    nota cae a media frase) y/o **pierde los párrafos** de la prosa: el texto plano no
+    basta porque el problema es de GEOMETRÍA. OCR-ea capturando la caja de cada palabra
+    y sepáralo por posición/tamaño: `ocr_incremental.py x.pdf --engine tesseract --psm 6
+    --tsv-out x.tsv` (+ `--sidecar-out`/`--tess-pdf` si quieres texto/PDF; resumible por
+    lote) y luego **`ocr_geometry.py x.tsv --pages A-B`** separa running-head / cuerpo /
+    **notas** (por el HUECO vertical antes del pie, señal robusta aunque la fuente de
+    nota no sea claramente menor) y reconstruye **párrafos** por la sangría (mediana de
+    márgenes, robusta a los marcadores volados «§ ¥» que cuelgan a la izquierda).
+    `--join` para texto en verso (un bloque, luego `verse_paragraphs`). Medido en
+    Theophilus of Edessa: quitó el intercalado nota↔cuerpo y cosió la prosa; los títulos
+    de capítulo y prosa-vs-verso los pone el converter del libro. Límite: separa LAYOUT,
+    no arregla el garble de reconocimiento en bordes de página.
 
 ### 3. ¿Bisturí o Docling?
 Mira layout en una página de cuerpo:
