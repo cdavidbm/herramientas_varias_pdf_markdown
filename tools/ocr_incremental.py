@@ -65,7 +65,7 @@ def sh(cmd, env=None):
 
 
 
-def tesseract_batch(pdf, a, b, side, part, tmp, dpi, lang, env, want_text, want_pdf):
+def tesseract_batch(pdf, a, b, side, part, tmp, dpi, lang, env, want_text, want_pdf, psm=None):
     """Render pages a..b with pdftoppm and OCR each directly with tesseract.
 
     Produces, per request, the concatenated TEXT (pages \\f-separated → `side`)
@@ -98,7 +98,8 @@ def tesseract_batch(pdf, a, b, side, part, tmp, dpi, lang, env, want_text, want_
             cflags = ["-c", "tessedit_create_pdf=1"]
             if want_text:
                 cflags += ["-c", "tessedit_create_txt=1"]
-            r = sh(["tesseract", str(png), str(stem), "-l", lang] + cflags, env=env)
+            pflags = ["--psm", str(psm)] if psm is not None else []
+            r = sh(["tesseract", str(png), str(stem), "-l", lang] + pflags + cflags, env=env)
             if want_text:
                 txt_f = stem.with_suffix(".txt")
                 texts.append(txt_f.read_text(encoding="utf-8", errors="replace")
@@ -106,7 +107,8 @@ def tesseract_batch(pdf, a, b, side, part, tmp, dpi, lang, env, want_text, want_
                 txt_f.unlink(missing_ok=True)
             page_pdfs.append(stem.with_suffix(".pdf"))
         else:
-            r = sh(["tesseract", str(png), "stdout", "-l", lang], env=env)
+            pflags = ["--psm", str(psm)] if psm is not None else []
+            r = sh(["tesseract", str(png), "stdout", "-l", lang] + pflags, env=env)
             texts.append(r.stdout)
         if r.returncode != 0:
             png.unlink(missing_ok=True)
@@ -157,6 +159,11 @@ def main():
                     "ocrmypdf's Ghostscript rasterization yields a BLANK text layer (odd/split/recoded scans "
                     "that pdftotext reports as empty even after a clean ocrmypdf run).")
     ap.add_argument("--dpi", type=int, default=300, help="render DPI for --engine tesseract (default 300)")
+    ap.add_argument("--psm", type=int, default=None,
+                    help="tesseract page-segmentation mode (--engine tesseract). Default = auto. "
+                         "Usa --psm 6 (bloque uniforme) cuando el 'auto' detecta falsas columnas y "
+                         "DESCOLOCA el orden de lectura en el tercio inferior de la página (medido en "
+                         "escaneos de página estrecha con notas a pie: psm 3 revuelve versos+notas).")
     args = ap.parse_args()
     if args.engine == "tesseract" and not (args.sidecar_out or args.tess_pdf):
         sys.exit("--engine tesseract needs an output: pass --sidecar-out PATH and/or --tess-pdf")
@@ -205,7 +212,7 @@ def main():
         if tess:
             try:
                 tesseract_batch(pdf, a, b, side, part, tmp, args.dpi, args.lang, env,
-                                want_text, want_pdf)
+                                want_text, want_pdf, args.psm)
             except RuntimeError as e:
                 side.unlink(missing_ok=True)
                 part.unlink(missing_ok=True)
