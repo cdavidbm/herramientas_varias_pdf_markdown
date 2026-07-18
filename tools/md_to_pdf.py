@@ -230,11 +230,15 @@ def center_images(tex, maxw=r"0.72\linewidth"):
                 % (maxw, path))
     return re.sub(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}", repl, tex)
 
-def typeset_wide_tables(tex, min_cols=8):
-    """Las tablas con muchas columnas (≥ min_cols) no caben legibles en vertical.
-    Envuelve cada longtable ancha en una página apaisada (`landscape`) y a cuerpo
-    ~7 pt. Debe correr DESPUÉS de wrap_table_columns (que ya reparte el ancho): en
-    apaisado `\\linewidth` es mayor, así que las columnas se ensanchan solas."""
+def typeset_wide_tables(tex, min_cols=7):
+    """Ajusta la densidad de cada tabla por su nº de columnas:
+      · ≥ min_cols columnas → página APAISADA (`landscape`) a ~7 pt: las tablas de
+        muchas cifras (ascensiones, términos, monomoiria) no caben legibles vertical.
+      · 5..min_cols-1 columnas → vertical pero a `\\small` (evita que los encabezados
+        se hifenen —«Tér-mino»— y que las cifras se aprieten/solapen).
+      · ≤4 columnas → tamaño normal.
+    Corre DESPUÉS de wrap_table_columns (que reparte el ancho): en apaisado
+    `\\linewidth` es mayor, así que las columnas se ensanchan solas."""
     def _wrap(m):
         tbl = m.group(0)
         head = tbl.split("\n", 1)[0]
@@ -245,6 +249,8 @@ def typeset_wide_tables(tex, min_cols=8):
         if ncol >= min_cols:
             return ("\\begin{landscape}\n{\\fontsize{7pt}{8.4pt}\\selectfont\n"
                     + tbl + "\n}\n\\end{landscape}")
+        if ncol >= 5:
+            return "{\\small\n" + tbl + "\n}"
         return tbl
     return re.sub(r"\\begin\{longtable\}.*?\\end\{longtable\}", _wrap, tex, flags=re.S)
 
@@ -289,7 +295,7 @@ def md_to_latex(mdfile, role):
                 lines[i] = "# " + PREF_RE.sub("", ln[2:]); break
         src = "\n".join(lines)
     r = subprocess.run(
-        ["pandoc", "-f", "gfm", "-t", "latex", "--top-level-division=chapter", "--wrap=none"],
+        ["pandoc", "-f", "gfm+raw_attribute", "-t", "latex", "--top-level-division=chapter", "--wrap=none"],
         input=src, capture_output=True, text=True)
     if r.returncode != 0:
         sys.stderr.write(f"pandoc falló en {mdfile}:\n{r.stderr[:1500]}\n"); sys.exit(1)
