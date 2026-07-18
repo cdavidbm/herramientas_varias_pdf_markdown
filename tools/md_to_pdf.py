@@ -196,8 +196,11 @@ def make_unnumbered(tex):
 
 def star_sections(tex):
     """Vuelve sin numerar las secciones de un fragmento (front-matter/apéndices), para
-    que no arrastren el contador de capítulo (p.ej. «25.11» en un apéndice sin número)."""
-    return re.sub(r"\\(section|subsection|subsubsection|paragraph)\{",
+    que no arrastren el contador de capítulo (p.ej. «25.11» en un apéndice sin número).
+    Maneja también `\\section[título-corto]{...}` — la forma que emite pandoc cuando el
+    encabezado lleva una NOTA AL PIE u otro móvil; si no, esas secciones escapaban al
+    starrado y salían numeradas («0.4») pese a ir en un apéndice."""
+    return re.sub(r"\\(section|subsection|subsubsection|paragraph)(?:\[[^\]]*\])?\{",
                   r"\\\1*{", tex)
 
 _COLALIGN = {"l": r"\raggedright", "c": r"\centering", "r": r"\raggedleft"}
