@@ -100,6 +100,25 @@ class StarSections(unittest.TestCase):
         self.assertIn(r"\paragraph*{Nota al margen}", out)
         self.assertNotIn(r"\addcontentsline", out)
 
+    def test_footnote_in_heading_uses_short_for_toc(self):
+        # pandoc emite \section[corto]{largo\footnote{...}} cuando el encabezado
+        # markdown lleva [^N]. El índice debe usar el CORTO (sin la nota), y la
+        # nota debe imprimirse UNA vez en el cuerpo (dentro del \section*).
+        src = r"\section[Cap 48: On the Nodes]{Cap 48: On the Nodes\footnote{Domiciliis.}}"
+        out = md_to_pdf.star_sections(src)
+        self.assertIn(r"\section*{Cap 48: On the Nodes\footnote{Domiciliis.}}", out)
+        self.assertIn(r"\addcontentsline{toc}{section}{Cap 48: On the Nodes}", out)
+        # la nota NO debe colarse en el índice (doble disparo):
+        self.assertNotIn(r"{toc}{section}{Cap 48: On the Nodes\footnote", out)
+
+    def test_footnote_with_nested_braces_in_heading(self):
+        # el \footnote del título contiene OTRO grupo con llaves: el escáner debe
+        # cerrar en la llave correcta, no en la primera.
+        src = r"\subsection[T]{T\footnote{Véase \textit{Carmen} IV.1}}"
+        out = md_to_pdf.star_sections(src)
+        self.assertIn(r"\subsection*{T\footnote{Véase \textit{Carmen} IV.1}}", out)
+        self.assertIn(r"\addcontentsline{toc}{subsection}{T}", out)
+
 
 class EndsTerminal(unittest.TestCase):
     """clean_markdown.ends_terminal: sin el "" espurio en TERMINAL, la detección

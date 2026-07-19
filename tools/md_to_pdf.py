@@ -196,20 +196,54 @@ def make_unnumbered(tex):
             % (t, t, t, t))
     return tex[:m.start()] + repl + tex[m.end():]
 
+_SEC_CMDS = ("subsubsection", "subsection", "section", "paragraph")
+
 def star_sections(tex):
     """Vuelve sin numerar las secciones de un fragmento (front-matter/apéndices), para
     que no arrastren el contador de capítulo (p.ej. «25.11» en un apéndice sin número),
     PERO las mantiene en el índice general con su nº de página (`\\addcontentsline`) —
-    si no, `--toc` de un libro de apéndices salía casi vacío. Maneja también la forma
-    `\\section[título-corto]{...}` que pandoc emite cuando el encabezado lleva una NOTA
-    (esas escapaban al starrado y salían numeradas «0.4»)."""
-    def repl(m):
-        cmd, title = m.group(1), m.group(3)
-        toc = "" if cmd == "paragraph" else r"\addcontentsline{toc}{%s}{%s}" % (cmd, title)
-        return r"\%s*{%s}%s" % (cmd, title, toc)
-    return re.sub(
-        r"\\(section|subsection|subsubsection|paragraph)(\[[^\]]*\])?"
-        r"\{((?:[^{}]|\{[^{}]*\})*)\}", repl, tex)
+    si no, `--toc` de un libro de apéndices salía casi vacío.
+
+    Escáner de llaves (no regex) para ser robusto al `\\footnote{...}` ANIDADO que
+    pandoc mete en el título cuando el encabezado markdown lleva una NOTA
+    (`## Cap 30 …10.ª casa[^164]`): en ese caso pandoc emite `\\section[corto]{largo\\footnote{…}}`
+    y usamos el título CORTO (sin la nota) para el índice, dejando que la nota se
+    imprima UNA sola vez en el cuerpo. Sin la forma corta, el título va tal cual al índice."""
+    out, i, n = [], 0, len(tex)
+    while i < n:
+        cmd = None
+        if tex[i] == "\\":
+            for c in _SEC_CMDS:
+                j = i + 1 + len(c)
+                if tex.startswith("\\" + c, i) and j < n and tex[j] in "[{":
+                    cmd = c
+                    break
+        if cmd is None:
+            out.append(tex[i]); i += 1; continue
+        j = i + 1 + len(cmd)
+        short = None
+        if tex[j] == "[":                        # título corto opcional (sin llaves anidadas)
+            k = tex.find("]", j)
+            if k == -1:
+                out.append(tex[i]); i += 1; continue
+            short = tex[j + 1:k]; j = k + 1
+        if j >= n or tex[j] != "{":              # no era una sección con argumento
+            out.append(tex[i]); i += 1; continue
+        depth, k = 0, j                          # busca la llave de cierre equilibrada
+        while k < n:
+            if tex[k] == "{": depth += 1
+            elif tex[k] == "}":
+                depth -= 1
+                if depth == 0: break
+            k += 1
+        title = tex[j + 1:k]
+        toctext = short if short is not None else title
+        if cmd == "paragraph":
+            out.append(r"\%s*{%s}" % (cmd, title))
+        else:
+            out.append(r"\%s*{%s}\addcontentsline{toc}{%s}{%s}" % (cmd, title, cmd, toctext))
+        i = k + 1
+    return "".join(out)
 
 _COLALIGN = {"l": r"\raggedright", "c": r"\centering", "r": r"\raggedleft"}
 
