@@ -326,11 +326,36 @@ def relocate_heading_footnotes(text):
                 out[i] = out[i].rstrip() + " " + "".join(pending); break
     return "\n".join(out)
 
+_NOTE_HEAD_RE = re.compile(r"^#{1,6}\s+(Notes|Notas)\s*$", re.I)
+
+def strip_empty_note_heading(text):
+    """Quita un encabezado «## Notas»/«## Notes» cuyo contenido son SOLO definiciones de
+    nota `[^x]:` (y líneas en blanco). En md_to_pdf las notas se imprimen al PIE de página,
+    así que ese encabezado queda VACÍO en el PDF (título huérfano en el índice y al final del
+    capítulo). Se CONSERVAN las definiciones (pandoc las necesita para el pie); solo se borra
+    la línea del título. Conservador: si bajo el encabezado hay cualquier otra cosa (prosa,
+    tabla…), NO lo toca."""
+    lines = text.split("\n")
+    out, i, n = [], 0, len(lines)
+    while i < n:
+        if _NOTE_HEAD_RE.match(lines[i]):
+            j, droppable = i + 1, True
+            while j < n and not re.match(r"^#{1,6}\s", lines[j]):
+                s = lines[j].strip()
+                if s and not re.match(r"^\[\^[^\]]+\]:", s):
+                    droppable = False; break
+                j += 1
+            if droppable:                        # solo definiciones (o nada) debajo -> fuera el título
+                i += 1; continue
+        out.append(lines[i]); i += 1
+    return "\n".join(out)
+
 def md_to_latex(mdfile, role):
     """Un .md -> fragmento LaTeX vía pandoc, según su rol (front/chapter/appendix).
     En capítulos numerados quita el literal «Capítulo N —» del título (memoir pone el
     número); en apéndices convierte el \\chapter en \\chapter* (sin número)."""
-    src = relocate_heading_footnotes(pathlib.Path(mdfile).read_text(encoding="utf-8"))
+    src = strip_empty_note_heading(
+        relocate_heading_footnotes(pathlib.Path(mdfile).read_text(encoding="utf-8")))
     if role == "chapter":                    # memoir numera; quitar el prefijo literal
         lines = src.split("\n")
         for i, ln in enumerate(lines):

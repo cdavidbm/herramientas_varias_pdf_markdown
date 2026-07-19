@@ -120,6 +120,30 @@ class StarSections(unittest.TestCase):
         self.assertIn(r"\addcontentsline{toc}{subsection}{T}", out)
 
 
+class StripEmptyNoteHeading(unittest.TestCase):
+    """md_to_pdf.strip_empty_note_heading: el título «Notas» sobre puras definiciones
+    `[^x]:` sale vacío en el PDF (notas al pie) -> se quita el título, se dejan las defs."""
+
+    def test_drops_heading_keeps_defs(self):
+        src = "Cuerpo.\n\n## Notas\n\n[^1]: uno\n[^2]: dos\n"
+        out = md_to_pdf.strip_empty_note_heading(src)
+        self.assertNotIn("## Notas", out)
+        self.assertIn("[^1]: uno", out)
+        self.assertIn("[^2]: dos", out)
+
+    def test_english_notes_and_deeper_level(self):
+        self.assertNotIn("# Notes", md_to_pdf.strip_empty_note_heading("x\n\n### Notes\n\n[^a]: y\n"))
+
+    def test_keeps_heading_with_real_content(self):
+        # un «Notas» seguido de prosa real NO se toca (no es el bloque de aparato)
+        src = "## Notas\n\nEsto es prosa, no una definición.\n"
+        self.assertIn("## Notas", md_to_pdf.strip_empty_note_heading(src))
+
+    def test_unrelated_heading_untouched(self):
+        src = "## Capítulo\n\n[^1]: def\n"
+        self.assertIn("## Capítulo", md_to_pdf.strip_empty_note_heading(src))
+
+
 class EndsTerminal(unittest.TestCase):
     """clean_markdown.ends_terminal: sin el "" espurio en TERMINAL, la detección
     de «el encabezado parte una frase» vuelve a funcionar."""
