@@ -358,6 +358,52 @@ un PDF entero como sección.
   → `python3 $T/latex_to_markdown.py maestro.tex --root ./src --out libro.md`.
   Expande los `\input`, mapea starfont/wasysym a Unicode (`\Saturn`→♄) y pasa por pandoc.
 
+## Traducir un LIBRO ENTERO a otro idioma → PDF (PARADIGMA de calidad)
+
+> Cuando el usuario pide algo como **«convierte X, trocéalo, tradúcelo [y hazme el PDF]»**,
+> este es el flujo de referencia. Es **genérico** (cualquier libro, cualquier idioma destino),
+> no temático. Paradigma probado de punta a punta en las **Natividades Persas I-IV** (Dykes,
+> 4 tomos, ~2.100 pp de PDF español, ~5.700 notas reconstruidas). Objetivo: **altísima calidad
+> con el mínimo de tokens tuyos** — orquestas subagentes, no traduces tú a mano.
+
+1. **Diagnostica y convierte** (§ de arriba): a markdown por capítulo, en `en/` (o el idioma
+   fuente). Si hay notas dañadas, **reconstruye el aparato ANTES de traducir** (§3c / `/reconstruir-notas`).
+2. **Fija la terminología UNA vez:** crea `glosario.md` en la carpeta del libro (hereda del
+   tomo/obra hermana si existe). Todas las decisiones (términos técnicos, transliteraciones a
+   conservar en cursiva, nombres propios) viven ahí; los subagentes lo leen y NO lo editan
+   (reportan términos nuevos y tú los consolidas).
+3. **TRADUCIR-COMO-QA (el corazón del método):** lanza **un subagente por obra/capítulo** que
+   (a) **corrige el inglés EN SITIO** contra la fuente y (b) **escribe el español**, con los
+   MISMOS anclajes `[^N]`. Traducir frase a frase es el MEJOR control de calidad: destapa huecos
+   que una auditoría por ratio NO ve (en las Natividades aparecieron notas fundidas/mal
+   numeradas, capítulos enteros ausentes, y hasta el final de un libro truncado). Cada agente
+   reconstruye el aparato de notas y reporta balance.
+4. **La IMAGEN es la fuente autoritativa** en escaneos degradados: si la capa OCR es basura pero
+   las imágenes del PDF son legibles, el agente **traduce leyendo las imágenes** (`pdftoppm`),
+   no el texto OCR. Esto salva libros que la auditoría daría por «mejor esfuerzo». **NUNCA**
+   corrijas árabe/latín/griego/nombres/cifras «a ojo»: verifícalo contra la imagen; lo que no
+   sea transcribible con certeza se marca honesto, no se inventa.
+5. **GIGANTES → trocear + consolidar (ahorro de tokens y a prueba de cortes):** un archivo
+   grande se parte por rango de capítulos/páginas; **un subagente por tramo escribe a PARCIALES
+   en `/tmp/`** (nunca al archivo final, para no colisionar) con notas numeradas 1-based locales;
+   **tú consolidas** concatenando los tramos y **renumerando las notas por offset** (script
+   Python de ~10 líneas: `re.sub(r'\[\^(\d+)\]', +offset)` + separar cuerpo/definiciones).
+6. **RITMO por el límite de sesión:** los agentes que leen imágenes consumen mucho → lanza
+   **2 a la vez**, espera, y sigue. **Cada tramo terminado se guarda en disco**, así que una
+   sesión que se corte no pierde nada: se reanuda leyendo el estado de `es/` y los parciales de
+   `/tmp/`. Para pausas largas, deja un `_RESUME_….md` autónomo en la carpeta.
+7. **Convenciones de entrega (firmes, del usuario):** notas `[^N]` ANCLADAS donde la imagen
+   muestre el superíndice; **sin encabezado «Notas» vacío** (`md_to_pdf` lo borra solo); **sin
+   índice analítico** salvo que lo pida; **portada SIN «(uso privado de estudio)»**; el **glosario
+   del libro se PRESENTA en el idioma destino** (lema traducido + original en cursiva,
+   re-alfabetizado), no se «traduce del inglés»; **nunca líneas hiperextensas** (prosa→párrafos,
+   verso→un párrafo por verso con el nº en negrita); **verifica las FRONTERAS entre archivos**
+   (los capítulos se filtran de un archivo a otro).
+8. **PDF y verificación:** `md_to_pdf.py … --toc --footnotes chapter` bajo `systemd-run -p
+   MemoryMax=4G` (`--font-fallback "Noto Naskh Arabic"` si hay árabe suelto). Verifica: **0
+   «Missing character»** en el log, **balance de notas en=es** (inline==defs por archivo), ratio
+   de palabras es/en ~1.0 (sin truncar), y **renderiza 2-3 páginas** para leerlas contra la imagen.
+
 ## YouTube → markdown de estudio (skill `/youtube`)
 
 Otra fuente además de libros: videos de YouTube, vía **`yt-dlp`**.
