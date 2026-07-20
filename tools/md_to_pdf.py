@@ -27,6 +27,10 @@ UNI2CMD = {
     "☌":"Conjunction","☍":"Opposition","△":"Trine","□":"Square","⚹":"Sextile",
     "☊":"Ascnode","☋":"Descnode","℞":"Retrograde","⊗":"Fortune",
 }
+# starfont NO trae los nodos: la Cabeza (☊ U+260A) y la Cola (☋ U+260B) del Dragón se
+# toman de wasysym (\ascnode/\descnode), que sí está cargado. (Sobrescribe por codepoint.)
+UNI2CMD["☊"] = "ascnode"
+UNI2CMD["☋"] = "descnode"
 
 def latex_escape(s):
     """Escapa los metacaracteres de LaTeX en texto plano (título/autor de portada).
@@ -293,6 +297,10 @@ def typeset_wide_tables(tex, min_cols=6):
             return ("\\begin{landscape}\n{\\fontsize{7pt}{8.4pt}\\selectfont\n"
                     + tbl + "\n}\n\\end{landscape}")
         if ncol >= 5:
+            return "{\\footnotesize\n" + tbl + "\n}"
+        # 4 columnas pero MUCHAS filas densas (p. ej. faces/decanos, 12 signos con
+        # glifo+rango de grados por celda) → también compacta a footnotesize.
+        if ncol == 4 and tbl.count(r"\tabularnewline") >= 10:
             return "{\\footnotesize\n" + tbl + "\n}"
         return tbl
     return re.sub(r"\\begin\{longtable\}.*?\\end\{longtable\}", _wrap, tex, flags=re.S)
