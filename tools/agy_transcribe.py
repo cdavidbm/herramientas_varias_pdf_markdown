@@ -222,6 +222,29 @@ def heal_truncated(pdf, agy_dir, out_md, prompt, pages_dir, title, model, fallba
     return missing_ref_pages(out_md, agy_dir)
 
 
+def _figure_name(cap: str, page: int, n: int) -> str:
+    """Nombre de archivo ÚNICO para una figura según su leyenda.
+
+    Soporta los tres rótulos habituales, con numeración jerárquica o plana:
+      «Figure 7.1 - …» → fig_07_01.png   (por capítulo.figura; evita colisión 7.1 vs 7.10)
+      «Chart 1 - …»    → chart_001.png   (secuencial)
+      «Table 8 …»      → table_008.png
+    Si no reconoce el rótulo, cae a un nombre por página+orden (siempre único)."""
+    m = re.search(r"Figure\s+(\d+)\.(\d+)", cap)
+    if m:
+        return f"fig_{int(m.group(1)):02d}_{int(m.group(2)):02d}.png"
+    m = re.search(r"Figure\s+(\d+)", cap)
+    if m:
+        return f"fig_{int(m.group(1)):03d}.png"
+    m = re.search(r"Chart\s+(\d+)", cap)
+    if m:
+        return f"chart_{int(m.group(1)):03d}.png"
+    m = re.search(r"Table\s+(\d+)", cap)
+    if m:
+        return f"table_{int(m.group(1)):03d}.png"
+    return f"figpg{page:03d}_{n}.png"
+
+
 def do_figures(pdf: Path, agy_dir: Path, out_md: Path, figures_dir: Path,
                relpath: str, dpi: int) -> int:
     figures_dir.mkdir(parents=True, exist_ok=True)
@@ -239,8 +262,7 @@ def do_figures(pdf: Path, agy_dir: Path, out_md: Path, figures_dir: Path,
     md = out_md.read_text(encoding="utf-8")
     n = 0
     for page, cap, bbox in figs:
-        num = re.search(r"Figure\s+(\d+)", cap)
-        name = f"fig{int(num.group(1)):03d}.png" if num else f"figpg{page:03d}_{n}.png"
+        name = _figure_name(cap, page, n)
         r = sh(["python3", str(TOOLS / "crop_figure.py"), str(pdf), "--page", str(page),
                 "--bbox", bbox, "--pad", "0.012", "--dpi", str(dpi),
                 "--out", str(figures_dir / name)])
