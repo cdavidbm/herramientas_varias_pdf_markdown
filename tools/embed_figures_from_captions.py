@@ -148,11 +148,20 @@ def main():
     args = ap.parse_args()
 
     caps = parse_captions(args.md_dir)
+    # figuras YA embebidas (re-ejecución segura: no duplicar ni re-procesar)
+    def is_embedded(n: int) -> bool:
+        mdfile = caps[n][0]
+        return f"![Figura {n}](" in (args.md_dir / mdfile).read_text(encoding="utf-8")
+    pending_caps = {n: c for n, c in caps.items() if not is_embedded(n)}
+    skipped = len(caps) - len(pending_caps)
     pages_of = figure_pages(args.src)
-    figs = {n: (pages_of[n], caps[n]) for n in sorted(caps) if n in pages_of}
-    missing_pg = [n for n in caps if n not in pages_of]
-    print(f"[1/4] leyendas={len(caps)}  localizadas en fuente={len(figs)}"
+    figs = {n: (pages_of[n], pending_caps[n]) for n in sorted(pending_caps) if n in pages_of}
+    missing_pg = [n for n in pending_caps if n not in pages_of]
+    print(f"[1/4] leyendas={len(caps)}  ya embebidas={skipped}  por hacer={len(pending_caps)}"
+          f"  localizadas en fuente={len(figs)}"
           + (f"  ⚠ sin página: {missing_pg}" if missing_pg else ""))
+    if not figs:
+        print("nada pendiente que localizar."); return
 
     pdir = args.workdir / "pages"
     upages = sorted(set(p for p, _ in figs.values()))
