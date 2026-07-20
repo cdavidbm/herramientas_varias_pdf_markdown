@@ -68,5 +68,6 @@
 - `forja_common.py` — Lo que TODOS los conversores de La Forja hacían por su cuenta.
 
 ## Otros
+- `crop_figure.py` ⚠ — Recorta una FIGURA (carta astral, diagrama, rueda zodiacal…)
 - `ocr_geometry.py` — separa CUERPO / NOTAS AL PIE / running-head y reconstruye
 

@@ -29,6 +29,7 @@ import check_completeness
 import split_chapters
 import fix_ordinals
 import pdf_rich_to_markdown
+import crop_figure
 
 
 class LatexEscape(unittest.TestCase):
@@ -514,6 +515,38 @@ class RtfDeriveSections(unittest.TestCase):
         # Sin señales, mejor 0 secciones (error claro) que una falsa.
         self.assertEqual(self.rtf.derive_sections(["\tsolo prosa suelta."],
                                                   "Notas", []), [])
+
+
+class CropFigureBbox(unittest.TestCase):
+    """crop_figure.parse_bbox: la caja fraccionaria se valida antes de recortar."""
+
+    def test_valid_bbox(self):
+        self.assertEqual(crop_figure.parse_bbox("0.2,0.26,0.8,0.64"),
+                         (0.2, 0.26, 0.8, 0.64))
+
+    def test_tolerates_spaces(self):
+        self.assertEqual(crop_figure.parse_bbox(" 0.0, 0.1 ,1.0, 0.9 "),
+                         (0.0, 0.1, 1.0, 0.9))
+
+    def test_wrong_arity_rejected(self):
+        import argparse
+        with self.assertRaises(argparse.ArgumentTypeError):
+            crop_figure.parse_bbox("0.1,0.2,0.3")
+
+    def test_out_of_range_rejected(self):
+        import argparse
+        with self.assertRaises(argparse.ArgumentTypeError):
+            crop_figure.parse_bbox("0.1,0.2,1.3,0.9")
+
+    def test_inverted_box_rejected(self):
+        import argparse
+        with self.assertRaises(argparse.ArgumentTypeError):
+            crop_figure.parse_bbox("0.8,0.2,0.3,0.9")  # x1<=x0
+
+    def test_nonnumeric_rejected(self):
+        import argparse
+        with self.assertRaises(argparse.ArgumentTypeError):
+            crop_figure.parse_bbox("a,b,c,d")
 
 
 if __name__ == "__main__":
