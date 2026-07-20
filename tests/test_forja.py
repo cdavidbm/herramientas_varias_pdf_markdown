@@ -31,6 +31,7 @@ import fix_ordinals
 import pdf_rich_to_markdown
 import crop_figure
 import agy_consolidate
+import agy_translate
 
 
 class LatexEscape(unittest.TestCase):
@@ -585,6 +586,33 @@ class AgyConsolidate(unittest.TestCase):
     def test_heading_not_glued_to_previous(self):
         out = agy_consolidate.join_bodies([["texto sin punto final"], ["## §2: Título"]])
         self.assertEqual(out, ["texto sin punto final", "", "## §2: Título"])
+
+
+class AgyTranslate(unittest.TestCase):
+    """agy_translate: separar cuerpo/notas y trocear por párrafos sin partir."""
+
+    def test_split_body_defs(self):
+        md = ("# Libro\n\n## §1: T\n\nUn párrafo con nota.[^1]\n\n"
+              "![fig](../figuras/fig001.png)\n\n"
+              "[^1]: definición uno\n[^2]: definición dos\n")
+        body, defs = agy_translate.split_body_defs(md)
+        self.assertIn("Un párrafo con nota.[^1]", body)
+        self.assertIn("![fig]", body)
+        self.assertNotIn("[^1]: definición", body)
+        self.assertEqual(defs, "[^1]: definición uno\n[^2]: definición dos")
+
+    def test_split_no_defs(self):
+        md = "# Solo\n\nCuerpo sin notas.\n"
+        body, defs = agy_translate.split_body_defs(md)
+        self.assertEqual(defs, "")
+        self.assertIn("Cuerpo sin notas.", body)
+
+    def test_chunk_respects_paragraphs_and_size(self):
+        text = "\n\n".join(f"parrafo {i} con varias palabras aqui" for i in range(6))
+        chunks = agy_translate.chunk_paragraphs(text, max_words=12)
+        # ningún trozo parte un párrafo; recomponer da el texto original
+        self.assertEqual("\n\n".join(chunks).split(), text.split())
+        self.assertGreater(len(chunks), 1)
 
 
 if __name__ == "__main__":

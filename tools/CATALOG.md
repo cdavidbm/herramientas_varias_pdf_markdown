@@ -70,6 +70,7 @@
 ## Otros
 - `agy_consolidate.py` ⚠ — Cose las transcripciones POR PÁGINA de agy/Gemini (o de
 - `agy_transcribe.py` ⚠ — Orquesta la TRANSCRIPCIÓN VISUAL de un rango de páginas de un
+- `agy_translate.py` ⚠ — Traduce un markdown de capítulo/Book a otro idioma con agy/Gemini,
 - `crop_figure.py` ⚠ — Recorta una FIGURA (carta astral, diagrama, rueda zodiacal…)
 - `ocr_geometry.py` — separa CUERPO / NOTAS AL PIE / running-head y reconstruye
 
