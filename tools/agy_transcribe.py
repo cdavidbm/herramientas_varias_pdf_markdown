@@ -181,28 +181,38 @@ def missing_ref_pages(out_md: Path, agy_dir: Path) -> list[int]:
     return sorted(pages)
 
 
-def heal_truncated(pdf, agy_dir, out_md, prompt, pages_dir, title, model, fallback, agy_bin) -> list[int]:
-    """Re-transcribe páginas truncadas (notas huérfanas) con modelo de respaldo y re-consolida.
+CLAUDE_FALLBACK = "Claude Opus 4.6 (Thinking)"
 
-    Devuelve las páginas que SIGUEN sin resolverse (para intervención manual).
+
+def _ndefs(block: str) -> int:
+    return len(re.findall(r"^\[\^\d+\]:", block, re.M))
+
+
+def heal_truncated(pdf, agy_dir, out_md, prompt, pages_dir, title, model, fallback, agy_bin) -> list[int]:
+    """Re-transcribe páginas truncadas (notas huérfanas) escalando de modelo y re-consolida.
+
+    Escalera: bloque ACTUAL (no regresar un arreglo ya bueno) → modelo principal →
+    respaldo → Claude (arquitectura distinta, salva páginas donde Gemini trunca por una
+    ilustración). Se queda con el candidato con MÁS definiciones de nota. Devuelve las
+    páginas que SIGUEN sin resolverse (para intervención manual).
     """
     pmap = page_file_map(agy_dir)
     pending = missing_ref_pages(out_md, agy_dir)
     if not pending:
         return []
     for p in pending:
-        best = None
-        for mdl in (model, fallback):  # 1º el principal, luego respaldo
-            blk = split_blocks(agy_call([p], prompt, pages_dir, mdl, agy_bin)).get(p, "")
-            # nos quedamos con la versión que traiga MÁS definiciones de nota
-            if best is None or blk.count("[^") > best.count("[^"):
-                best = blk
-        if best and p in pmap:
-            f = pmap[p]
-            blocks = split_blocks(f.read_text(encoding="utf-8", errors="replace"))
-            blocks[p] = best
-            order = [int(x) for x in PAGE_RE.findall(f.read_text(encoding="utf-8", errors="replace"))]
-            f.write_text("\n".join(blocks[q] for q in order if q in blocks) + "\n", encoding="utf-8")
+        if p not in pmap:
+            continue
+        f = pmap[p]
+        blocks = split_blocks(f.read_text(encoding="utf-8", errors="replace"))
+        best = blocks.get(p, "")                       # nunca regresar lo que ya hay
+        for mdl in (model, fallback, CLAUDE_FALLBACK):
+            cand = split_blocks(agy_call([p], prompt, pages_dir, mdl, agy_bin)).get(p, "")
+            if _ndefs(cand) > _ndefs(best):
+                best = cand
+        blocks[p] = best
+        order = [int(x) for x in PAGE_RE.findall(f.read_text(encoding="utf-8", errors="replace"))]
+        f.write_text("\n".join(blocks[q] for q in order if q in blocks) + "\n", encoding="utf-8")
     # re-consolida
     outs = [str(x) for x in sorted(agy_dir.glob("b*.out"))]
     cmd = ["python3", str(TOOLS / "agy_consolidate.py"), str(out_md), *outs]
@@ -261,6 +271,7 @@ def main() -> None:
                     help="modelo para re-transcribir páginas truncadas rebeldes")
     ap.add_argument("--agy-bin", default=os.path.expanduser("~/.local/bin/agy"))
     ap.add_argument("--sentinel", action="store_true", help="tesseract 2º motor + informe de páginas sospechosas")
+    ap.add_argument("--no-heal", action="store_true", help="no re-transcribir páginas truncadas (si ya se arreglaron a mano)")
     ap.add_argument("--figures-dir", type=Path, default=None, help="recorta y embebe figuras aquí")
     ap.add_argument("--fig-relpath", default="../figuras", help="ruta relativa a las figuras desde el md")
     ap.add_argument("--fig-dpi", type=int, default=300)
@@ -309,12 +320,16 @@ def main() -> None:
         sys.exit(f"consolidación falló: {r.stderr.strip()}")
 
     # auto-sanado de páginas truncadas (notas huérfanas)
-    stubborn = heal_truncated(args.pdf, agy_dir, args.out, prompt, pages_dir,
-                              args.title, args.model, args.fallback_model, args.agy_bin)
-    if stubborn:
-        print(f"    ⚠ tras auto-sanado, notas aún huérfanas en págs {stubborn} → REVISAR/transcribir a mano")
+    if args.no_heal:
+        stubborn = missing_ref_pages(args.out, agy_dir)
+        print(f"    auto-sanado OMITIDO (--no-heal); notas huérfanas actuales: {stubborn or 'ninguna'}")
     else:
-        print("    ✓ auto-sanado: sin notas huérfanas")
+        stubborn = heal_truncated(args.pdf, agy_dir, args.out, prompt, pages_dir,
+                                  args.title, args.model, args.fallback_model, args.agy_bin)
+        if stubborn:
+            print(f"    ⚠ tras auto-sanado, notas aún huérfanas en págs {stubborn} → REVISAR/transcribir a mano")
+        else:
+            print("    ✓ auto-sanado: sin notas huérfanas")
 
     nfig = 0
     if args.figures_dir:
