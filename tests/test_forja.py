@@ -30,6 +30,7 @@ import split_chapters
 import fix_ordinals
 import pdf_rich_to_markdown
 import crop_figure
+import agy_consolidate
 
 
 class LatexEscape(unittest.TestCase):
@@ -547,6 +548,43 @@ class CropFigureBbox(unittest.TestCase):
         import argparse
         with self.assertRaises(argparse.ArgumentTypeError):
             crop_figure.parse_bbox("a,b,c,d")
+
+
+class AgyConsolidate(unittest.TestCase):
+    """agy_consolidate: separar notas, unir cuerpos a través del salto de página."""
+
+    def test_parse_pages(self):
+        raw = "=== pdf001-001.png ===\nHola\n=== pdf002-002.png ===\nMundo\n"
+        pages = agy_consolidate.parse_pages(raw)
+        self.assertEqual(len(pages), 2)
+        self.assertIn("Hola", pages[0])
+        self.assertIn("Mundo", pages[1])
+
+    def test_split_body_notes_separates_and_joins_continuation(self):
+        lines = ["Cuerpo con marca.[^1]", "", "[^1]: definición que sigue",
+                 "en una segunda línea."]
+        body, notes = agy_consolidate.split_body_notes(lines)
+        self.assertEqual(body[0], "Cuerpo con marca.[^1]")
+        self.assertEqual(notes, [(1, "definición que sigue en una segunda línea.")])
+
+    def test_join_dehyphenates_across_pages(self):
+        # última línea acaba en "-" → une sin espacio ni guion
+        out = agy_consolidate.join_bodies([["una parte tradi-"], ["cional del texto."]])
+        self.assertIn("tradicional del texto.", "\n".join(out))
+
+    def test_join_continues_sentence_across_pages(self):
+        # sin puntuación terminal → une con espacio
+        out = agy_consolidate.join_bodies([["for centuries. In"], ["ITA, I inserted"]])
+        self.assertEqual(out, ["for centuries. In ITA, I inserted"])
+
+    def test_join_keeps_separate_paragraphs(self):
+        # termina en punto → párrafo nuevo (línea en blanco entre medias)
+        out = agy_consolidate.join_bodies([["Fin del párrafo."], ["Nuevo párrafo."]])
+        self.assertEqual(out, ["Fin del párrafo.", "", "Nuevo párrafo."])
+
+    def test_heading_not_glued_to_previous(self):
+        out = agy_consolidate.join_bodies([["texto sin punto final"], ["## §2: Título"]])
+        self.assertEqual(out, ["texto sin punto final", "", "## §2: Título"])
 
 
 if __name__ == "__main__":
