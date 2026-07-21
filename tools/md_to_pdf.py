@@ -62,7 +62,12 @@ def footnote_numbering(mode: str) -> str:
     return ""                       # book: el contador de LaTeX ya es corrido
 
 
-def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=""):
+DEFAULT_GEOMETRY = ("top=2cm, bottom=2cm, outer=2.5cm, inner=2.5cm, "
+                    "heightrounded, marginparwidth=2.3cm, marginparsep=0.5cm")
+
+
+def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback="",
+             fontsize=12, geometry=DEFAULT_GEOMETRY, tocdepth="subsection"):
     unichars = "\n".join(
         r"\newunicodechar{%s}{{\normalfont\%s}}" % (u, c) for u, c in UNI2CMD.items())
     gpath = (r"\graphicspath{%s}" % "".join("{%s/}" % d for d in graphicspath)
@@ -79,8 +84,8 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
             "\\end{titlingpage}\n" % (title, authorline))
     # tocdepth=subsection: el índice incluye las tablas/subsecciones de apéndices
     # (que van «starred» pero con \addcontentsline), no solo los capítulos.
-    toctex = "\\settocdepth{subsection}\n\\tableofcontents\\clearpage\n" if toc else ""
-    return r"""\documentclass[extrafontsizes,ebook,12pt,oneside]{memoir}
+    toctex = ("\\settocdepth{%s}\n\\tableofcontents\\clearpage\n" % tocdepth) if toc else ""
+    return r"""\documentclass[extrafontsizes,ebook,%(fontsize)spt,oneside]{memoir}
 \usepackage{fontspec}                                  %% LuaLaTeX: Unicode nativo (no inputenc/T1)
 %(fallback)s
 \usepackage[shorthands=off, greek, english, main=%(lang)s]{babel}
@@ -95,9 +100,8 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
 \usepackage{fvextra}                                   %% verbatim que ajusta líneas largas
 \RecustomVerbatimEnvironment{verbatim}{Verbatim}{breaklines,breakanywhere,fontsize=\small}
 \usepackage{amssymb}
-%% --- geometría idéntica a las ediciones janegca (Valens/Doroteo) ---
-\usepackage[top=2cm, bottom=2cm, outer=2.5cm, inner=2.5cm,
-            heightrounded, marginparwidth=2.3cm, marginparsep=0.5cm]{geometry}
+%% --- geometría (por defecto = ediciones janegca Valens/Doroteo; override con --geometry) ---
+\usepackage[%(geometry)s]{geometry}
 \usepackage[colorlinks=true, linkcolor=black, urlcolor=blue, unicode]{hyperref}
 \usepackage{xurl}                                      %% parte URLs largas en cualquier carácter (no desbordan)
 
@@ -149,7 +153,8 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
 %(titleblock)s
 \pagenumbering{roman}
 %(toctex)s""" % dict(lang=lang, unichars=unichars, titleblock=titleblock,
-                     toctex=toctex, gpath=gpath, fn=fn, fallback=fallback)
+                     toctex=toctex, gpath=gpath, fn=fn, fallback=fallback,
+                     fontsize=fontsize, geometry=geometry)
 
 # Detección del prefijo de capítulo numerado en el H1: «Capítulo N —», «Chapter N —»
 # o simplemente «NN —» (numeración por dígitos, p. ej. «# 05 — La Luna»).
@@ -405,6 +410,15 @@ def main():
                     help="numeración de las notas: page = reinicia en cada página (def.); "
                          "chapter = reinicia en cada capítulo, para CONSERVAR la del "
                          "original cuando numera por obra; book = corrida de principio a fin")
+    ap.add_argument("--fontsize", type=int, default=12, metavar="PT",
+                    help="tamaño de letra base en puntos (def: 12). 11 compacta el libro.")
+    ap.add_argument("--geometry", default=DEFAULT_GEOMETRY, metavar="OPTS",
+                    help="opciones del paquete geometry (márgenes). Por defecto = estilo "
+                         "janegca. Ej. compacto: 'top=1.6cm, bottom=1.6cm, outer=1.8cm, "
+                         "inner=1.8cm, heightrounded'.")
+    ap.add_argument("--toc-depth", choices=("chapter", "section", "subsection"),
+                    default="subsection", metavar="NIVEL",
+                    help="profundidad del índice (def: subsection). chapter = un solo nivel.")
     a = ap.parse_args()
 
     # graphicspath = carpetas de imágenes indicadas + carpeta de cada .md (rutas absolutas)
@@ -435,7 +449,8 @@ def main():
         fallback = (r"\usepackage{luaotfload}" "\n"
                     r'\directlua{luaotfload.add_fallback("forjafb", {"%s:mode=harf;"})}' "\n"
                     r"\setmainfont{Latin Modern Roman}[RawFeature={fallback=forjafb}]") % a.font_fallback
-    doc = (preamble(a.title, a.author, a.lang, a.toc, gdirs, a.footnotes, fallback)
+    doc = (preamble(a.title, a.author, a.lang, a.toc, gdirs, a.footnotes, fallback,
+                    a.fontsize, a.geometry, a.toc_depth)
            + front + "\n\\mainmatter\n" + mainb + "\n\\end{document}\n")
 
     out = pathlib.Path(a.out).resolve()
