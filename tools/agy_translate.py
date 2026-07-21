@@ -72,6 +72,38 @@ def chunk_paragraphs(text: str, max_words: int) -> list[str]:
     return chunks
 
 
+DEFLINE = re.compile(r"^\[\^\d+\]:")
+
+
+def chunk_defs(text: str, max_words: int) -> list[str]:
+    """Trocea el bloque FINAL de definiciones de nota agrupando definiciones ENTERAS.
+
+    Las defs `[^N]:` van una por línea SIN línea en blanco entre sí, así que
+    `chunk_paragraphs` las vería como un único párrafo gigante y agy/Gemini trunca su
+    salida (medido: ~190 de 304 defs en Brennan cap. 4). Aquí cada definición empieza en
+    `[^N]:` y sigue hasta la próxima (soporta defs de varias líneas); se agrupan en trozos
+    de <= max_words conservando el formato una-por-línea.
+    """
+    lines = text.split("\n")
+    defs, cur = [], []
+    for ln in lines:
+        if DEFLINE.match(ln) and cur:
+            defs.append("\n".join(cur)); cur = [ln]
+        else:
+            cur.append(ln)
+    if cur:
+        defs.append("\n".join(cur))
+    chunks, buf, n = [], [], 0
+    for d in defs:
+        w = len(d.split())
+        if buf and n + w > max_words:
+            chunks.append("\n".join(buf)); buf, n = [], 0
+        buf.append(d); n += w
+    if buf:
+        chunks.append("\n".join(buf))
+    return chunks
+
+
 def translate_chunk(text: str, prompt: str, glos_name: str, workdir: Path, model: str, agy_bin: str, idx: int) -> str:
     src = workdir / f"_tr_src_{idx:03d}.md"
     src.write_text(text, encoding="utf-8")
@@ -108,7 +140,7 @@ def main() -> None:
     body, defs = split_body_defs(md)
     chunks = chunk_paragraphs(body, args.chunk_words)
     if defs:
-        chunks_defs = chunk_paragraphs(defs, args.chunk_words)
+        chunks_defs = chunk_defs(defs, args.chunk_words)
     else:
         chunks_defs = []
     print(f"[traducción] {args.src.name}: {len(chunks)} trozos de cuerpo + {len(chunks_defs)} de notas")
