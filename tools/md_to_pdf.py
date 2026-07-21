@@ -413,6 +413,17 @@ def main():
         d = str(pathlib.Path(m).resolve().parent)
         if d not in gdirs: gdirs.append(d)
 
+    # AVISO: el griego POLITÓNICO (U+1F00–1FFF: espíritus/acentos, ᾳ) NO está en Latin
+    # Modern y se pierde EN SILENCIO sin --font-fallback (el básico en MAYÚSCULAS sí sale,
+    # lo que engaña). Medido en Brennan: el griego del horóscopo salió como huecos.
+    if not a.font_fallback:
+        poly = re.compile("[ἀ-῿]")
+        hit = next((m for m in a.md if poly.search(pathlib.Path(m).read_text(encoding="utf-8"))), None)
+        if hit:
+            sys.stderr.write(
+                f"AVISO: griego politónico en «{pathlib.Path(hit).name}» y sin --font-fallback; "
+                "Latin Modern lo descarta en silencio. Usa --font-fallback \"GFS Artemisia\".\n")
+
     roles = classify_roles(a.md)
     texs = [md_to_latex(m, r) for m, r in zip(a.md, roles)]
     front = "\n\n".join(t for t, r in zip(texs, roles) if r == "front")
