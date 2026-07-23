@@ -156,6 +156,22 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   dos líneas; numeración continua en todo el libro; libros AstroArt/Döser). NO en
   índices/bibliografía. Para rehacer un archivo ya convertido: revierte con regex
   (`^\[\^N\]:`→`N `, `\s*\[\^N\]`→` N`) y reaplica.
+- **PDF DIGITAL cuyos dígitos se pierden al extraer** (cursos y manuales con fuentes
+  de símbolos: el párrafo se lee bien pero `Arc of Direction = RA °'"` ha quedado sin
+  cifras). **Ningún control de §3d lo ve**: ni el ratio, ni el balance de notas, ni el
+  corrector. Hay que medirlo contra el PDF:
+  `pdf_restore_digits.py cap.md --pdf cap.pdf [--apply]` — la línea dañada es EXACTAMENTE
+  el texto del PDF sin los dígitos, así que quitándoselos a ambos deben coincidir; solo
+  se toca lo verificado y único, y la reinserción va en paralelo para no tocar negritas,
+  cursivas ni `[^N]`. `pdftotext -layout` sí extrae esos dígitos: el fallo es del bisturí.
+  El mismo fallo se lleva los volados de nota, así que después:
+  `footnotes_from_pdf.py cap.md --pdf cap.pdf --apply [--interpolar]` — lee el aparato
+  REAL del PDF (el número va en la línea anterior a la definición y sube 1,2,3…, lo que
+  descarta los números de página), etiqueta los textos de nota sueltos, inserta los que
+  falten y sitúa cada llamada por su contexto. **Ojo al asimetría:** una definición sin
+  llamada NO se imprime (la nota se pierde), y un texto de nota sin etiquetar se imprime
+  como prosa a mitad de capítulo. Verifica al final `definiciones == llamadas` y 0
+  huérfanas. Medido en el Diploma Course de Zoller: 610 cifras y 624/624 notas.
 - `index_rebuild.py viejo_indice.md libro.pdf --out nuevo.md --report faltan.txt` —
   el **índice analítico** del original no sirve tras traducir: sus números remiten a
   OTRA edición, y el OCR de un índice a 2 columnas suele entrelazarlas, así que no se

@@ -73,5 +73,7 @@
 - `agy_translate.py` ⚠ — Traduce un markdown de capítulo/Book a otro idioma con agy/Gemini,
 - `crop_figure.py` ⚠ — Recorta una FIGURA (carta astral, diagrama, rueda zodiacal…)
 - `embed_figures_from_captions.py` ⚠ — Añade las FIGURAS (cartas, diagramas) a un libro ya
+- `footnotes_from_pdf.py` — Reconstruye el APARATO DE NOTAS leyendo el del PDF original.
 - `ocr_geometry.py` — separa CUERPO / NOTAS AL PIE / running-head y reconstruye
+- `pdf_restore_digits.py` — Restaura las CIFRAS que la extracción borró en silencio
 
