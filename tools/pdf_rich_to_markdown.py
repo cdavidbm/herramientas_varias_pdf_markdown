@@ -585,9 +585,10 @@ def main() -> int:
     if body:
         marks = len(re.findall(r"\[\^\d+\](?!:)", md))
         seq = [n for n, _ in notes]
-        full = seq == list(range(1, len(seq) + 1))
-        print(f"  notas: {len(notes)} definiciones "
-              f"({'secuencia 1..%d COMPLETA' % seq[-1] if full else 'SECUENCIA ROTA'}), "
+        full = bool(seq) and seq == list(range(1, len(seq) + 1))
+        estado = ("secuencia 1..%d COMPLETA" % seq[-1] if full
+                  else "sin notas" if not seq else "SECUENCIA ROTA")
+        print(f"  notas: {len(notes)} definiciones ({estado}), "
               f"{marks} llamadas [^N] en el texto")
         if not full and seq:
             falta = sorted(set(range(1, seq[-1] + 1)) - set(seq))

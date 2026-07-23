@@ -67,7 +67,8 @@ DEFAULT_GEOMETRY = ("top=2cm, bottom=2cm, outer=2.5cm, inner=2.5cm, "
 
 
 def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback="",
-             fontsize=12, geometry=DEFAULT_GEOMETRY, tocdepth="subsection"):
+             fontsize=12, geometry=DEFAULT_GEOMETRY, tocdepth="subsection",
+             chapstyle="bringhurst", arabfont=""):
     unichars = "\n".join(
         r"\newunicodechar{%s}{{\normalfont\%s}}" % (u, c) for u, c in UNI2CMD.items())
     gpath = (r"\graphicspath{%s}" % "".join("{%s/}" % d for d in graphicspath)
@@ -88,7 +89,11 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
     return r"""\documentclass[extrafontsizes,ebook,%(fontsize)spt,oneside]{memoir}
 \usepackage{fontspec}                                  %% LuaLaTeX: Unicode nativo (no inputenc/T1)
 %(fallback)s
-\usepackage[shorthands=off, greek, english, main=%(lang)s]{babel}
+%% bidi=basic: LuaTeX reordena de DERECHA A IZQUIERDA la escritura árabe/hebrea.
+%% Sin esto el árabe sale con las letras sueltas y en orden invertido (el fallback de
+%% fuente da los glifos, pero NO el shaping contextual ni el sentido de lectura).
+\usepackage[shorthands=off, greek, english, bidi=basic, main=%(lang)s]{babel}
+%(arabic)s
 \usepackage{wasysym}
 \usepackage{starfont}                                  %% glifos astrológicos
 \usepackage{newunicodechar}                            %% mapea ☉♄♈ -> starfont
@@ -114,6 +119,17 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
   \renewcommand{\printchapternum}{}
   \renewcommand{\afterchapternum}{}
   \renewcommand{\printchaptertitle}[1]{\raggedright\larger\scshape\MakeLowercase{##1}}
+  \renewcommand{\afterchaptertitle}{\vskip 0.3em \hrule\vskip\onelineskip}
+}
+%% --- estilo alternativo «mayuscula»: título de capítulo MÁS GRANDE, EN NEGRITA y en MAYÚSCULAS ---
+\makechapterstyle{mayuscula}{%%
+  \renewcommand{\chapterheadstart}{}
+  \renewcommand{\chaptername}{}
+  \renewcommand{\printchaptername}{}
+  \renewcommand{\chapternamenum}{}
+  \renewcommand{\printchapternum}{}
+  \renewcommand{\afterchapternum}{}
+  \renewcommand{\printchaptertitle}[1]{\raggedright\LARGE\bfseries\MakeUppercase{##1}}
   \renewcommand{\afterchaptertitle}{\vskip 0.3em \hrule\vskip\onelineskip}
 }
 \setsecheadstyle{\bfseries\raggedright}
@@ -146,7 +162,7 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
 %(unichars)s
 
 \begin{document}
-\chapterstyle{bringhurst}
+\chapterstyle{%(chapstyle)s}
 \pagestyle{forja}             %% titulillo centrado y pequeño; folio abajo
 \frontmatter
 \pagenumbering{gobble}
@@ -154,7 +170,8 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
 \pagenumbering{roman}
 %(toctex)s""" % dict(lang=lang, unichars=unichars, titleblock=titleblock,
                      toctex=toctex, gpath=gpath, fn=fn, fallback=fallback,
-                     fontsize=fontsize, geometry=geometry)
+                     fontsize=fontsize, geometry=geometry, chapstyle=chapstyle,
+                     arabic=arabfont)
 
 # Detección del prefijo de capítulo numerado en el H1: «Capítulo N —», «Chapter N —»
 # o simplemente «NN —» (numeración por dígitos, p. ej. «# 05 — La Luna»).
@@ -401,7 +418,7 @@ def main():
     ap.add_argument("--image-dir", action="append", default=[], metavar="DIR",
                     help="carpeta donde buscar las imágenes (repetible); se añaden al graphicspath")
     ap.add_argument("--keep-tex", action="store_true", help="conservar el .tex intermedio junto al PDF")
-    ap.add_argument("--font-fallback", metavar="FUENTE", default="",
+    ap.add_argument("--font-fallback", metavar="FUENTE", action="append", default=[],
                     help="fuente de reserva para caracteres que la principal (Latin Modern) no tenga "
                          "—p. ej. 'Noto Naskh Arabic' para escritura árabe, 'Noto Sans CJK SC' para CJK—. "
                          "Opt-in: sin esta bandera, nada cambia. Requiere la fuente instalada (fc-list).")
@@ -416,6 +433,14 @@ def main():
                     help="opciones del paquete geometry (márgenes). Por defecto = estilo "
                          "janegca. Ej. compacto: 'top=1.6cm, bottom=1.6cm, outer=1.8cm, "
                          "inner=1.8cm, heightrounded'.")
+    ap.add_argument("--arabic-font", metavar="FUENTE", default="",
+                    help="activa escritura ÁRABE correcta (ligada y de derecha a izquierda) "
+                         "declarando el locale de babel con esta fuente, p.ej. 'Noto Naskh Arabic'. "
+                         "Sin esto el árabe sale con letras sueltas y en orden invertido.")
+    ap.add_argument("--chapter-style", choices=("bringhurst", "mayuscula"),
+                    default="bringhurst", metavar="ESTILO",
+                    help="estilo del título de capítulo: bringhurst (versalitas, def.) "
+                         "o mayuscula (más grande, negrita, MAYÚSCULAS)")
     ap.add_argument("--toc-depth", choices=("chapter", "section", "subsection"),
                     default="subsection", metavar="NIVEL",
                     help="profundidad del índice (def: subsection). chapter = un solo nivel.")
@@ -446,11 +471,21 @@ def main():
     if a.font_fallback:
         # LuaLaTeX: los glifos que Latin Modern no tenga (árabe, CJK…) caen a la
         # fuente de reserva, con shaping HarfBuzz (mode=harf) para la escritura árabe.
+        # REPETIBLE: se pueden encadenar varias reservas (p.ej. árabe + griego).
+        lista = ", ".join('"%s:mode=harf;"' % fnt for fnt in a.font_fallback)
         fallback = (r"\usepackage{luaotfload}" "\n"
-                    r'\directlua{luaotfload.add_fallback("forjafb", {"%s:mode=harf;"})}' "\n"
-                    r"\setmainfont{Latin Modern Roman}[RawFeature={fallback=forjafb}]") % a.font_fallback
+                    r'\directlua{luaotfload.add_fallback("forjafb", {%s})}' "\n"
+                    r"\setmainfont{Latin Modern Roman}[RawFeature={fallback=forjafb}]") % lista
+    arabtex = ""
+    if a.arabic_font:
+        # onchar=ids fonts -> babel detecta los caracteres árabes y les aplica SOLO a
+        # ellos la lengua y la fuente árabes; Script=Arabic activa el shaping contextual
+        # (las letras se ligan). Sin onchar el texto queda en Latin Modern (invisible) y
+        # sin Script=Arabic las letras salen sueltas.
+        arabtex = ("\\babelprovide[import=ar, onchar=ids fonts]{arabic}\n"
+                   "\\babelfont[arabic]{rm}[Script=Arabic]{%s}" % a.arabic_font)
     doc = (preamble(a.title, a.author, a.lang, a.toc, gdirs, a.footnotes, fallback,
-                    a.fontsize, a.geometry, a.toc_depth)
+                    a.fontsize, a.geometry, a.toc_depth, a.chapter_style, arabtex)
            + front + "\n\\mainmatter\n" + mainb + "\n\\end{document}\n")
 
     out = pathlib.Path(a.out).resolve()
