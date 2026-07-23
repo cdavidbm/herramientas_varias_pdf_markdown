@@ -140,6 +140,26 @@ Tras convertir, dejar el markdown listo para leer/traducir.
 
 - `clean_markdown.py` — quita running-headers de página (sin borrar contenido
   repetido legítimo), guion suave, saca imágenes base64 a archivo, normaliza espacios.
+- `fix_markup.py FILE... [--apply]` — artefactos de MARKUP de la maqueta (InDesign/Quark):
+  negrita partida por salto de línea (`**…** **…**`→`**… …**`), cursiva partida en
+  subtítulos, ordinales con `**` espurios (`2**º`→`2º`), `****` sueltos, y encabezados de
+  sección `§` dejados en negrita (`**§N: …**`→`## §N`; `§N.M`→`###`, convención Dykes; si
+  el libro no usa `§`, esa regla no dispara). Idempotente. (Medido en Sahl & Māshā'allāh.)
+- `reflow_columns.py FILE... [--apply]` — recompone la prosa cortada en fragmentos de
+  una línea con comentarios `<!-- col N pág M -->`, que deja un bisturí al mal-leer una
+  maqueta a DOS COLUMNAS paralelas (original|traducción, texto|variante). Cose los
+  fragmentos abiertos (el texto principal cierra frase y hace de barrera); preserva el
+  texto token a token. NO desentrelaza dos columnas de CONTENIDO distinto mezcladas línea
+  a línea (eso pide leer la fuente y reconstruir a mano: p. ej. la lista §5.0 de Sahl).
+- **FIGURAS de un libro ya convertido** cuyo markdown conserva las leyendas «**Figura N:
+  …**» pero no las imágenes: `embed_figures_from_captions.py FUENTE.pdf --md-dir es
+  --figures-dir figuras` recorta cada figura del PDF (localiza «Figure N», pide a agy la
+  bbox del dibujo) y la incrusta ANTES de su leyenda. `crop_figure.py x.pdf --page N
+  --bbox x0,y0,x1,y1` recorta una región suelta. **ATAJO sin agy:** si las figuras son
+  imágenes RASTER embebidas (una por página, `pdfimages -list` lo confirma), extráelas
+  PIXEL A PIXEL con `pdfimages -png -f N -l N x.pdf fig` — más limpio y sin gastar cuota;
+  invierte las que salgan en negativo (brillo bajo) y, si dos comparten página, asígnalas
+  por orden arriba→abajo. (Medido en Sahl: 56 figuras raster directas, 0 agy.)
 - `split_chapters.py libro.md --plan plan.json` (o `--by-heading 2`) — trocea en
   capítulos. Exige UNA de las dos banderas; el `.md` va siempre como posicional.
 - `verse_paragraphs.py libro/*.md [--apply]` — texto **VERSIFICADO** (Abū Maʿshar,
@@ -437,6 +457,20 @@ Otra fuente además de libros: videos de YouTube, vía **`yt-dlp`**.
   Prueba un tramo (`--start/--end`) antes de lanzar horas de CPU. Videos ocultos
   no listados bajan solos; para privados/con login usa `--cookies cookies.txt`
   (en WSL, `--cookies-from-browser` NO lee la Vivaldi de Windows: exporta cookies.txt).
+
+## Transcripción con visión (agy/Gemini) y ayudantes de OCR
+Cuando la capa OCR es basura pero **la imagen es legible** y ni Docling ni el re-OCR
+bastan, transcribe leyendo la IMAGEN con un modelo de visión:
+- `agy_transcribe.py x.pdf --out ./paginas` — orquesta la transcripción página a página
+  con agy/Gemini (naming de figuras robusto; sanado que escala a Claude; `--no-heal`).
+- `agy_consolidate.py ./paginas --out cap.md` — cose esas transcripciones por página en
+  un capítulo coherente.
+- `agy_translate.py cap.md --out cap-es.md --glosario g.md` — el MOTOR de traducción con
+  agy/Gemini troceando + QA estructural (lo que usan `/traducir-md` y el paradigma de
+  libro entero); `chunk_defs()` evita truncar el bloque de notas.
+Ayudantes de OCR (los usa la skill `/ocr`): `ocr_preprocess.py` (deskew/contraste/
+binarización antes de tesseract) y `ocr_corruption.py` (detecta texto reconocido corrupto
+para corregirlo con criterio). Detalle fino de todos: `tools/CATALOG.md` y `tools/README.md`.
 
 ## Herramientas disponibles en el equipo
 Scripts del repo · `pandoc` · `ocrmypdf` · `tesseract` · poppler (`pdfinfo`,

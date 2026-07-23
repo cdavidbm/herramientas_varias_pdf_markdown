@@ -22,7 +22,7 @@
 - `book_index.py` — Índice de búsqueda full-text LOCAL sobre una carpeta de markdown.
 - `book_map.py` — Mapa estructural compacto de una carpeta de markdown (o un .md).
 - `detect_chapters.py` — Scan a PDF for candidate chapter start pages.
-- `ocr_corruption.py` ⚠ — Detecta texto OCR probablemente CORRUPTO (sin diccionario).
+- `ocr_corruption.py` — Detecta texto OCR probablemente CORRUPTO (sin diccionario).
 - `pdf_blocks.py` — Recover BLOCK QUOTES from a DIGITAL pdf by font size + indentation.
 - `pdf_headings.py` — Recover heading HIERARCHY from a DIGITAL pdf by font size.
 
@@ -40,11 +40,12 @@
 - `docling_clean.py` — Limpia los ARTEFACTOS SISTEMÁTICOS que introduce Docling al
 - `fix_diacritics.py` — Repara la corrupción de DIACRÍTICOS típica de PDF de
 - `fix_ligatures.py` — Repara la corrupción de LIGADURAS típica de PDF de editoriales
+- `fix_markup.py` — Repara artefactos de MARKUP que deja la extracción de un PDF maquetado:
 - `fix_ordinals.py` — Repara los ORDINALES que el OCR destroza en libros escaneados
 - `fix_roman_numerals.py` — corrige numerales romanos corrompidos por el OCR.
 - `flag_ocr_artifacts.py` — DETECTA (no corrige) ruido de OCR camuflado en markdown.
 - `footnotes_rebuild.py` — Rebuild Markdown footnotes `[^N]` from OCR output where
-- `ocr_preprocess.py` ⚠ — Limpia una imagen de página ANTES del OCR (escaneos malos).
+- `ocr_preprocess.py` — Limpia una imagen de página ANTES del OCR (escaneos malos).
 - `ocr_spellfix.py` — corrección ortográfica CONSERVADORA de erratas de OCR.
 - `verse_paragraphs.py` — reformatea texto VERSIFICADO a UN PÁRRAFO POR VERSO.
 
@@ -68,12 +69,13 @@
 - `forja_common.py` — Lo que TODOS los conversores de La Forja hacían por su cuenta.
 
 ## Otros
-- `agy_consolidate.py` ⚠ — Cose las transcripciones POR PÁGINA de agy/Gemini (o de
-- `agy_transcribe.py` ⚠ — Orquesta la TRANSCRIPCIÓN VISUAL de un rango de páginas de un
-- `agy_translate.py` ⚠ — Traduce un markdown de capítulo/Book a otro idioma con agy/Gemini,
-- `crop_figure.py` ⚠ — Recorta una FIGURA (carta astral, diagrama, rueda zodiacal…)
-- `embed_figures_from_captions.py` ⚠ — Añade las FIGURAS (cartas, diagramas) a un libro ya
+- `agy_consolidate.py` — Cose las transcripciones POR PÁGINA de agy/Gemini (o de
+- `agy_transcribe.py` — Orquesta la TRANSCRIPCIÓN VISUAL de un rango de páginas de un
+- `agy_translate.py` — Traduce un markdown de capítulo/Book a otro idioma con agy/Gemini,
+- `crop_figure.py` — Recorta una FIGURA (carta astral, diagrama, rueda zodiacal…)
+- `embed_figures_from_captions.py` — Añade las FIGURAS (cartas, diagramas) a un libro ya
 - `footnotes_from_pdf.py` — Reconstruye el APARATO DE NOTAS leyendo el del PDF original.
 - `ocr_geometry.py` — separa CUERPO / NOTAS AL PIE / running-head y reconstruye
 - `pdf_restore_digits.py` — Restaura las CIFRAS que la extracción borró en silencio
+- `reflow_columns.py` — Recompone la prosa que un bisturí partió al mal-leer una maqueta
 
