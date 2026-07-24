@@ -68,7 +68,7 @@ DEFAULT_GEOMETRY = ("top=2cm, bottom=2cm, outer=2.5cm, inner=2.5cm, "
 
 def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback="",
              fontsize=12, geometry=DEFAULT_GEOMETRY, tocdepth="subsection",
-             chapstyle="bringhurst", arabfont=""):
+             chapstyle="bringhurst", arabfont="", short_headers=False):
     unichars = "\n".join(
         r"\newunicodechar{%s}{{\normalfont\%s}}" % (u, c) for u, c in UNI2CMD.items())
     gpath = (r"\graphicspath{%s}" % "".join("{%s/}" % d for d in graphicspath)
@@ -86,6 +86,17 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
     # tocdepth=subsection: el índice incluye las tablas/subsecciones de apéndices
     # (que van «starred» pero con \addcontentsline), no solo los capítulos.
     toctex = ("\\settocdepth{%s}\n\\tableofcontents\\clearpage\n" % tocdepth) if toc else ""
+    # titulillo de página: por defecto «N. Título»; con --short-headers, solo «Capítulo N»
+    # (útil cuando los títulos son largos y se pegan al cuerpo). Los capítulos SIN número
+    # (front-matter: Introducción…) siguen mostrando su título en ambos casos.
+    if short_headers:
+        chaptermark = (r"\renewcommand{\chaptermark}[1]{\markboth"
+                       r"{\ifnum\value{chapter}>0 \chaptername\ \thechapter\else #1\fi}"
+                       r"{\ifnum\value{chapter}>0 \chaptername\ \thechapter\else #1\fi}}")
+    else:
+        chaptermark = (r"\renewcommand{\chaptermark}[1]{\markboth"
+                       r"{\ifnum\value{chapter}>0 \thechapter.\ \fi #1}"
+                       r"{\ifnum\value{chapter}>0 \thechapter.\ \fi #1}}")
     return r"""\documentclass[extrafontsizes,ebook,%(fontsize)spt,oneside]{memoir}
 \usepackage{fontspec}                                  %% LuaLaTeX: Unicode nativo (no inputenc/T1)
 %(fallback)s
@@ -145,9 +156,8 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
 \makeoddfoot{forja}{}{\thepage}{}
 \makeevenfoot{forja}{}{\thepage}{}
 \makeheadrule{forja}{0pt}{0pt}
-%% marca = «N. Título» (el nº solo si el capítulo está numerado); las secciones no pisan
-\renewcommand{\chaptermark}[1]{\markboth
-  {\ifnum\value{chapter}>0 \thechapter.\ \fi #1}{\ifnum\value{chapter}>0 \thechapter.\ \fi #1}}
+%% marca de titulillo (según --short-headers); las secciones no pisan
+%(chaptermark)s
 \renewcommand{\sectionmark}[1]{}
 
 %% notas al pie: la numeración la elige --footnotes (por página / obra / corrida)
@@ -171,7 +181,7 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
 %(toctex)s""" % dict(lang=lang, unichars=unichars, titleblock=titleblock,
                      toctex=toctex, gpath=gpath, fn=fn, fallback=fallback,
                      fontsize=fontsize, geometry=geometry, chapstyle=chapstyle,
-                     arabic=arabfont)
+                     arabic=arabfont, chaptermark=chaptermark)
 
 # Detección del prefijo de capítulo numerado en el H1: «Capítulo N —», «Chapter N —»
 # o simplemente «NN —» (numeración por dígitos, p. ej. «# 05 — La Luna»).
@@ -444,6 +454,9 @@ def main():
     ap.add_argument("--toc-depth", choices=("chapter", "section", "subsection"),
                     default="subsection", metavar="NIVEL",
                     help="profundidad del índice (def: subsection). chapter = un solo nivel.")
+    ap.add_argument("--short-headers", action="store_true",
+                    help="titulillo de página = solo «Capítulo N» (útil si los títulos son "
+                         "largos y se pegan al cuerpo); por defecto muestra «N. Título».")
     a = ap.parse_args()
 
     # graphicspath = carpetas de imágenes indicadas + carpeta de cada .md (rutas absolutas)
@@ -485,7 +498,8 @@ def main():
         arabtex = ("\\babelprovide[import=ar, onchar=ids fonts]{arabic}\n"
                    "\\babelfont[arabic]{rm}[Script=Arabic]{%s}" % a.arabic_font)
     doc = (preamble(a.title, a.author, a.lang, a.toc, gdirs, a.footnotes, fallback,
-                    a.fontsize, a.geometry, a.toc_depth, a.chapter_style, arabtex)
+                    a.fontsize, a.geometry, a.toc_depth, a.chapter_style, arabtex,
+                    short_headers=a.short_headers)
            + front + "\n\\mainmatter\n" + mainb + "\n\\end{document}\n")
 
     out = pathlib.Path(a.out).resolve()
