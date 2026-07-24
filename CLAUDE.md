@@ -176,6 +176,16 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   dos líneas; numeración continua en todo el libro; libros AstroArt/Döser). NO en
   índices/bibliografía. Para rehacer un archivo ya convertido: revierte con regex
   (`^\[\^N\]:`→`N `, `\s*\[\^N\]`→` N`) y reaplica.
+- **Aparato pegado al cuerpo SIN sangría fiable** (recortaste una columna de un facing
+  árabe|inglés y el recorte reinició el margen, o el OCR aplastó la indentación): el
+  módulo **`footnote_chain.py`** separa cuerpo/notas por la señal robusta de que los
+  **números de nota son CONSECUTIVOS** (n, n+1, n+2…); un número no consecutivo —remisión
+  «128 below», «3.3 above», cifra de prosa— se trata como continuación, no como nota nueva,
+  y el nº de página del pie tampoco rompe la cadena. Ancla los volados aplastados por
+  cursor ascendente. Dos formatos: número+texto en la misma línea (por defecto) o
+  `--number-only` (volado solo en su renglón). Es LIBRERÍA (`from footnote_chain import
+  process_page`) — la importa el bisturí, que conoce la maqueta; el CLI procesa un bloque
+  suelto. (Medido en la Abbreviation de Abū Maʿshar, notas 1-112, y las Flowers, 1-308.)
 - **PDF DIGITAL cuyos dígitos se pierden al extraer** (cursos y manuales con fuentes
   de símbolos: el párrafo se lee bien pero `Arc of Direction = RA °'"` ha quedado sin
   cifras). **Ningún control de §3d lo ve**: ni el ratio, ni el balance de notas, ni el
