@@ -62,25 +62,28 @@ def _fn_re(number_only):
     return FN_NUMONLY if number_only else FN_SAMELINE
 
 
-def split_apparatus(lines, number_only=False):
+def split_apparatus(lines, number_only=False, max_gap=15):
     """Devuelve (líneas_cuerpo, líneas_notas). El aparato = primer arranque cuyos números
-    forman una cadena consecutiva de ≥2; en su defecto, una nota única en el tercio final."""
+    forman una cadena consecutiva de ≥2 con PROXIMIDAD (cada nota a ≤`max_gap` líneas de la
+    anterior). La proximidad es esencial: una LLAMADA volada que el OCR dejó sola en su
+    renglón cerca del cuerpo (p.ej. «132» flotando bajo un título) NO debe abrir el bloque
+    aunque más abajo exista la nota «133» — están a 40 líneas, no forman aparato contiguo;
+    el bloque real va al pie, con sus números juntos. En su defecto, una nota única en el
+    tercio final."""
     fn = _fn_re(number_only)
+    marks = [(i, int(fn.match(l).group(1))) for i, l in enumerate(lines) if fn.match(l)]
 
-    def chain_len(idx):
-        seq = []
-        for l in lines[idx:]:
-            m = fn.match(l)
-            if m:
-                n = int(m.group(1))
-                if not seq or n == seq[-1] + 1:
-                    seq.append(n)
-                # un número no consecutivo es continuación: ni suma ni rompe
-        return len(seq)
-
-    for i, ln in enumerate(lines):
-        if fn.match(ln) and chain_len(i) >= 2:
-            return lines[:i], lines[i:]
+    for si, (i0, n0) in enumerate(marks):
+        last_i, last_n, count = i0, n0, 1
+        for i, n in marks[si + 1:]:
+            if n == last_n + 1:
+                if i - last_i <= max_gap:      # consecutiva y CONTIGUA → misma cadena
+                    last_i, last_n, count = i, n, count + 1
+                else:
+                    break                       # consecutiva pero lejos → otro bloque
+            # un número no consecutivo es continuación: ni suma ni rompe
+        if count >= 2:
+            return lines[:i0], lines[i0:]
     for i, ln in enumerate(lines):
         if fn.match(ln) and i >= len(lines) * 2 // 3:
             return lines[:i], lines[i:]
