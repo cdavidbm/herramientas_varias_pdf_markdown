@@ -90,9 +90,11 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
     # (útil cuando los títulos son largos y se pegan al cuerpo). Los capítulos SIN número
     # (front-matter: Introducción…) siguen mostrando su título en ambos casos.
     if short_headers:
+        # \rhchapname = el «Capítulo/Chapter» de babel, capturado ANTES de que el estilo de
+        # capítulo vacíe \chaptername (los estilos hacen \renewcommand{\chaptername}{}).
         chaptermark = (r"\renewcommand{\chaptermark}[1]{\markboth"
-                       r"{\ifnum\value{chapter}>0 \chaptername\ \thechapter\else #1\fi}"
-                       r"{\ifnum\value{chapter}>0 \chaptername\ \thechapter\else #1\fi}}")
+                       r"{\ifnum\value{chapter}>0 \rhchapname\ \thechapter\else #1\fi}"
+                       r"{\ifnum\value{chapter}>0 \rhchapname\ \thechapter\else #1\fi}}")
     else:
         chaptermark = (r"\renewcommand{\chaptermark}[1]{\markboth"
                        r"{\ifnum\value{chapter}>0 \thechapter.\ \fi #1}"
@@ -172,6 +174,7 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
 %(unichars)s
 
 \begin{document}
+\newcommand{\rhchapname}{}\let\rhchapname\chaptername   %% guarda «Capítulo» antes de que el estilo lo vacíe
 \chapterstyle{%(chapstyle)s}
 \pagestyle{forja}             %% titulillo centrado y pequeño; folio abajo
 \frontmatter
