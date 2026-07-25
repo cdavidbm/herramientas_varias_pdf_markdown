@@ -227,13 +227,52 @@ def classify_roles(files):
 
 def make_unnumbered(tex):
     """Convierte el primer \\chapter de un fragmento en \\chapter* (sin número) pero
-    lo mantiene en el índice y en el titulillo. Para apéndices."""
-    m = re.search(r"\\chapter(?:\[[^\]]*\])?\{((?:[^{}]|\{[^{}]*\})*)\}", tex)
-    if not m: return tex
-    t = m.group(1)
+    lo mantiene en el índice y en el titulillo. Para apéndices.
+
+    Escáner de llaves (no regex): el título puede llevar anidamiento de VARIOS niveles
+    —pandoc envuelve un `\\chapter` cuyo título tiene ÉNFASIS en
+    `\\chapter{\\texorpdfstring{…\\emph{…}…}{…}}` (2 niveles)—; un regex de un solo nivel
+    NO lo captura y el capítulo se queda NUMERADO (bug: la Traducción de las Flowers salía
+    como «1 …» mientras el resto de apéndices iban sin número). El escáner es robusto a
+    cualquier profundidad. Para el índice/titulillo se usa la 2.ª rama de
+    `\\texorpdfstring{pdf}{tex}` si está (texto plano, sin `\\emph`), o el título tal cual."""
+    m = re.search(r"\\chapter(\[[^\]]*\])?\{", tex)
+    if not m:
+        return tex
+    open_brace = m.end() - 1
+    depth, i, n = 0, open_brace, len(tex)
+    while i < n:
+        if tex[i] == "{":
+            depth += 1
+        elif tex[i] == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        i += 1
+    title = tex[open_brace + 1:i]                       # contenido completo de \chapter{…}
+    # título para índice/titulillo: la rama TeX de \texorpdfstring{pdf}{tex} si existe
+    tm = re.match(r"\\texorpdfstring\{", title)
+    toc_title = title
+    if tm:
+        d, k = 0, tm.end() - 1
+        while k < len(title):                          # saltar la 1.ª rama {pdf}
+            if title[k] == "{": d += 1
+            elif title[k] == "}":
+                d -= 1
+                if d == 0: break
+            k += 1
+        m2 = re.match(r"\{", title[k + 1:])
+        if m2:                                         # 2.ª rama {tex}
+            d, s = 0, k + 1
+            for j in range(k + 1, len(title)):
+                if title[j] == "{": d += 1
+                elif title[j] == "}":
+                    d -= 1
+                    if d == 0:
+                        toc_title = title[s + 1:j]; break
     repl = (r"\chapter*{%s}\addcontentsline{toc}{chapter}{%s}\markboth{%s}{%s}"
-            % (t, t, t, t))
-    return tex[:m.start()] + repl + tex[m.end():]
+            % (title, toc_title, toc_title, toc_title))
+    return tex[:m.start()] + repl + tex[i + 1:]
 
 _SEC_CMDS = ("subsubsection", "subsection", "section", "paragraph")
 
