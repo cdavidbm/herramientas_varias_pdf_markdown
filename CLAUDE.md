@@ -338,11 +338,31 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
 | Situación | Script |
 |---|---|
 | **Cursiva significativa** o **2 columnas paralelas** original/traducción | `pdf_rich_to_markdown.py` (ver recuadro arriba) |
+| **PDF de Acrobat ClearScan** (`pdfinfo` dice «Paper Capture … ClearScan») | `clearscan_to_markdown.py` (ver recuadro abajo) |
 | Carpeta de **un PDF por capítulo**, notas a pie | `pdf_chapters_to_markdown.py plan.json` |
 | **Un PDF digital limpio** (Calibre, con outline) | `detect_chapters.py` → `plan.json` → `pdf_sections_to_markdown.py plan.json` |
 | Libro **escaneado ya OCR-eado** con citas Harvard | `pdf_book_to_markdown.py` |
 | `pdftotext` **no extrae nada** pero tienes sidecar `.txt` de OCR | `ocr_text_to_markdown.py` |
 | Solo **partir** el PDF en PDFs por capítulo | `detect_chapters.py` → `plan.json` → `split_pdf.py` |
+
+> **PDF hecho con Acrobat ClearScan** → `clearscan_to_markdown.py`, NO `pdftotext` ni
+> Docling. ClearScan no deja el OCR como capa invisible: **sustituye el texto por fuentes
+> sintéticas** (`Fd<n>-Identity-H`), una por «racimo de formas». El texto se extrae bien,
+> pero **la cursiva se pierde EN SILENCIO**, y en una edición académica es información
+> (términos, transliteraciones, títulos, y a veces los propios subapartados). Ninguna vía
+> normal la ve: `pdffonts` no da ningún nombre con «italic», `pdftohtml -xml` emite **0**
+> marcas `<i>`, y el `/FontDescriptor` **miente** (`ItalicAngle` 0 y `Flags` idéntico en
+> las 384 fuentes). Lo que sí es verdad son los CONTORNOS: el script mide la inclinación
+> real de cada fuente embebida y decide redonda vs. cursiva. Medido en *The Search of the
+> Heart* (Dykes, 239 pp): bimodal limpio —92.8 % redonda, 4.9 % cursiva, 2.3 % zona gris
+> que resultaron ser los titulillos en versalita cursiva—, validado contra la imagen.
+> Detección: `pdfinfo` → `Producer: … Paper Capture … ClearScan`.
+>
+> **Dos trampas medidas al escribirlo:** (1) los `fontspec` de `pdftohtml -xml` son
+> GLOBALES y se declaran donde aparecen por primera vez —un mapa por página deja el 40 %
+> del texto sin estilo—; (2) para rehacer párrafos hay que usar la sangría **relativa a la
+> línea siguiente**, no la absoluta: los párrafos en BLOQUE (citas, párrafos numerados
+> `[3]`) tienen todas sus líneas metidas y con un umbral absoluto se parten una a una.
 
 `detect_chapters.py` lista páginas candidatas (no escribe el plan); con eso
 **redactas el `plan.json`** y corres el conversor con `--dry-run` primero.

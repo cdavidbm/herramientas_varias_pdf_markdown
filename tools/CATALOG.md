@@ -8,6 +8,7 @@
 - `limpiar_academico.py` — Orquestador de POST-LIMPIEZA para markdown de libros
 
 ## Conversores (bisturíes)
+- `clearscan_to_markdown.py` — PDF de **Acrobat ClearScan** -> markdown CON CURSIVAS.
 - `epub_illustrated_to_markdown.py` — convert an image-heavy EPUB (music theory,
 - `epub_to_markdown.py` — Convert a complex EPUB into one self-contained markdown
 - `latex_to_markdown.py` — Convierte un libro en LaTeX a markdown de estudio (para
