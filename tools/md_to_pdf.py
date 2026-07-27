@@ -65,15 +65,29 @@ def footnote_numbering(mode: str) -> str:
 DEFAULT_GEOMETRY = ("top=2cm, bottom=2cm, outer=2.5cm, inner=2.5cm, "
                     "heightrounded, marginparwidth=2.3cm, marginparsep=0.5cm")
 
+# Tamaño de fuente para las tablas «normales» (≤4 col no densas). Lo fija --table-size
+# en main(); las tablas anchas siguen su propia lógica (footnotesize / apaisado 7pt).
+TABLE_SIZE = "normal"
+# Libros cuyos encabezados YA traen su propia numeración («## Capítulo 10.1: …», al estilo
+# de Dykes): la numeración automática de memoir se DUPLICA con ella («10.1. Capítulo 10.1:»)
+# y, peor, puede DIVERGIR —basta un subapartado sin numerar intercalado para que el contador
+# se adelante—, con lo que las remisiones del texto («véase el Cap. 20.6») dejarían de casar.
+OWN_SEC_NUMS = False
+# Imprimir la leyenda de `![…](img)` bajo la imagen (ver split_image_captions).
+FIG_CAPTIONS = False
+_TABLE_SIZE_CMD = {"normal": "", "small": r"\small",
+                   "footnotesize": r"\footnotesize", "scriptsize": r"\scriptsize"}
+
 
 def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback="",
              fontsize=12, geometry=DEFAULT_GEOMETRY, tocdepth="subsection",
-             chapstyle="bringhurst", arabfont="", short_headers=False):
+             chapstyle="bringhurst", arabfont="", short_headers=False, leading=None):
     unichars = "\n".join(
         r"\newunicodechar{%s}{{\normalfont\%s}}" % (u, c) for u, c in UNI2CMD.items())
     gpath = (r"\graphicspath{%s}" % "".join("{%s/}" % d for d in graphicspath)
              if graphicspath else "")
     fn = footnote_numbering(fnmode)
+    leadingtex = (r"\linespread{%s}" % leading) if leading else ""
     title = latex_escape(title) if title else title
     author = latex_escape(author) if author else author
     titleblock = ""
@@ -85,7 +99,11 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
             "\\end{titlingpage}\n" % (title, authorline))
     # tocdepth=subsection: el índice incluye las tablas/subsecciones de apéndices
     # (que van «starred» pero con \addcontentsline), no solo los capítulos.
-    toctex = ("\\settocdepth{%s}\n\\tableofcontents\\clearpage\n" % tocdepth) if toc else ""
+    # \clearpage ANTES y después: el índice abre siempre en página propia, aunque lo
+    # preceda la portada o cualquier otro material. Y `\tableofcontents*` (forma ESTRELLADA
+    # de memoir) para que el índice NO se liste a sí mismo como primera entrada.
+    toctex = ("\\clearpage\n\\settocdepth{%s}\n\\tableofcontents*\\clearpage\n"
+              % tocdepth) if toc else ""
     # titulillo de página: por defecto «N. Título»; con --short-headers, solo «Capítulo N»
     # (útil cuando los títulos son largos y se pegan al cuerpo). Los capítulos SIN número
     # (front-matter: Introducción…) siguen mostrando su título en ambos casos.
@@ -120,6 +138,7 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
 \usepackage{amssymb}
 %% --- geometría (por defecto = ediciones janegca Valens/Doroteo; override con --geometry) ---
 \usepackage[%(geometry)s]{geometry}
+%(leading)s
 \usepackage[colorlinks=true, linkcolor=black, urlcolor=blue, unicode]{hyperref}
 \usepackage{xurl}                                      %% parte URLs largas en cualquier carácter (no desbordan)
 
@@ -184,14 +203,18 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
 %(toctex)s""" % dict(lang=lang, unichars=unichars, titleblock=titleblock,
                      toctex=toctex, gpath=gpath, fn=fn, fallback=fallback,
                      fontsize=fontsize, geometry=geometry, chapstyle=chapstyle,
-                     arabic=arabfont, chaptermark=chaptermark)
+                     arabic=arabfont, chaptermark=chaptermark, leading=leadingtex)
 
-# Detección del prefijo de capítulo numerado en el H1: «Capítulo N —», «Chapter N —»
-# o simplemente «NN —» (numeración por dígitos, p. ej. «# 05 — La Luna»).
+# Detección del prefijo de capítulo numerado en el H1: «Capítulo N —», «Chapter N —»,
+# «Capítulo N: …» o simplemente «NN —» (numeración por dígitos, p. ej. «# 05 — La Luna»).
+# Los DOS PUNTOS son separador tan común como el guion (medido en al-Kindī, «The Forty
+# Chapters»: todos los H1 son «Capítulo N: …»). Sin reconocerlos, classify_roles no ve
+# capítulos numerados, los manda todos a `appendix` (\chapter*) y entonces
+# `--footnotes chapter` NO reinicia las notas, porque el contador de capítulo no avanza.
 CHAP_RE = re.compile(
-    r"^#\s+(?:(?:Cap[íi]tulo|Chapter)\s+\S+|\d{1,3})\s*(?:—|–|-{1,3}|\.)", re.I)
+    r"^#\s+(?:(?:Cap[íi]tulo|Chapter)\s+\S+|\d{1,3})\s*(?:—|–|-{1,3}|\.|:)", re.I)
 PREF_RE = re.compile(
-    r"^\s*(?:(?:Cap[íi]tulo|Chapter)\s+\S+|\d{1,3})\s*(?:—|–|-{1,3}|\.)\s*", re.I)
+    r"^\s*(?:(?:Cap[íi]tulo|Chapter)\s+\S+|\d{1,3})\s*(?:—|–|-{1,3}|\.|:)\s*", re.I)
 # Títulos H1 de front-matter (para libros SIN «Capítulo N», organizados por Partes)
 FRONT_RE = re.compile(
     r"^#\s+(prefacio|preface|pr[oó]logo|proemio|introducci[oó]n|introduction|"
@@ -376,6 +399,10 @@ def typeset_wide_tables(tex, min_cols=6):
         # glifo+rango de grados por celda) → también compacta a footnotesize.
         if ncol == 4 and tbl.count(r"\tabularnewline") >= 10:
             return "{\\footnotesize\n" + tbl + "\n}"
+        # tablas «normales» (≤4 col no densas): tamaño base según --table-size
+        cmd = _TABLE_SIZE_CMD.get(TABLE_SIZE, "")
+        if cmd:
+            return "{" + cmd + "\n" + tbl + "\n}"
         return tbl
     return re.sub(r"\\begin\{longtable\}.*?\\end\{longtable\}", _wrap, tex, flags=re.S)
 
@@ -432,12 +459,40 @@ def strip_empty_note_heading(text):
         out.append(lines[i]); i += 1
     return "\n".join(out)
 
+IMG_CAP_RE = re.compile(r"^!\[(?P<alt>.+?)\]\((?P<path>[^)]+)\)(?P<cola>.*)$")
+
+def split_image_captions(src):
+    """`![Leyenda](img.png)` -> imagen SOLA + su leyenda impresa debajo, centrada.
+
+    Sin esto la leyenda se PIERDE: el lector `gfm` de pandoc no tiene `implicit_figures`,
+    así que el texto alternativo no llega al LaTeX y la imagen sale muda. En un libro
+    traducido eso es grave —el pie del diagrama solo existiría en el markdown—.
+
+    Se emite como bloque centrado NO flotante (`raw_attribute`), no como `figure`: los
+    textos de este taller dicen «véase la figura de abajo», así que la imagen debe
+    quedarse donde el autor la puso y no irse a flotar a otra página. La leyenda pasa
+    por pandoc como markdown normal, de modo que conserva cursivas y notas `[^N]` —y la
+    nota que cuelga de la línea de la imagen deja de imprimirse como un número suelto."""
+    out = []
+    for ln in src.split("\n"):
+        m = IMG_CAP_RE.match(ln)
+        if not m:
+            out.append(ln); continue
+        alt, path, cola = m.group("alt"), m.group("path"), m.group("cola")
+        out.append("![](%s)" % path)
+        out.append("")
+        out.append("`\\begin{center}\\small\\bfseries `{=latex}%s%s`\\end{center}`{=latex}"
+                   % (alt, cola))
+    return "\n".join(out)
+
 def md_to_latex(mdfile, role):
     """Un .md -> fragmento LaTeX vía pandoc, según su rol (front/chapter/appendix).
     En capítulos numerados quita el literal «Capítulo N —» del título (memoir pone el
     número); en apéndices convierte el \\chapter en \\chapter* (sin número)."""
     src = strip_empty_note_heading(
         relocate_heading_footnotes(pathlib.Path(mdfile).read_text(encoding="utf-8")))
+    if FIG_CAPTIONS:
+        src = split_image_captions(src)
     if role == "chapter":                    # memoir numera; quitar el prefijo literal
         lines = src.split("\n")
         for i, ln in enumerate(lines):
@@ -453,6 +508,8 @@ def md_to_latex(mdfile, role):
     if role == "appendix":                   # capítulo sin nº + secciones sin nº
         tex = star_sections(make_unnumbered(tex))
     elif role == "front":                    # secciones sin nº
+        tex = star_sections(tex)
+    elif role == "chapter" and OWN_SEC_NUMS:  # el propio título ya numera: no duplicar
         tex = star_sections(tex)
     # las tablas se reparten al ancho de página en TODOS los roles (también capítulos):
     # antes solo se envolvían en front/apéndices y las de los capítulos desbordaban.
@@ -499,7 +556,35 @@ def main():
     ap.add_argument("--short-headers", action="store_true",
                     help="titulillo de página = solo «Capítulo N» (útil si los títulos son "
                          "largos y se pegan al cuerpo); por defecto muestra «N. Título».")
+    ap.add_argument("--leading", type=float, default=None, metavar="FACTOR",
+                    help="interlineado: factor de \\linespread (def: sin cambio, ~1.0). "
+                         "<1 compacta (p. ej. 0.97 aprieta un poco sin agobiar), >1 airea.")
+    ap.add_argument("--table-size", choices=("normal", "small", "footnotesize", "scriptsize"),
+                    default="normal", metavar="TAM",
+                    help="tamaño de letra de las tablas «normales» (≤4 col no densas), p. ej. "
+                         "las tablas maestras 2-col (def: normal). small/footnotesize las "
+                         "compactan; las tablas anchas ya se achican/apaisan solas.")
+    ap.add_argument("--figure-captions", action="store_true",
+                    help="imprime el texto alternativo de las imágenes como PIE de figura "
+                         "centrado bajo cada una. Sin esto se pierde: el lector gfm de "
+                         "pandoc no pasa el alt al LaTeX y la imagen sale muda.")
+    ap.add_argument("--own-section-numbers", action="store_true",
+                    help="los encabezados de sección YA traen su numeración en el texto "
+                         "(«## Capítulo 10.1: …», estilo Dykes): no numerarlas también con "
+                         "memoir. Evita el «10.1. Capítulo 10.1:» duplicado y, sobre todo, "
+                         "que la numeración automática DIVERJA de la del autor cuando hay "
+                         "subapartados sin numerar intercalados (rompería las remisiones). "
+                         "Siguen apareciendo en el índice con su página.")
+    ap.add_argument("--start-chapter", type=int, default=None, metavar="N",
+                    help="arranca la numeración de capítulos en N (def: 1). Para obras "
+                         "MULTIVOLUMEN cuyo tomo continúa la numeración del anterior "
+                         "(p. ej. --start-chapter 61 para un Vol. II que empieza en el cap. 61).")
     a = ap.parse_args()
+
+    global TABLE_SIZE, OWN_SEC_NUMS, FIG_CAPTIONS
+    TABLE_SIZE = a.table_size
+    OWN_SEC_NUMS = a.own_section_numbers
+    FIG_CAPTIONS = a.figure_captions
 
     # graphicspath = carpetas de imágenes indicadas + carpeta de cada .md (rutas absolutas)
     gdirs = [str(pathlib.Path(d).resolve()) for d in a.image_dir]
@@ -539,10 +624,15 @@ def main():
         # sin Script=Arabic las letras salen sueltas.
         arabtex = ("\\babelprovide[import=ar, onchar=ids fonts]{arabic}\n"
                    "\\babelfont[arabic]{rm}[Script=Arabic]{%s}" % a.arabic_font)
+    # --start-chapter N: arranca la numeración de capítulos en N (obras multivolumen,
+    # p. ej. el Vol. II que continúa en el cap. 61). setcounter a N-1 antes del 1er \chapter.
+    mainstart = "\n\\mainmatter\n"
+    if a.start_chapter:
+        mainstart += "\\setcounter{chapter}{%d}\n" % (a.start_chapter - 1)
     doc = (preamble(a.title, a.author, a.lang, a.toc, gdirs, a.footnotes, fallback,
                     a.fontsize, a.geometry, a.toc_depth, a.chapter_style, arabtex,
-                    short_headers=a.short_headers)
-           + front + "\n\\mainmatter\n" + mainb + "\n\\end{document}\n")
+                    short_headers=a.short_headers, leading=a.leading)
+           + front + mainstart + mainb + "\n\\end{document}\n")
 
     out = pathlib.Path(a.out).resolve()
     with tempfile.TemporaryDirectory() as td:
