@@ -207,6 +207,64 @@ def corta_notas(lineas):
     return lineas[:i], lineas[i:]
 
 
+
+def corta_notas_guiado(lineas, textos_notas):
+    """(cuerpo, notas) cortando por DÓNDE EMPIEZA la primera nota, cuyo texto se conoce.
+
+    La versión por tamaño de letra falla en muchas páginas de este escaneo y deja el pie
+    dentro del cuerpo. Si el aparato ya se transcribió aparte, se sabe cómo empieza la
+    primera nota de la página: basta localizar ese renglón y cortar ahí.
+
+    Es MUY superior a ir quitando cada nota del cuerpo por separado: un solo corte por
+    página, el aparato queda contiguo por construcción, y no se anda recortando trozos
+    dentro de párrafos de prosa (medido: el 46 % de los párrafos del Libro II son mixtos,
+    prosa con la nota pegada, así que el recorte fino tocaría casi todo el libro)."""
+    if not textos_notas or len(lineas) < 3:
+        return None
+    if isinstance(textos_notas, str):
+        textos_notas = [textos_notas]
+    # Se prueban TODAS las notas de la página y se corta por la coincidencia más
+    # TEMPRANA: si solo se busca la primera, basta con que el OCR la haya destrozado para
+    # perder el corte entero (medido: así solo se quitaba entre el 16 % y el 95 % del
+    # aparato según la sección). Con todas, una nota legible cualquiera salva la página.
+    corte = None
+    for texto in textos_notas:
+        objetivo = set(_norm_pal(texto)[:12])
+        if len(objetivo) < 4:
+            continue
+        mejor, mejor_sc = None, 0.0
+        for i, (_t, g) in enumerate(lineas):
+            if i < len(lineas) * 0.08:     # guarda mínima: en páginas cargadas de notas
+                                           # el aparato ocupa casi toda la plana
+                continue
+            pal = set(_norm_pal(texto_de_linea(g)))
+            sc = len(objetivo & pal) / len(objetivo)
+            if sc > mejor_sc:
+                mejor_sc, mejor = sc, i
+        if mejor is not None and mejor_sc >= 0.5:
+            corte = mejor if corte is None else min(corte, mejor)
+    if corte is None:
+        return None
+    # El ancla marca dónde empieza la PRIMERA NOTA TRANSCRITA de la página, que no siempre
+    # es el primer renglón del pie: cuando una nota viene continuada de la página anterior,
+    # sus renglones quedan por encima. Así que desde el ancla se sube mientras las líneas
+    # sigan siendo de cuerpo menor que la prosa (medido: sin esto solo se retiraba el 54 %
+    # del aparato aunque el ancla acertara en 203 de 207 páginas).
+    tams = [statistics.median([sp.size for sp in g]) for _t, g in lineas]
+    cuerpo_tam = statistics.median(tams)
+    i = corte
+    while i > 1 and tams[i - 1] < cuerpo_tam:
+        i -= 1
+    return lineas[:i], lineas[i:]
+
+
+def _norm_pal(s):
+    import unicodedata as _u
+    s = _u.normalize("NFKD", s)
+    s = "".join(c for c in s if not _u.combining(c))
+    return re.sub(r"[^a-z0-9 ]+", " ", s.lower()).split()
+
+
 def texto_de_linea(grupo):
     """Une los spans de una línea marcando las cursivas con `*…*`."""
     partes, abierto = [], False
@@ -303,11 +361,13 @@ def une_guiones(parrs):
     return out
 
 
-def convierte(pdf, ini, fin, incl, umbral_incl, titulo_corto):
+def convierte(pdf, ini, fin, incl, umbral_incl, titulo_corto, sin_notas=False,
+              notas_por_pagina=None):
     xml, spec = paginas_xml(pdf, ini, fin)
     es_cursiva = {f: (v > umbral_incl) for f, v in incl.items()}
     cuerpo_out, notas_out, no_puestas = [], [], []
-    for pg in re.split(r"<page ", xml)[1:]:
+    for _idx, pg in enumerate(re.split(r"<page ", xml)[1:]):
+        num_pagina = (ini or 1) + _idx
         spans = spans_de_pagina(pg, spec, es_cursiva)
         if not spans:
             continue
@@ -315,7 +375,13 @@ def convierte(pdf, ini, fin, incl, umbral_incl, titulo_corto):
         # fuera el titulillo (1.ª línea) y el folio suelto
         while lineas and es_titulillo(texto_de_linea(lineas[0][1]), titulo_corto):
             lineas.pop(0)
-        cuerpo, notas = corta_notas(lineas)
+        guiado = None
+        if notas_por_pagina:
+            prim = notas_por_pagina.get(num_pagina)
+            if prim:
+                guiado = corta_notas_guiado(lineas, prim)
+
+        cuerpo, notas = guiado if guiado else corta_notas(lineas)
         parr = une_guiones(parrafos(cuerpo))
         nn = separa_notas(notas)
         # Las llamadas se sitúan PÁGINA A PÁGINA, no sobre la sección entera: la llamada
@@ -323,7 +389,10 @@ def convierte(pdf, ini, fin, incl, umbral_incl, titulo_corto):
         # búsqueda es mínimo. Buscando sobre todo el capítulo, una sola coincidencia falsa
         # adelanta el puntero y arrastra a TODAS las siguientes (medido: 50 de 99 notas
         # sin situar en el Libro I, y justo las altas).
-        parr, faltan = inserta_llamadas(parr, [n for n, _ in nn])
+        parr, faltan = ([], []) if sin_notas else inserta_llamadas(
+            parr, [n for n, _ in nn])
+        if sin_notas:
+            parr, faltan = une_guiones(parrafos(cuerpo)), []
         cuerpo_out += parr
         notas_out += nn
         no_puestas += faltan
@@ -421,39 +490,71 @@ def _parecido(cand, n):
     s = str(n)
     if d.startswith(s) or s.startswith(d[:len(s)]):
         return True
-    # El escaneo de este libro trae el MARGEN IZQUIERDO RECORTADO en muchas páginas y se
-    # come la primera cifra del volado: un «24» queda impreso como «4». Por eso el
-    # candidato puede ser un SUFIJO del número esperado.
+    # El escaneo trae el MARGEN IZQUIERDO RECORTADO en muchas páginas, y eso deforma el
+    # volado por los DOS lados:
+    #  · se come la primera cifra -> «24» sale como «4» (el candidato es SUFIJO del nº);
+    #  · o arrastra un trazo del renglón y añade una cifra espuria delante -> la nota 39
+    #    aparece como «tenth139», y la 78 como «manner.178» (el nº es SUFIJO del candidato).
     if len(d) < len(s) and s.endswith(d):
         return True
+    # PROBADO Y DESCARTADO: admitir además una cifra ESPURIA delante (la nota 39 aparece
+    # a veces como «tenth139») recupera llamadas en el Libro I pero sale muy caro en el
+    # resto —Introducción de 7 a 18 perdidas, Libro III de 8 a 17—, porque relaja la
+    # compatibilidad y la alineación se llena de emparejamientos falsos que desplazan a
+    # los buenos. Ceñirlo a «un 1 de más y números de dos cifras» tampoco lo salva.
+    # Es preferible dejar la llamada sin situar (y anotada) que anclarla mal.
     try:
         return abs(int(d[:len(s)]) - n) <= 1
     except ValueError:
         return False
 
 
-def inserta_llamadas(parrafos_cuerpo, numeros):
+def inserta_llamadas(parrafos_cuerpo, numeros, ventana=None):
     """Mete `[^N]` en el cuerpo. Devuelve (párrafos, no_situadas).
 
-    NO se busca cada número por su valor: los volados salen mutilados y así casi ninguno
-    casaría. Se alinean POR ORDEN los candidatos con la lista de notas —que es una
-    secuencia consecutiva conocida— y solo se acepta un candidato si además se parece.
-    Es deliberadamente conservador: antes dejar una llamada sin poner (y reportarla) que
-    convertir en nota una cifra de la prosa."""
+    NO se busca cada número por su valor: los volados salen mutilados —el escaneo trae el
+    margen izquierdo recortado y a un «24» le falta el «2»— así que casi ninguno casaría
+    por igualdad. Lo que se explota es que las notas forman una secuencia CONSECUTIVA y
+    aparecen en el cuerpo EN ORDEN.
+
+    Se resuelve con una alineación monótona óptima (programación dinámica, estilo LCS)
+    entre la lista de notas y los candidatos del texto. Un puntero codicioso no vale: una
+    sola coincidencia falsa —una cifra de carta como «54.9)» o «:55:00»— lo empuja
+    adelante y se lleva por delante todas las llamadas siguientes, que sí estaban
+    (medido en la Introducción: 60, 61 y 62 se perdían así). La alineación, en cambio,
+    prefiere globalmente el emparejamiento que más notas coloca.
+    """
     texto = "\n\n".join(parrafos_cuerpo)
-    no_situadas, desplazamiento = [], 0
-    pos = 0
-    for n in numeros:
-        colocada = False
-        for m in CAND_RE.finditer(texto, pos):
-            if _parecido(m.group(1), n):
-                marca = "[^%d]" % n
-                texto = texto[:m.start(1)] + marca + texto[m.end(1):]
-                pos = m.start(1) + len(marca)
-                colocada = True
-                break
-        if not colocada:
-            no_situadas.append(n)
+    cands = [(m.start(1), m.end(1), m.group(1)) for m in CAND_RE.finditer(texto)]
+    n, m = len(numeros), len(cands)
+    if not n or not m:
+        return parrafos_cuerpo, list(numeros)
+
+    compat = [[_parecido(cands[j][2], numeros[i]) for j in range(m)] for i in range(n)]
+    # dp[i][j] = máximo de notas colocadas usando notas i.. y candidatos j..
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n - 1, -1, -1):
+        for j in range(m - 1, -1, -1):
+            mejor = dp[i][j + 1]                       # descartar el candidato j
+            if compat[i][j]:
+                mejor = max(mejor, 1 + dp[i + 1][j + 1])
+            dp[i][j] = max(mejor, dp[i + 1][j])        # descartar la nota i
+    # reconstruir
+    pares, i, j = [], 0, 0
+    while i < n and j < m:
+        if compat[i][j] and dp[i][j] == 1 + dp[i + 1][j + 1]:
+            pares.append((i, j)); i += 1; j += 1
+        elif dp[i][j] == dp[i][j + 1]:
+            j += 1
+        else:
+            i += 1
+    colocadas = {i for i, _j in pares}
+    no_situadas = [numeros[i] for i in range(n) if i not in colocadas]
+
+    # insertar de atrás hacia adelante para no invalidar posiciones
+    for i, j in reversed(pares):
+        ini_c, fin_c, _txt = cands[j]
+        texto = texto[:ini_c] + ("[^%d]" % numeros[i]) + texto[fin_c:]
     return texto.split("\n\n"), no_situadas
 
 
@@ -476,6 +577,17 @@ def main():
                     help="inclinación a partir de la cual se considera CURSIVA (def: 0.12)")
     ap.add_argument("--titulo-corto", default="",
                     help="trozo del titulillo para reconocerlo y quitarlo")
+    ap.add_argument("--notas-dir", default=None,
+                    help="carpeta con las notas ya transcritas (pdfNNN.txt, «N | texto»). "
+                         "Si se da, el aparato se corta por DÓNDE EMPIEZA la primera nota "
+                         "de cada página en vez de por el tamaño de letra, que en escaneos "
+                         "malos falla y deja el pie dentro del cuerpo.")
+    ap.add_argument("--sin-notas", action="store_true",
+                    help="no separar ni enlazar el aparato: deja el cuerpo TAL CUAL, con "
+                         "las cifras del volado intactas. Es lo que hace falta para una "
+                         "copia PRÍSTINA sobre la que integrar notas leídas aparte: si el "
+                         "cuerpo ya trae `[^N]`, esas llamadas se suman a las nuevas y "
+                         "quedan huérfanas.")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -500,13 +612,23 @@ def main():
 
     if not a.plan:
         sys.exit("hace falta --plan o --pages")
+    npp = {}
+    if a.notas_dir:
+        for f in sorted(pathlib.Path(a.notas_dir).glob("pdf*.txt")):
+            for ln in f.read_text(encoding="utf-8").splitlines():
+                m = re.match(r"\s*\d{1,3}\s*\|\s*(.+)$", ln)
+                if m:
+                    npp.setdefault(int(f.stem[3:]), []).append(m.group(1).strip())
+        sys.stderr.write(f"  {len(npp)} páginas con primera nota conocida\n")
+
     plan = json.loads(pathlib.Path(a.plan).read_text(encoding="utf-8"))
     out = pathlib.Path(a.out); out.mkdir(parents=True, exist_ok=True)
     for i, sec in enumerate(plan["sections"], 1):
         p0, p1 = sec["pages"]
-        cuerpo, notas, no_puestas = convierte(pdf, p0, p1, incl, a.umbral, a.titulo_corto)
+        cuerpo, notas, no_puestas = convierte(pdf, p0, p1, incl, a.umbral,
+                                              a.titulo_corto, a.sin_notas, npp)
         md = f"# {sec['title']}\n\n" + "\n\n".join(cuerpo)
-        if notas:
+        if notas and not a.sin_notas:
             md += "\n\n" + "\n".join("[^%d]: %s" % (n, txt) for n, txt in notas)
         # Nada se pierde en silencio: una definición SIN llamada no se imprime en el PDF,
         # así que las que no se pudieron situar quedan anotadas para la pasada manual.
