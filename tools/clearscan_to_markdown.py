@@ -292,6 +292,14 @@ def texto_de_linea(grupo):
 NUM_PARR_RE = re.compile(r"^\s*\[\d+[a-z]?\]")
 
 HEAD_RE = re.compile(r"^\s*Chapter\s+([IVXivx0-9]+(?:\.\s?[0-9]+)*)\s*[:.]", re.I)
+# La Introducción y algunos apéndices no numeran con «Chapter N.M» sino con «§N:».
+SEC_RE = re.compile(r"^\s*§\s?(\d+)\s*:\s*\S")
+# Los apéndices numeran «N. Título: …». Los DOS PUNTOS son el discriminador: las listas
+# numeradas de la prosa («1. Whole-sign houses from the Lot of Fortune.») acaban en punto
+# y no los llevan, así que no se las promueve por error.
+NUM_RE = re.compile(r"^\s*(\d{1,2})\.\s+\S.*:")
+# Títulos editoriales entre corchetes, solos en su renglón: «[The querent's thought]».
+COR_RE = re.compile(r"^\s*\[[^\]]{4,70}\]\s*$")
 
 
 def como_encabezado(txt):
@@ -300,11 +308,27 @@ def como_encabezado(txt):
     Se decide por el TEXTO y no por la tipografía: en este PDF los subapartados van en
     cursiva y los apartados en negrita, pero el `[3]` que abre párrafo comparte cuerpo y
     negrita con los apartados, así que la geometría sola confundiría ambas cosas."""
-    m = HEAD_RE.match(txt)
+    # OJO: hay que mirar el texto SIN las marcas de cursiva. En este libro los
+    # subapartados van EN CURSIVA, así que llegan aquí como «*Chapter II.1.3: …*» y un
+    # `^Chapter` no casa nunca: medido, el Libro II se quedaba con 20.508 palabras y solo
+    # 6 subtítulos, y la Introducción con 13.720 y ninguno.
+    limpio = txt.strip().strip("*").strip()
+    s = SEC_RE.match(limpio)
+    if s:
+        # Solo si la línea es CORTA: «§3 below, I will deal with…» es una remisión dentro
+        # de la prosa, no un título.
+        if len(limpio) <= 90:
+            return "## " + limpio
+        return None
+    if COR_RE.match(limpio):
+        return "### " + limpio
+    if NUM_RE.match(limpio) and len(limpio) <= 95:
+        return "## " + limpio
+    m = HEAD_RE.match(limpio)
     if not m:
         return None
     niveles = len(re.findall(r"[0-9]+", m.group(1))) + 1
-    return "#" * min(max(niveles, 2), 5) + " " + txt.strip()
+    return "#" * min(max(niveles, 2), 5) + " " + limpio
 
 
 def parrafos(lineas, sangria_extra=6):
@@ -525,7 +549,20 @@ def inserta_llamadas(parrafos_cuerpo, numeros, ventana=None):
     prefiere globalmente el emparejamiento que más notas coloca.
     """
     texto = "\n\n".join(parrafos_cuerpo)
-    cands = [(m.start(1), m.end(1), m.group(1)) for m in CAND_RE.finditer(texto)]
+    # Zonas prohibidas: encabezados, imágenes y tablas. Sin esto, las cifras del PROPIO
+    # número de apartado se toman por volados y el título acaba destrozado: medido,
+    # «Chapter II.1.1» salía como «Chapter II. [^10]. [^11]».
+    prohibido = []
+    pos = 0
+    for parr in parrafos_cuerpo:
+        if parr.lstrip().startswith(("#", "![", "|")):
+            prohibido.append((pos, pos + len(parr)))
+        pos += len(parr) + 2
+    def _vetado(i):
+        return any(a <= i < b for a, b in prohibido)
+
+    cands = [(m.start(1), m.end(1), m.group(1)) for m in CAND_RE.finditer(texto)
+             if not _vetado(m.start(1))]
     n, m = len(numeros), len(cands)
     if not n or not m:
         return parrafos_cuerpo, list(numeros)

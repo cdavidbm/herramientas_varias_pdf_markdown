@@ -38,15 +38,36 @@ def sh(cmd):
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
-def split_body_defs(md: str) -> tuple[str, str]:
-    """Separa el cuerpo del bloque FINAL contiguo de definiciones de nota `[^N]:`.
+COMENTARIO = re.compile(r"^\s*<!--.*-->\s*$")
+
+
+def split_body_defs(md: str) -> tuple[str, str, str]:
+    """Separa cuerpo / bloque FINAL de definiciones `[^N]:` / cola de comentarios HTML.
 
     Recorre desde el final saltando líneas en blanco; mientras encuentre defs las incluye
     en el bloque; se detiene en la primera línea de cuerpo (no-def, no-blanca).
+
+    **Los comentarios HTML de cierre no cuentan como cuerpo.** Un `<!-- LLAMADAS SIN
+    SITUAR: … -->` al final del archivo (lo dejan los reconstructores de aparato) hacía
+    que el bloque de notas NO se detectara: se iba entero al cuerpo, donde `chunk_paragraphs`
+    lo ve como UN párrafo gigante y agy/Gemini trunca su salida (el mismo fallo que motivó
+    `chunk_defs`). Aquí se apartan como `tail`, que se devuelve VERBATIM al final.
     """
     lines = md.split("\n")
-    split = len(lines)
-    for k in range(len(lines) - 1, -1, -1):
+    n = len(lines)
+    tail_from = n
+    for k in range(n - 1, -1, -1):
+        s = lines[k].strip()
+        if s == "":
+            continue
+        if COMENTARIO.match(lines[k]):
+            tail_from = k
+            continue
+        break
+    tail = "\n".join(lines[tail_from:]).strip()
+
+    split = tail_from
+    for k in range(tail_from - 1, -1, -1):
         s = lines[k].strip()
         if s == "":
             continue
@@ -55,8 +76,8 @@ def split_body_defs(md: str) -> tuple[str, str]:
             continue
         break
     body = "\n".join(lines[:split]).rstrip()
-    defs = "\n".join(lines[split:]).strip()
-    return body, defs
+    defs = "\n".join(lines[split:tail_from]).strip()
+    return body, defs, tail
 
 
 def chunk_paragraphs(text: str, max_words: int) -> list[str]:
@@ -137,7 +158,7 @@ def main() -> None:
         glos_local.write_text(args.glosario.read_text(encoding="utf-8"), encoding="utf-8")
     prompt = args.prompt.read_text(encoding="utf-8")
 
-    body, defs = split_body_defs(md)
+    body, defs, tail = split_body_defs(md)
     chunks = chunk_paragraphs(body, args.chunk_words)
     if defs:
         chunks_defs = chunk_defs(defs, args.chunk_words)
@@ -156,7 +177,7 @@ def main() -> None:
 
     body_es = "\n\n".join(results[:len(chunks)]).strip()
     defs_es = "\n".join(results[len(chunks):]).strip()
-    out = body_es + ("\n\n" + defs_es if defs_es else "") + "\n"
+    out = body_es + ("\n\n" + defs_es if defs_es else "") + ("\n\n" + tail if tail else "") + "\n"
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(out, encoding="utf-8")
 
@@ -172,6 +193,16 @@ def main() -> None:
     print(f"OK  {args.out}")
     print(f"    notas EN refs/defs={len(en_refs)}/{len(en_defs)}  ES refs/defs={len(es_refs)}/{len(es_defs)}"
           f"  {'✓' if es_refs==en_refs and es_defs==en_defs else '⚠ DESAJUSTE'}")
+    # el detalle importa: AÑADIR llamadas suele ser una MEJORA (agy ancla las que el OCR
+    # dejó sueltas); PERDERLAS es siempre un defecto. Huérfanas = llamada sin definición.
+    perdidas, ganadas = sorted(en_refs - es_refs, key=int), sorted(es_refs - en_refs, key=int)
+    if perdidas:
+        print(f"    ⚠ llamadas PERDIDAS ({len(perdidas)}): {', '.join(perdidas)}")
+    if ganadas:
+        print(f"    + llamadas AÑADIDAS ({len(ganadas)}): {', '.join(ganadas)} → verificar que casan con su definición")
+    huerfanas = sorted(es_refs - es_defs, key=int)
+    if huerfanas:
+        print(f"    ⚠ HUÉRFANAS en ES (llamada sin definición): {', '.join(huerfanas)}")
     print(f"    encabezados EN/ES={en_h}/{es_h}  figuras EN/ES={en_img}/{es_img}  ratio ES/EN={ratio:.2f}")
     if resid > 3:
         print(f"    ⚠ posibles restos en inglés en el cuerpo (~{resid} palabras función) → revisar")

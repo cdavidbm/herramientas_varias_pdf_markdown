@@ -249,6 +249,32 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   tablas** (restos que sobrevivieron al troceo) y en glosarios (entradas que el filtro
   de basura pegó o borró). Úsalo tras convertir un libro-diccionario para no dejar
   cabos: corre el detector, revisa cada marca contra la imagen y corrige con criterio.
+- **LAS LLAMADAS DE NOTA SE COMEN CIFRAS** cuando el escaneo tiene el margen recortado.
+  Es el defecto MÁS CARO de detectar de todos los de esta sección, porque **el balance de
+  notas cuadra perfectamente** y aun así el texto ha perdido un dato. Pasa cuando el
+  colocador de llamadas busca «el siguiente número N» por el cuerpo: si el volado real
+  está fuera de la imagen, ancla sobre la PRIMERA cifra que encuentra —un grado, un punto
+  de dignidad, un número de capítulo—. Medido en *The Search of the Heart* (50 casos):
+  `7.5°`→`7.[^95]°`, `Decano 1`→`Decano [^19]`, `*Skilled* I.5.2`→`*Skilled* I.[^50].2`,
+  `2 1/2`→`[^3]/2`, `Libros I-V`→`Libros [^1]-V`.
+  **Cómo detectarlo:** busca `[^N]` en HUECO NUMÉRICO — pegado a `°`/`′`, dentro de una
+  numeración con puntos (`I.[^50].2`), o entre dos cifras de una serie.
+  **Cómo repararlo:** casi siempre por LÓGICA, sin abrir el PDF —una serie descendente
+  5-4-3-2-1, unos doceavos que van de 2,5° en 2,5°, la numeración de capítulos del propio
+  libro— y solo el resto contra la imagen. Al restaurar la cifra la llamada DESAPARECE
+  (estaba mal puesta): esa definición pasa a «sin anclar», que es lo honesto.
+  **El mismo patrón vale en el ORIGINAL y en la TRADUCCIÓN**: el contexto numérico
+  sobrevive intacto, así que el reparador se aplica igual a `en/` y a `es/`.
+- **ENCABEZADOS PARTIDOS EN DOS RENGLONES**: si un título va centrado en dos líneas, el
+  bisturí promueve solo la primera y deja la segunda como párrafo suelto que empieza en
+  minúscula. Se cose al título (sin coma si es continuación genitiva, «…del significador»
+  + «del consultante»; con coma si es cláusula nueva). Si la continuación YA está en el
+  encabezado porque se recompuso antes contra el índice impreso, se BORRA el huérfano en
+  vez de duplicarlo.
+- **El ÍNDICE IMPRESO es el mejor contraste para los encabezados destrozados** (no solo
+  para renumerar): conserva los títulos reales, así que con él se hace una lista curada
+  de correcciones y, sobre todo, se descubre **qué capítulos FALTAN** en el markdown
+  porque su título se quedó tragado dentro del cuerpo (10 de ellos en *Search*).
 - `chapter_bounds.py libro.pdf clean.md --sections secs.json --offset N [--apply]` —
   cuando **no puedes fiarte de los encabezados** de Docling: título repetido como
   running header y promovido a encabezado en sitio equivocado (¡a mitad de frase!),
@@ -454,6 +480,19 @@ un PDF entero como sección.
    en `/tmp/`** (nunca al archivo final, para no colisionar) con notas numeradas 1-based locales;
    **tú consolidas** concatenando los tramos y **renumerando las notas por offset** (script
    Python de ~10 líneas: `re.sub(r'\[\^(\d+)\]', +offset)` + separar cuerpo/definiciones).
+5b. **Si traduces con `agy_translate.py`, VERIFICA Y REINTENTA — no es determinista.** Dos
+   modos de fallo, los dos silenciosos y caros: (a) **reemite un trozo entero** (se ve
+   como ENCABEZADOS REPETIDOS, no por el ratio: medido en un Libro que salió con 13
+   encabezados en vez de 7); (b) **pierde algún anclaje `[^N]`**. Envuelve la llamada en
+   un lanzador que compruebe encabezados repetidos, encabezados EN=ES, figuras idénticas,
+   definiciones completas y ratio, y **reintente con `--chunk-words` menor**.
+   **Calibra el criterio:** el umbral NO debe ser «cero pérdidas». Relanzar 20.000
+   palabras por 1 llamada de 257 cuesta una pasada entera y puede salir PEOR, porque el
+   reintento SOBRESCRIBE y no se comparan los dos resultados; tolera ≤2 llamadas o ≤2 %
+   y arregla el fleco a mano. En sentido contrario, **añadir** llamadas suele ser MEJORA
+   (agy ancla notas que el OCR dejó sueltas, y en un aparato con lemas latinos acierta):
+   lístalas para verificarlas una a una contra su definición, pero no las rechaces.
+
 6. **RITMO por el límite de sesión:** los agentes que leen imágenes consumen mucho → lanza
    **2 a la vez**, espera, y sigue. **Cada tramo terminado se guarda en disco**, así que una
    sesión que se corte no pierde nada: se reanuda leyendo el estado de `es/` y los parciales de
