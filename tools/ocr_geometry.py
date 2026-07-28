@@ -74,14 +74,24 @@ def parse_lines(tsv_text: str):
     return out
 
 
-def split_page(tsv_text: str):
-    """Devuelve (running_head|None, [(es_sangria, texto)], [texto_nota])."""
+def split_page(tsv_text: str, rel_indent: bool = False):
+    """Devuelve (running_head|None, [(es_sangria, texto)], [texto_nota]).
+
+    `rel_indent=True` decide el párrafo por la sangría RELATIVA a la línea
+    siguiente en vez del umbral absoluto contra la mediana de la página: es lo
+    correcto cuando el libro tiene pasajes sangrados EN BLOQUE (citas, listas,
+    párrafos numerados), donde el umbral absoluto parte la prosa renglón a
+    renglón. Por defecto se mantiene el comportamiento anterior."""
     lines = parse_lines(tsv_text)
     if not lines:
         return None, [], []
     body_h = statistics.median(h for _, h, _, _ in lines)
     rh = None
-    if RH_TOP.match(lines[0][3]) and lines[0][0] < lines[-1][0] * 0.12:
+    # Se prueba SIN marcas de énfasis: si un paso previo recuperó las cursivas del
+    # escaneo, el titulillo llega como «*TÍTULO DE LA OBRA* 33» y un `^[A-Z]` no casa
+    # nunca —el titulillo se colaba entero en el cuerpo—. En muchas ediciones el
+    # titulillo va JUSTAMENTE en cursiva o versalita, así que es el caso normal.
+    if RH_TOP.match(lines[0][3].replace("*", "").lstrip()) and lines[0][0] < lines[-1][0] * 0.12:
         rh = lines[0][3]; lines = lines[1:]
     if len(lines) < 3:
         return rh, [(False, l[3]) for l in lines], []
@@ -106,9 +116,43 @@ def split_page(tsv_text: str):
     note_lines = lines[start:] if start is not None else []
     lefts = sorted(l[2] for l in body_lines)
     base = lefts[len(lefts) // 2] if lefts else 0
-    body = [((l[2] - base) > 25, l[3]) for l in body_lines]
+    if rel_indent:
+        body = _sangria_relativa(body_lines)
+    else:
+        body = [((l[2] - base) > 25, l[3]) for l in body_lines]
     notes = [l[3] for l in note_lines]
     return rh, body, notes
+
+
+def _sangria_relativa(body_lines):
+    """Marca inicio de párrafo por la sangría RELATIVA a la línea siguiente.
+
+    El umbral ABSOLUTO contra la mediana de la página falla en los pasajes sangrados EN
+    BLOQUE —citas, listas con viñeta, párrafos numerados—: ahí TODAS las líneas están a
+    la derecha de la mediana, así que cada renglón se convierte en un párrafo. Medido en
+    The Book of the Nine Judges: el 45 % de los párrafos de la Introducción salían con
+    menos de 14 palabras, es decir, prosa despedazada.
+
+    Reglas:
+      · sangría de PRIMERA LÍNEA: la línea está a la derecha de la SIGUIENTE → párrafo
+        nuevo. Dentro de un bloque sangrado todas comparten margen, así que no dispara.
+      · CAMBIO DE MARGEN respecto a la anterior → frontera de bloque (entra o sale una
+        cita), que también es párrafo nuevo.
+    """
+    n = len(body_lines)
+    marcas = []
+    for i, l in enumerate(body_lines):
+        izq = l[2]
+        sig = body_lines[i + 1][2] if i + 1 < n else izq
+        ant = body_lines[i - 1][2] if i else izq
+        primera_linea = izq > sig + 15          # sangría de primera línea
+        # ARRANQUE DE BLOQUE: la línea se mete respecto a la anterior Y SE ALINEA con la
+        # siguiente. La segunda condición es imprescindible: sin ella la regla también
+        # dispara en el renglón que va DETRÁS de una sangría normal (vuelve al margen,
+        # y eso es un cambio de margen), y entonces cada párrafo se parte en dos.
+        arranque_bloque = izq > ant + 25 and abs(izq - sig) <= 15
+        marcas.append(primera_linea or arranque_bloque)
+    return [(m, l[3]) for m, l in zip(marcas, body_lines)]
 
 
 def _dehyph(a: str, b: str, D: set) -> str:
@@ -117,9 +161,16 @@ def _dehyph(a: str, b: str, D: set) -> str:
         stem = a[:-1]
         w1 = re.search(r"([A-Za-z]+)$", stem); w2 = re.match(r"([A-Za-z]+)", b)
         if w1 and w2:
-            j = (w1.group(1) + w2.group(1)).lower()
-            if j in D and not (w1.group(1).lower() in D and w2.group(1).lower() in D):
-                return stem + b
+            a1, a2 = w1.group(1).lower(), w2.group(1).lower()
+            j = a1 + a2
+            if j in D and not (a1 in D and a2 in D):
+                return stem + b                      # «qual-ities» → «qualities»
+            # GUION REAL, no corte de línea: si las dos mitades son palabras por su
+            # cuenta y la unión NO lo es, el guion pertenece al compuesto y hay que
+            # CONSERVARLO. Sin esto salían «out-ofsign» y «degreeintervals» (medido en
+            # The Book of the Nine Judges), que es pérdida de texto silenciosa.
+            if a1 in D and a2 in D and j not in D:
+                return stem + "-" + b
         return stem + b
     return a + " " + b if a else b
 
