@@ -265,6 +265,17 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   (estaba mal puesta): esa definición pasa a «sin anclar», que es lo honesto.
   **El mismo patrón vale en el ORIGINAL y en la TRADUCCIÓN**: el contexto numérico
   sobrevive intacto, así que el reparador se aplica igual a `en/` y a `es/`.
+- **TITULILLOS QUE SOBREVIVEN FUNDIDOS AL CUERPO**: el bisturí quita el titulillo por
+  geometría, pero en las páginas donde el OCR lo pegó a la primera línea del texto ya no
+  hay geometría que valga y **sale impreso a media página, en versales, cortando la
+  frase**. En el markdown pasa desapercibido; **solo se ve RENDERIZANDO páginas del PDF**
+  —renderizar no es un lujo, es el único control que ve esta clase de defecto—. Se borran
+  por su TEXTO, y el anclaje NO puede ser el nombre del autor (el OCR lo escribe de tantas
+  formas como páginas: `HERMANN`, `HERMAJVN`, `HERMAI\l\'`…) sino la constante: que la
+  línea EMPIECE por las primeras letras en VERSALES (sin `re.I`: en la prosa el nombre va
+  en caja mixta) y lleve el TÍTULO de la obra detrás. **Guarda obligatoria:** muchos libros
+  tienen texto legítimo en versales dentro del cuerpo (rótulos de tabla, portadillas), así
+  que borrar «toda línea en mayúsculas» destruye contenido real.
 - **ENCABEZADOS PARTIDOS EN DOS RENGLONES**: si un título va centrado en dos líneas, el
   bisturí promueve solo la primera y deja la segunda como párrafo suelto que empieza en
   minúscula. Se cose al título (sin coma si es continuación genitiva, «…del significador»
