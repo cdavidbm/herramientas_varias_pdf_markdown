@@ -54,6 +54,20 @@ chars=$(pdftotext -f 1 -l 5 x.pdf - 2>/dev/null | wc -c); echo "chars/5pp=$chars
     con poppler y deja que tesseract ponga la capa de texto (esquiva Ghostscript). Añade
     `--sidecar-out x.txt` si quieres además el texto plano.
 - **Páginas apaisadas (ancho/alto > ~1.3)** → escaneo 2-up → `python3 $T/split_pdf_spreads.py x.pdf` (deja `x_1up.pdf`) ANTES de OCR/troceo.
+  - **Si el 2-up lo vas a TRANSCRIBIR POR VISIÓN** (no OCR-ear), no uses el de arriba —que
+    corta por la mitad geométrica— sino `python3 $T/split_scan_spreads.py x.pdf ./paginas`:
+    extrae la imagen embebida con `pdfimages` (mucho más rápido que rasterizar) y corta **por
+    el LOMO detectado**, no por el centro. **Nunca ajustes el corte a la caja de texto:** se
+    come el arranque de cada línea de la página derecha («I decided to extend…» → «d to
+    extend…») y en el markdown final eso es INVISIBLE. Cortar dentro de la franja negra del
+    lomo no puede tocar texto; que asomen unas letras de la vecina es inofensivo. Verifica
+    siempre con `check_scan_margins.py ./paginas` **y con los anchos anómalos** frente a la
+    mediana (una página mucho más estrecha = corte que se comió texto). Otras dos trampas
+    medidas: promediar la tinta sobre TODA la altura trunca la caja de las páginas con pocas
+    líneas (última de capítulo, portadillas), y el recorte de bordes negros debe alternar
+    filas/columnas **recalculando**, porque una banda negra horizontal infla el perfil de todas
+    las columnas. El **folio impreso** da el mapeo página↔imagen y hay que validarlo:
+    `libro = 2·N − 6 / 2·N − 5` en Travaglia, pero el offset cambia con el front matter.
   - **OJO rotación:** si `pdfinfo` da `Page rot: 90/270`, el ratio ancho/alto que ve
     `split_pdf_spreads` es el del MediaBox SIN rotar y no detecta el 2-up. Hornea la
     rotación primero: `qpdf --flatten-rotation x.pdf x_flat.pdf`.

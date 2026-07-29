@@ -33,6 +33,7 @@
 - `split_chapters.py` — Split a single Markdown file into one file per chapter.
 - `split_pdf.py` — Split a PDF into multiple PDFs based on a chapters plan.
 - `split_pdf_spreads.py` — Turn a 2-up scanned PDF (two book pages per physical
+- `split_scan_spreads.py` — Parte un escaneo 2-up en IMÁGENES de una página, listas
 
 ## Limpieza post-conversión
 - `astro_glyphs.py` — Astrological-glyph reference + OCR-garble flagger for Markdown
@@ -73,6 +74,7 @@
 - `agy_consolidate.py` — Cose las transcripciones POR PÁGINA de agy/Gemini (o de
 - `agy_transcribe.py` — Orquesta la TRANSCRIPCIÓN VISUAL de un rango de páginas de un
 - `agy_translate.py` — Traduce un markdown de capítulo/Book a otro idioma con agy/Gemini,
+- `check_scan_margins.py` — Control de calidad del partido de un escaneo 2-up: avisa
 - `crop_figure.py` — Recorta una FIGURA (carta astral, diagrama, rueda zodiacal…)
 - `embed_figures_from_captions.py` — Añade las FIGURAS (cartas, diagramas) a un libro ya
 - `footnote_chain.py` — Separa el APARATO de notas del CUERPO cuando la única señal fiable
