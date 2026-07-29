@@ -316,6 +316,38 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   blanco inicial** y llegar a la tinta antes de buscar el hueco de arriba (una carta pasó
   de 99 a 1.585 px al corregirlo). Al incrustar, NO ancles la leyenda en `^`: al recomponer
   párrafos muchas quedan dentro del texto (medido: 35 de 70 colocadas frente a 61).
+- **APARATO DE NOTAS DE UN ESCANEO: el número NO se lee, se CUENTA.** Los volados van
+  diminutos y tesseract no los reconoce: los pega a la palabra anterior como basura
+  (`money,!!`, `it.'3`, `of]'©`) y ninguna combinación de `--psm` lo arregla. Pero la
+  POSICIÓN sí es medible: el marcador de nota tiene la **línea base ALZADA** respecto a la
+  de su renglón. Así que se cuentan marcadores y se deduce el número, usando el dígito que
+  sobreviva solo para COMPROBAR.
+  **ANTES DE NADA, AVERIGUA DÓNDE REINICIA LA NUMERACIÓN.** Es la suposición que lo decide
+  todo. En *The Book of the Nine Judges* no reinicia por sección `§N` sino por **SUBGRUPO
+  TEMÁTICO**, y el **titulillo de recto** los anuncia (MARRIAGE & RELATIONSHIPS, THEFT,
+  WAR…): con esa corrección la cadena da 191/191 y 157/157 contra el impreso; sin ella,
+  1018 donde el libro va por 195. Verifícalo leyendo los números del pie en varias páginas
+  ANTES de construir nada.
+  **Reglas que hacen falta, todas medidas:** (a) un dígito suelto que discrepa se descarta,
+  pero DOS seguidos con el mismo desfase mandan; (b) la cadena **nunca retrocede por debajo
+  de donde empezó la página**, o dos cifras del texto de una nota la hunden; (c) el
+  titulillo de VERSO lleva el título del libro y alterna con el de recto — descártalo
+  mirando la línea ENTERA, porque extrayendo primero te queda una cola que ya no se parece
+  al título (184 reinicios falsos donde hay 9); (d) el OCR TRUNCA los titulillos, así que
+  al comparar subgrupos acepta que uno esté contenido en el otro.
+  **Para las LLAMADAS del cuerpo:** geometría (cola con tinta solo en la banda alzada) MÁS
+  firma de basura. Cada señal por su cuenta da decenas de falsos por página; juntas,
+  ninguno. Y **ancla solo cuando dos señales independientes coincidan** (posición y cifra
+  superviviente): sale ~25 % de cobertura, pero un anclaje falso mueve la nota a otra frase
+  y al leer NO se nota. Ojo: si marcas las cursivas con `*`, EXCLUYE el asterisco del
+  repertorio de basura o el titulillo en cursiva se cuela como llamada y corre la página +1.
+  **Si los números se repiten dentro del archivo** (varios subgrupos con su nota 1), usa
+  etiquetas `[^grupo-numero]`: `md_to_pdf` renumera al maquetar.
+  **Y AUDITA LA COMPLETITUD DESPUÉS DE CADA CAMBIO.** Reconstruir el aparato produce
+  pérdidas de texto silenciosas: indexar definiciones por número las sobrescribe cuando la
+  numeración se repite, y una página sin marcador detectable pierde su pie ENTERO si el
+  código hace `zip` con una lista vacía. Tres pérdidas distintas (20 %, 8/9 y 16 %) en un
+  solo libro, ninguna con error y ninguna visible en el markdown.
 - **TITULILLOS QUE SOBREVIVEN FUNDIDOS AL CUERPO**: el bisturí quita el titulillo por
   geometría, pero en las páginas donde el OCR lo pegó a la primera línea del texto ya no
   hay geometría que valga y **sale impreso a media página, en versales, cortando la
