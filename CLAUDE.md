@@ -265,6 +265,43 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   (estaba mal puesta): esa definición pasa a «sin anclar», que es lo honesto.
   **El mismo patrón vale en el ORIGINAL y en la TRADUCCIÓN**: el contexto numérico
   sobrevive intacto, así que el reparador se aplica igual a `en/` y a `es/`.
+- **ESCANEO GRANDE: EXTRAE LA IMAGEN, NO RASTERICES.** Si el PDF es un escaneo con UNA
+  imagen embebida por página (compruébalo: `pdfimages -list x.pdf | tail -n+3 | awk
+  '{c[$1]++} END{for(p in c) if(c[p]!=1) print p}'`), `pdftoppm -r 300` es un despilfarro:
+  tiene que buscar dentro del archivo y rasterizar. Medido en un PDF de 736 pp / 243 MB:
+  **3,94 s/página con `pdftoppm` frente a 0,19 s con `pdfimages`**. Con eso, más llamar a
+  tesseract UNA vez para los dos formatos (`-c tessedit_create_txt=1 -c
+  tessedit_create_tsv=1`; llamarlo dos veces duplica el coste) y **`OMP_THREAD_LIMIT=1`**
+  (varios tesseract en paralelo se estorban: 60 s/pág sin el límite, 1,4 con él), el libro
+  pasó de **8 horas a 23 minutos**, con salida idéntica carácter por carácter.
+  **REESCALA a 300 ppi** las páginas que vengan por debajo o el OCR se degrada
+  (`Illness`→`[lness`).
+  **OJO con `TESSDATA_PREFIX`:** si lo apuntas a una carpeta de modelos alternativa (los
+  `best`), tesseract ya NO encuentra los ficheros de configuración `txt`/`tsv`, que viven
+  ahí dentro, y **genera solo el texto EN SILENCIO** — 736 `.txt` y 0 `.tsv`, y la
+  conversión sale vacía. Por eso hay que usar los `-c tessedit_create_*`, que no dependen
+  de dónde estén los modelos.
+- **CURSIVAS DE UN ESCANEO PURO: mide la INCLINACIÓN DEL TRAZO.** Cuando no hay capa de
+  texto, el truco de ClearScan (medir las fuentes embebidas) no aplica, y tesseract no
+  marca la cursiva: su hOCR solo emite `x_fsize`. La señal está en los píxeles: se cizalla
+  el recorte de cada palabra en un abanico de ángulos y se elige el que hace más PICUDO el
+  histograma de la proyección vertical (los trazos verticales se alinean). Imprescindible
+  **recortar a la banda de ALTURA-X antes de medir**: si no, la `y`, la `g` y la `p` fingen
+  una inclinación que no está en el trazo. Medido: **8 de 8 aciertos y 0,2 % de falsos**;
+  en el cuerpo la separación es de 16° (cursiva −16°, redonda 0°) pero **en el pie baja a
+  3°**, así que ahí se sub-detecta: es un límite, no un fallo. Y la imagen medida tiene que
+  ser EXACTAMENTE la que vio tesseract, o las coordenadas del TSV no encajan y la cursiva
+  sale desplazada una palabra. Vectoriza el barrido con numpy (bincount por ángulo): de 6 a
+  2,3 s/página.
+- **FIGURAS DENTRO DEL ESCANEO DE PÁGINA** (no como objetos aparte): se recortan por
+  región. La leyenda («Figure 12: …») da el borde inferior; el superior se busca hacia
+  arriba hasta la primera racha en blanco MÁS LARGA QUE EL INTERLINEADO de esa página
+  —calculado de la propia página, que varía—. **Dos trampas:** (1) un umbral fijo de ~28
+  filas coincide con el hueco normal entre renglones y devuelve recortes de 30-50 px;
+  (2) entre la figura y su leyenda YA hay un hueco grande, así que hay que **saltar el
+  blanco inicial** y llegar a la tinta antes de buscar el hueco de arriba (una carta pasó
+  de 99 a 1.585 px al corregirlo). Al incrustar, NO ancles la leyenda en `^`: al recomponer
+  párrafos muchas quedan dentro del texto (medido: 35 de 70 colocadas frente a 61).
 - **TITULILLOS QUE SOBREVIVEN FUNDIDOS AL CUERPO**: el bisturí quita el titulillo por
   geometría, pero en las páginas donde el OCR lo pegó a la primera línea del texto ya no
   hay geometría que valga y **sale impreso a media página, en versales, cortando la
