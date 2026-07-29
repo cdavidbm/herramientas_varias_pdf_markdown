@@ -80,6 +80,14 @@ chars=$(pdftotext -f 1 -l 5 x.pdf - 2>/dev/null | wc -c); echo "chars/5pp=$chars
     densidad de tinta) → tesseract *best* por mitad (texto + `-c tessedit_create_pdf=1`)
     → `pdfunite` para el buscable upright. Orden de lectura: izquierda antes que derecha
     por hoja. Medido en «Project Hindsight Companion» (33 hojas → 65 páginas upright).
+    **Si lo vas a TRANSCRIBIR POR VISIÓN, no partas por la mitad ni por el valle de una
+    banda fija en torno al centro:** el escaneo lleva un margen de mesa que DESCENTRA el
+    spread y el corte cae dentro del texto, dejando la página izquierda sin el final de
+    cada línea (invisible después en el markdown). Localiza las **dos cajas de texto** por
+    el perfil de tinta suavizado y corta en mitad del hueco que las separa; y recorta cada
+    mitad a su caja de tinta, no por «bandas oscuras» (aquí el fondo es CLARO y ese recorte
+    actúa distinto en cada hoja, descuadrando el partido). Y `pdfimages` en vez de
+    `pdftoppm`: 44 hojas → 88 páginas en 12 s. Medido en *On the Stellar Rays* (Zoller/Hand).
   - **Escaneo MUY degradado donde `pdftotext -layout` REMEZCLA la prosa:** en algunos
     escaneos (bordes curvos de cuadernillo, bleed, columnas mal detectadas) el
     `-layout` dispersa el cuerpo en fragmentos de margen derecho («each», «es», «oth-»,
@@ -126,6 +134,29 @@ capítulo con bisturí, revisa el `.md`; si quedó sucio, repite con Docling.
 > línea a línea sale en frases mestizas. Es el único bisturí que hace ambas cosas,
 > así que «multicolumna → Docling» NO aplica si son columnas paralelas o hay
 > cursiva significativa.
+>
+> **Lo que hay que pulir DESPUÉS** (medido en Partridge, *Al-Kindi's Theory of the Magical
+> Arts*): el PDF corta la cursiva en cada salto de renglón (`*The Philosophical Works of
+> Al-*` `*Kindi*`), así que hay que fusionarla — pero la fusión **no puede cruzar el salto
+> de línea** (con `\s*`, que incluye `\n`, se encadenan las marcas de párrafos distintos y
+> el frente del libro entero acaba en una cursiva) y hay que **apartar las negritas antes**
+> (`**` son dos asteriscos adyacentes: la fusión los colapsa y deja los títulos como texto
+> corrido). El folio suelto se convierte en `<!-- p. N -->`; las definiciones de nota salen
+> CONCATENADAS en una línea por página y sin los dos puntos; y las leyendas de figura
+> maquetadas AL LADO del texto se cuelan a media frase, a veces partidas en dos trozos.
+>
+> **NUNCA cuentes llamadas de nota con «no seguido de dos puntos»** (`\[\^(\d+)\](?!:)`):
+> hay llamadas legítimas delante de un dos puntos («…la verdadera naturaleza de la
+> realidad[^23]:»). Una definición es la que **ABRE RENGLÓN**. Este error aparece siempre
+> disfrazado de «nota huérfana» y hace perder tiempo.
+>
+> **Y ojo con el aparato de DOS CAPAS** (notas del traductor + notas largas del editor, como
+> en Project Hindsight): si las notas del editor tienen VARIOS PÁRRAFOS, un separador que
+> cierre la definición en el primer renglón en blanco deja los párrafos siguientes sueltos en
+> el cuerpo, y al consolidar se acumulan al final del libro —impresos como prosa **después
+> del colofón**—. Se detectan buscando líneas sangradas ANTES de la primera `[^N]:` del
+> archivo. Además: **si un título de capítulo lleva llamada de nota**, y el título es el
+> delimitador del troceo, esa nota se queda sin definición.
 
 > **Escaneo largo o equipo que se puede cerrar:** usa
 > `python3 $T/docling_incremental.py x.pdf --out ./markdown` — procesa por lotes
@@ -539,6 +570,20 @@ un PDF entero como sección.
   nada de eso. Requiere **lualatex + memoir + starfont** (`setup.sh` NO lo comprueba;
   si falta, instala TeX Live). **Compila bajo `systemd-run --user -p MemoryMax=4G`**:
   un bucle de lualatex puede congelar el equipo.
+  - **CARACTERES PERDIDOS: MÍDELOS, no leas el log.** Más fiable que buscar «Missing
+    character»: extrae el texto del PDF y compara el conjunto de caracteres **no ASCII** del
+    markdown con el del PDF; lo que esté en el md y no en el PDF se perdió EN SILENCIO.
+    Medido: **Latin Modern no tiene** varios signos de transliteración corrientes en este
+    fondo —`ḳ` U+1E33, `ẖ` U+1E96, `ʻ` U+02BB, `ʼ` U+02BC— ni el árabe. Se arreglan con
+    `--font-fallback "Charis SIL"` (fuente SIL, hecha para transliteración: cubre los cuatro)
+    y `--arabic-font "Noto Naskh Arabic"`.
+  - **Los marcadores `<!-- p. N -->` en línea propia PARTEN el párrafo al maquetar**: un
+    comentario HTML aislado es un BLOQUE para pandoc, así que sale punto y aparte donde el
+    libro sólo cambiaba de página. **En el markdown no se ve; en el PDF sí.** Pásalos inline,
+    al final de la línea anterior, cuando la frase continúa (la siguiente arranca en
+    minúscula). Al detectarlos, busca la línea anterior **HACIA ATRÁS**: entre el texto y el
+    marcador hay un renglón EN BLANCO y comparar con la inmediata no detecta ni un caso. No
+    los unas tras una leyenda de figura. Medido: 95 párrafos partidos en el clúster «de radiis».
 - Entregar un capítulo suelto en otro formato: `pandoc cap.md -o cap.epub|.docx`.
 - **Libro fuente en LaTeX** (ediciones tipo janegca de Valens y clásicos helenísticos)
   → `python3 $T/latex_to_markdown.py maestro.tex --root ./src --out libro.md`.
