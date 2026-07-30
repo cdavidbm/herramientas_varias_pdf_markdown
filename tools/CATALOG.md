@@ -17,6 +17,7 @@
 - `pdf_chapters_to_markdown.py` — Convert one or more pre-split chapter PDFs
 - `pdf_rich_to_markdown.py` — Extrae un PDF DIGITAL a markdown conservando las
 - `pdf_sections_to_markdown.py` — Split a PDF into one markdown file per logical
+- `pdfxml_to_markdown.py` — bisturí para PDF digitales cuya capa de texto está
 - `rtf_to_markdown.py` — Convert an RTF book into per-section markdown,
 
 ## Sondas / diagnóstico

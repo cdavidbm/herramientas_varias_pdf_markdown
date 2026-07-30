@@ -534,6 +534,7 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
 |---|---|
 | **Cursiva significativa** o **2 columnas paralelas** original/traducción | `pdf_rich_to_markdown.py` (ver recuadro arriba) |
 | **PDF de Acrobat ClearScan** (`pdfinfo` dice «Paper Capture … ClearScan») | `clearscan_to_markdown.py` (ver recuadro abajo) |
+| **PDF digital cuya capa de texto está INCOMPLETA**: se pierden las llamadas de nota, los puntos suscritos o los dígitos | `pdfxml_to_markdown.py` (ver recuadro abajo) |
 | Carpeta de **un PDF por capítulo**, notas a pie | `pdf_chapters_to_markdown.py plan.json` |
 | **Un PDF digital limpio** (Calibre, con outline) | `detect_chapters.py` → `plan.json` → `pdf_sections_to_markdown.py plan.json` |
 | Libro **escaneado ya OCR-eado** con citas Harvard | `pdf_book_to_markdown.py` |
@@ -558,6 +559,35 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
 > del texto sin estilo—; (2) para rehacer párrafos hay que usar la sangría **relativa a la
 > línea siguiente**, no la absoluta: los párrafos en BLOQUE (citas, párrafos numerados
 > `[3]`) tienen todas sus líneas metidas y con un umbral absoluto se parten una a una.
+
+> **PDF DIGITAL con la capa de texto INCOMPLETA** (nativo, `pdftotext` da prosa legible,
+> pero faltan cosas que NADIE ve) → `pdfxml_to_markdown.py`. Medido en Attrell & Porreca,
+> *Picatrix* (Penn State, 2019). Tres pérdidas simultáneas y todas silenciosas:
+> (1) **las llamadas de nota desaparecen** —los volados van en una fuente sin `ToUnicode`
+> y se extraen como cadena vacía o PUA: en el texto solo queda un doble espacio, y el
+> aparato entero (95 notas) se evapora sin que el ratio ni el balance lo delaten—;
+> (2) **el punto suscrito de las transliteraciones** se compone con una fuente aparte
+> (`…DotUnder…`), así que `al-Qurṭubī` sale `al-Qurtubī` —una errata invisible—; y
+> (3) **los dígitos elzevirianos** (tablas, cifras) son glifos PUA que ni `pdftotext` ni
+> `mutool` extraen: la tabla conserva los rótulos y PIERDE los números.
+> **Cómo se resuelve:** `pdftohtml -xml` da posición + familia + tamaño por palabra en
+> 0,4 s (pdfminer tarda MINUTOS por página con fuentes Type 3). La familia dice qué lleva
+> punto suscrito; el volado se reconoce por la **LÍNEA BASE ALZADA** —no por el tamaño,
+> porque los dígitos elzevirianos también son bajos (260 glifos pequeños frente a 77
+> volados reales)— y se CUENTA, como en un escaneo. Los glifos PUA de los dígitos se
+> deducen comparando UNA tabla con su imagen y se pasan con `--charmap "U+F63A=2,…"`;
+> entonces la llamada además se puede LEER, lo que da un **cotejo de dos señales
+> independientes** (contada vs. impresa) que destapa cualquier desfase.
+> **Trampas medidas:** los `<fontspec>` son GLOBALES (declararlos por página deja 33 de 34
+> sin estilo); un volado de dos cifras son DOS glifos contiguos (sin agrupar, sales al
+> doble de notas); `pdftohtml` no emite token de espacio entre palabras —el espacio se
+> deduce del HUECO, y sin eso al cerrar una cursiva las palabras se pegan
+> (`*Picatrix*stand`)—; y el aparato de final de libro reinicia en «1.», así que si no
+> cortas ahí las notas de la sección siguiente se cuelan dentro de la última definición.
+> **Límite honesto:** las tablas SIMPLES salen bien (`--tables`), las de encabezado
+> apilado quedan aproximadas; y cada fuente de versalitas tiene SU propio mapeo corrupto,
+> así que un `--charmap` global de una sola letra puede estropear otra fuente: mapea
+> cadenas enteras (`Å±ÆÁÂ=TABLE`) y verifica contra la imagen.
 
 `detect_chapters.py` lista páginas candidatas (no escribe el plan); con eso
 **redactas el `plan.json`** y corres el conversor con `--dry-run` primero.
