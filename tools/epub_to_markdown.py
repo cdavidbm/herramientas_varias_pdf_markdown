@@ -416,7 +416,7 @@ class Converter:
 def load_footnote_lookup(html: str, fmt: str = "by_a_id") -> dict[str, str]:
     """Parse a footnote-pool file into {anchor_id -> markdown body}.
 
-    Two formats are supported:
+    Three formats are supported:
 
     * `by_a_id` (default, Study Quran / Davies pattern):
         <p class="footnote"><a id="bX_fnN" href="...">N.</a> body...</p>
@@ -425,6 +425,11 @@ def load_footnote_lookup(html: str, fmt: str = "by_a_id") -> dict[str, str]:
         <div class="nota"><p id="ntN"><sup>[N]</sup> body... <a href="ref">&lt;&lt;</a></p></div>
       The id lives on the `<p>` itself; the body has a leading <sup>[N]</sup>
       and a trailing back-link `<a>` that we strip.
+    * `by_a_id_any` (Calibre/Kindle pattern, e.g. Picatrix Liber Atratus):
+        <p class="calibre_2">[<a id="filepos…" href="…">N</a>] body...</p>
+      Same idea as `by_a_id` but the paragraph carries an arbitrary class, so
+      we accept ANY <p> whose first <a> has an id, and strip the surrounding
+      brackets of the leading `[N]` marker.
     """
     soup = BeautifulSoup(html, "html.parser")
     out: dict[str, str] = {}
@@ -457,10 +462,14 @@ def load_footnote_lookup(html: str, fmt: str = "by_a_id") -> dict[str, str]:
                 out[anchor_id] = text
         return out
 
-    # Default: by_a_id
-    for p in soup.find_all("p", class_="footnote"):
-        if not isinstance(p, Tag):
-            continue
+    # by_a_id (default) and by_a_id_any: the id lives on the first <a> inside
+    # the paragraph. They differ only in which paragraphs are eligible.
+    if fmt == "by_a_id_any":
+        candidates = [p for p in soup.find_all("p") if isinstance(p, Tag)]
+    else:
+        candidates = [p for p in soup.find_all("p", class_="footnote")
+                      if isinstance(p, Tag)]
+    for p in candidates:
         a = p.find("a")
         if not isinstance(a, Tag):
             continue
@@ -470,9 +479,13 @@ def load_footnote_lookup(html: str, fmt: str = "by_a_id") -> dict[str, str]:
         a.extract()
         conv = Converter(footnote_lookup={})
         text = "".join(conv._inline(c) for c in p.children)
+        # Leading marker left behind by the extracted <a>: "N." or the
+        # brackets of "[N]" (by_a_id_any).
         text = re.sub(r"^\s*\d+\.\s*", "", text)
+        text = re.sub(r"^\s*\[\s*\]\s*", "", text)
         text = re.sub(r"\s+", " ", text).strip()
-        out[anchor_id] = text
+        if text:
+            out[anchor_id] = text
     return out
 
 

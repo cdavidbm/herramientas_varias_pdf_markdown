@@ -80,6 +80,7 @@
 - `embed_figures_from_captions.py` — Añade las FIGURAS (cartas, diagramas) a un libro ya
 - `footnote_chain.py` — Separa el APARATO de notas del CUERPO cuando la única señal fiable
 - `footnotes_from_pdf.py` — Reconstruye el APARATO DE NOTAS leyendo el del PDF original.
+- `footnotes_redistribute.py` ⚠ — mueve las definiciones `[^N]:` agrupadas al final
 - `imprime_sin_anclar.py` — evita que el PDF se coma las notas que no tienen llamada.
 - `limpia_dudas.py` — resuelve las marcas `[?: …]` que el traductor dejó como deuda declarada.
 - `normaliza_autores.py` — arregla el nombre de la AUTORIDAD al final de cada encabezado.
