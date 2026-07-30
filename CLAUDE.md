@@ -10,7 +10,7 @@ diagnosticas el documento y eliges la herramienta correcta tú mismo**.
 > máquina o sin la skill cargada.
 
 > **¿Qué herramientas hay? → [`tools/CATALOG.md`](tools/CATALOG.md).** Es el índice
-> ÚNICO de las 46 tools, agrupadas y con su propósito, **autogenerado desde los
+> ÚNICO de las 67 tools, agrupadas y con su propósito, **autogenerado desde los
 > docstrings** (`python3 tools/catalog.py --write`), así que no se desincroniza.
 > Ante un libro difícil, consúltalo para no reinventar lo que ya existe. Este
 > CLAUDE.md da la RECETA (qué usar y en qué orden); el catálogo da el INVENTARIO.
@@ -390,6 +390,50 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   en caja mixta) y lleve el TÍTULO de la obra detrás. **Guarda obligatoria:** muchos libros
   tienen texto legítimo en versales dentro del cuerpo (rótulos de tabla, portadillas), así
   que borrar «toda línea en mayúsculas» destruye contenido real.
+  **Automatizado en `quita_titulillos_fundidos.py`**, que exige las TRES constantes a la vez
+  —4+ versales, número de página al final, y ningún fragmento en minúscula en el prefijo— y
+  con `--encabezados` borra además los titulillos que el conversor llegó a PROMOVER a
+  encabezado («# §A: INTRODUCTORY MATTERS 57»), pero solo si puede probar que están
+  duplicados. Medido: 68 casos en *Nine Judges*. Ojo, **el discriminante es el nº de página,
+  no las versales**: «VIDA», «AMISTADES», «CARRERAS DE CABALLOS» eran rótulos legítimos.
+- **UN CAPÍTULO ENTERO PUEDE VIVIR DENTRO DEL APARATO, y ningún control lo nota.** En §7 de
+  *Nine Judges*, 26 «definiciones de nota» eran en realidad el texto de un capítulo con su
+  título y su autoridad —y **23 de esos capítulos no estaban en el cuerpo en absoluto**—.
+  Se habrían impreso como notas al pie al final de la sección. No lo ve NADA de lo habitual:
+  el balance de notas cuadra (son definiciones válidas), el recuento de encabezados cuadra
+  (nunca hubo encabezado que perder) y el ratio de palabras cuadra (el texto está, en el
+  sitio equivocado). **Solo se ve preguntándose DÓNDE está el texto, no SI está.**
+  `rescata_capitulos.py cap.md --apply` los devuelve al cuerpo: la definición que abre por
+  `§N.M: Título—Autoridad` arranca el bloque, y las etiquetas siguientes que empiezan en
+  MINÚSCULA son su continuación partida por el salto de página. Dos avisos medidos: al
+  reubicar, las llamadas de las etiquetas consumidas quedan **huérfanas** (hay que quitarlas)
+  y algún bloque trae una nota real empalmada dentro del TÍTULO, que hay que separar a mano.
+- **ATRIBUCIONES DE AUTORÍA DESTROZADAS** (compendios que asignan cada capítulo a una
+  autoridad tras una raya: «—Sahl», «—ʿUmar»): el OCR escribe nueve nombres de cincuenta
+  formas —«Sah», «SahF», «Sahb», «Jitjis», «al-Kindr», «aAristotle»— y al limpiar la basura
+  del final algunos quedan TRUNCADOS. Como el repertorio es CERRADO se normaliza sin adivinar:
+  `normaliza_autores.py ./es --idioma es --apply`. **Dos guardas que evitaron destrozos:** un
+  `[^N]` pegado al nombre es una LLAMADA legítima y hay que preservarla; y el guion de
+  «al-Rijāl» NO es separador de autoría —tomarlo por tal se comía el «I.5.1» de un título—.
+- **COTEJAR EL APARATO CONTRA EL PIE IMPRESO** cuando las notas se reconstruyeron contando
+  marcadores: `coteja_aparato.py cap.md --pdf libro.pdf --paginas 28-67` OCR-ea la franja
+  inferior de cada página, lee los números REALES (en el pie sí van en cuerpo normal, al
+  contrario que los volados) y compara por el ARRANQUE DEL TEXTO, no por el número, de modo
+  que el desfase aparece como patrón. Medido en la Introducción de *Nine Judges*: 5 notas
+  corridas +1, 4 corridas +2 y 2 desaparecidas. **La causa raíz era que el conversor PARTÍA
+  en dos las notas que cruzan un salto de página** y registraba cada mitad como nota nueva;
+  cada partición mete un número de más y desde ahí todo se corre. El balance refs↔defs
+  cuadraba y el markdown se leía sin sobresaltos.
+- **MARCAS DE DUDA DEL TRADUCTOR** (`[?: …]`, cuando se le prohíbe inventar ante un resto de
+  OCR): no todas son iguales y tratarlas igual es el error. `limpia_dudas.py ./es --apply`
+  las clasifica en tres: RUIDO (la cola de una llamada de nota que el escaneo se comió → se
+  borra), REFERENCIA cruzada donde la marca es lo ÚNICO que hay («Véase `[?: VIL6.]`» → se
+  repara normalizando el destrozo `I`↔`J [ L T H U 1`) y lo demás, que se LISTA para mirarlo
+  a mano. Medido: de 682 marcas, 469 eran ruido y 33 referencias reparables. **La señal que
+  distingue redundante de portante es si lo de DELANTE queda abierto** (palabra función o
+  paréntesis sin cerrar): «*Recti* [?: Reefi]» no perdió nada, «asoció a [?: …]» perdió
+  «Trismegisto». Y cuidado: una marca puede estar sustituyendo a un conector —`[?: *¢>*]`
+  era un `&`, y borrarlo dejaba «Éxito fracaso en la vida»—.
 - **ENCABEZADOS PARTIDOS EN DOS RENGLONES**: si un título va centrado en dos líneas, el
   bisturí promueve solo la primera y deja la segunda como párrafo suelto que empieza en
   minúscula. Se cose al título (sin coma si es continuación genitiva, «…del significador»
@@ -577,6 +621,25 @@ un PDF entero como sección.
     fondo —`ḳ` U+1E33, `ẖ` U+1E96, `ʻ` U+02BB, `ʼ` U+02BC— ni el árabe. Se arreglan con
     `--font-fallback "Charis SIL"` (fuente SIL, hecha para transliteración: cubre los cuatro)
     y `--arabic-font "Noto Naskh Arabic"`.
+  - **UNA NOTA SIN LLAMADA NO SE IMPRIME.** pandoc solo saca una nota si existe la LLAMADA
+    `[^etiqueta]` en el cuerpo; la definición huérfana se descarta **EN SILENCIO**. Es
+    demoledor en libros cuyo aparato se reconstruyó contando marcadores en un escaneo, donde
+    solo se ancla una minoría: medido en *Nine Judges*, **1.463 notas de 1.995 no salieron**
+    en el PDF —el log limpio, el balance refs↔defs cuadrando y el ratio de palabras del
+    markdown intacto, porque el texto está: es la maquetación la que lo tira—.
+    **Cómo se ve:** extrae el texto del PDF y busca en él el arranque de CADA definición del
+    markdown (normalizando la partición de palabras a final de línea, o salen ~50 falsos
+    positivos). **Cómo se arregla:** `imprime_sin_anclar.py ./es --apply` convierte las
+    definiciones sin llamada en texto corriente al final de su archivo, con su número, bajo
+    un epígrafe. Así se imprimen todas sin fingir un anclaje no verificado. En *Nine Judges*
+    el libro pasó de 614 a 753 páginas.
+  - **Y una llamada DENTRO DE UN ENCABEZADO también se descarta.** `## §10.1: Título—Sahl[^2]`
+    pierde la nota (y ensucia el índice). Sácala al primer párrafo del capítulo: 28 casos en
+    *Nine Judges*, 28 notas recuperadas.
+  - **RENDERIZA UNA PÁGINA Y MÍRALA: es el único control que ve esto.** En un muestreo salió
+    un **titulillo de página impreso a media prosa** («*§§7.60-71: MERCANCÍAS ¢” PRECIOS 279*»,
+    con el `&` destrozado y el folio dentro). Iba en CURSIVA, así que el limpiador que solo
+    miraba texto normal no lo veía, y ninguna medición de texto lo delata.
   - **Los marcadores `<!-- p. N -->` en línea propia PARTEN el párrafo al maquetar**: un
     comentario HTML aislado es un BLOQUE para pandoc, así que sale punto y aparte donde el
     libro sólo cambiaba de página. **En el markdown no se ve; en el PDF sí.** Pásalos inline,
