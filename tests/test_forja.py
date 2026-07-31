@@ -935,3 +935,46 @@ class TraducirLibro(unittest.TestCase):
         en = "# T\n\nUno[^1] dos tres cuatro cinco.\n\n[^1]: nota\n"
         es = "# T\n\nUno[^1] dos tres cuatro cinco.\n\n[^1]: nota\n"
         self.assertEqual(traducir_libro.verificar(en, es), [])
+
+
+class ImagenesInline(unittest.TestCase):
+    """Una imagen diminuta es un glifo a media frase, no una lámina."""
+
+    def _png(self, alto):
+        import struct, zlib
+        ihdr = struct.pack(">II", 40, alto) + b"\x08\x02\x00\x00\x00"
+        chunk = b"IHDR" + ihdr
+        return (b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + chunk
+                + struct.pack(">I", zlib.crc32(chunk)))
+
+    def test_glifo_pequeno_va_en_linea(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "images").mkdir()
+            (root / "images/g.png").write_bytes(self._png(20))
+            conv = epub_to_markdown.Converter(image_dir="imagenes", image_root=root,
+                                              inline_img_px=60)
+            html = '<p>de los cuernos <img src="images/g.png"/> , y de la cola</p>'
+            out = "\n".join(conv.convert_file(html, filename="x.html"))
+            # todo en un renglón: la frase no se parte
+            self.assertRegex(out, r"cuernos !\[\]\(imagenes/g\.png\)")
+            self.assertNotIn("\n\n![", out)
+
+    def test_lamina_grande_sigue_siendo_bloque(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "images").mkdir()
+            (root / "images/lam.png").write_bytes(self._png(900))
+            conv = epub_to_markdown.Converter(image_dir="imagenes", image_root=root,
+                                              inline_img_px=60)
+            html = '<p>Texto.</p><p><img src="images/lam.png"/></p>'
+            out = "\n".join(conv.convert_file(html, filename="x.html"))
+            self.assertIn("\n\n![](imagenes/lam.png)", out)
+
+    def test_sin_image_root_no_mide_y_deja_bloque(self):
+        conv = epub_to_markdown.Converter(image_dir="im", inline_img_px=60)
+        html = '<p>a <img src="images/g.png"/> b</p>'
+        out = "\n".join(conv.convert_file(html, filename="x.html"))
+        self.assertIn("![](im/g.png)", out)

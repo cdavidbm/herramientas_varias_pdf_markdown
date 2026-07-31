@@ -143,7 +143,9 @@ class Converter:
                  bold_classes: set[str] | None = None,
                  heading_paragraphs: dict[str, int] | None = None,
                  image_dir: str = "",
-                 image_skip: set[str] | None = None):
+                 image_skip: set[str] | None = None,
+                 image_root: Path | None = None,
+                 inline_img_px: int = 60):
         self.footnote_lookup = footnote_lookup or {}
         # Emphasis carried by CSS CLASS instead of <i>/<em> (Calibre and most
         # Kindle exports do this: <span class="italic"> or <span class="calibre12">
@@ -160,6 +162,11 @@ class Converter:
         self.image_dir = image_dir
         self.image_skip = image_skip or set()
         self.used_images: set[str] = set()
+        # Altura (px) por debajo de la cual una imagen se considera un glifo
+        # inline y no una lámina. Necesita la raíz del EPUB para medirla.
+        self.inline_img_px = inline_img_px
+        self.image_root = image_root
+        self._img_cache: dict[str, int] = {}
         # Normalised section title, used to suppress an in-document heading that
         # merely repeats the plan-provided H1 (a very common EPUB duplication,
         # independent of the book's CSS classes).
@@ -212,6 +219,33 @@ class Converter:
         self.used_footnotes.append((num, body))
         return num
 
+    def _img_height(self, src: str) -> int:
+        """Alto en px del JPEG/PNG, leído de la cabecera (0 si no se puede)."""
+        if src in self._img_cache:
+            return self._img_cache[src]
+        h = 0
+        if self.image_root:
+            hits = [self.image_root / src]
+            hits += list(self.image_root.rglob(src.rsplit("/", 1)[-1]))
+            for cand in hits:
+                if not cand.is_file():
+                    continue
+                b = cand.read_bytes()
+                try:
+                    if b[:2] == b"\xff\xd8":                      # JPEG
+                        i = 2
+                        while i < len(b) - 9 and b[i] == 0xFF:
+                            if b[i + 1] in (0xC0, 0xC1, 0xC2):
+                                h = int.from_bytes(b[i + 5:i + 7], "big"); break
+                            i += 2 + int.from_bytes(b[i + 2:i + 4], "big")
+                    elif b[1:4] == b"PNG":
+                        h = int.from_bytes(b[20:24], "big")
+                except Exception:
+                    h = 0
+                break
+        self._img_cache[src] = h
+        return h
+
     # ---- inline -------------------------------------------------------------
 
     def _inline(self, node) -> str:
@@ -243,6 +277,12 @@ class Converter:
                 return ""
             self.used_images.add(src)
             alt = _attr(node, "alt").strip()
+            # Una imagen DIMINUTA es un glifo a media frase (un signo zodiacal, una
+            # palabra en otro alfabeto), no una lámina. Emitirla como BLOQUE parte
+            # la frase en tantos trozos como glifos —37 en el cap. 52 de Agripa— y
+            # el párrafo deja de leerse, en el markdown y en el PDF. Va en LÍNEA.
+            if self._img_height(src) and self._img_height(src) <= self.inline_img_px:
+                return f"![{alt}]({self.image_dir}/{name})"
             return f"\n\n![{alt}]({self.image_dir}/{name})\n\n"
         if "image" in classes:
             return ""
@@ -746,6 +786,9 @@ def main() -> int:
     ap.add_argument("--images", type=str, default="",
                     help="Extract images into OUTPUT_DIR/NAME and link them "
                          "from the markdown (default: drop images)")
+    ap.add_argument("--inline-img-px", type=int, default=60,
+                    help="las imágenes de menos de N px de alto se emiten EN LÍNEA "
+                         "(son glifos a media frase, no láminas); 0 lo desactiva")
     ap.add_argument("--image-skip", type=str, default="",
                     help="Comma-separated image basenames to ignore (e.g. the cover)")
     args = ap.parse_args()
@@ -875,7 +918,9 @@ def main() -> int:
                              bold_classes=bold_classes,
                              heading_paragraphs=heading_paragraphs,
                              image_dir=image_dir,
-                             image_skip=image_skip)
+                             image_skip=image_skip,
+                             image_root=text_root,
+                             inline_img_px=args.inline_img_px)
             parts: list[str] = [f"# {title}", ""]
 
             missing = []

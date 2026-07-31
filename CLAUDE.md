@@ -908,6 +908,15 @@ distintas, y **tratarlas igual es el error**:
   **NO transcribir**. Copiarlas a mano introduce erratas invisibles donde cada letra
   cuenta; la imagen es la fuente y lo honesto es dejarla, traduciendo solo el título.
 - **Sellos, sigilos, caracteres y diagramas** → se quedan como imagen: son glifos.
+  Y a veces la imagen ES el contenido: el cap. 52 de Agripa trata DE LAS FORMAS de los
+  caracteres y muestra **dos variantes históricas** del de Saturno, ninguna igual al ♄
+  moderno. Sustituirlas por Unicode destruiría justo aquello de lo que habla el capítulo.
+
+**El defecto de verdad no era transcribirlas, sino que iban en BLOQUE.** Un glifo de 20 px
+emitido como párrafo propio **parte la frase en tantos trozos como glifos** —37 en ese
+capítulo—, y el párrafo deja de leerse tanto en el markdown como en el PDF. Las imágenes
+por debajo de ~60 px de alto van EN LÍNEA: `epub_to_markdown.py --inline-img-px 60`
+(por defecto). Medido en Agripa: 61 glifos, 123 archivos recompuestos.
 
 **Clasifícalas por DIMENSIONES antes de decidir** (`< 80 px` de alto = palabra inline;
 `> 600×500` = lámina o tabla), no por el capítulo en el que caen: en el mismo capítulo de
