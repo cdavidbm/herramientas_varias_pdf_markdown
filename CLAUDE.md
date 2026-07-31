@@ -668,6 +668,26 @@ EPUB muy ilustrado → `epub_illustrated_to_markdown.py`.
 > título, así que hay que quitar todas las negritas del encabezado (las cursivas no:
 > en un título son significativas).
 >
+> **EPUB DE EDITORIAL (InDesign/Inner Traditions), cuatro trampas más.** Medido en
+> *Three Books of Occult Philosophy* (Agripa, trad. Eric Purdue): 214 capítulos,
+> 3.026 notas, 194 imágenes.
+> (1) El pool se llama **`_ftn.xhtml`** y `build_plan` no reconocía esa abreviatura:
+> daba «no footnote pool detected» y se habrían perdido las 3.026 notas enteras. Ya
+> está en `FOOTNOTE_NAME`; ante un «no pool detected», **mira tú los nombres de
+> archivo antes de creértelo**.
+> (2) El `<sup>` de la llamada lleva **DOS `<a>`**: primero el ancla VACÍA de destino
+> (`<a id="nr36"></a>`) y luego el enlace al pool. Quedarse con el primero deja la
+> nota sin resolver y el genérico de `<sup>` escupe un **circunflejo suelto** delante
+> del marcador (`superior,^[^1]`) — 3.026 veces.
+> (3) En `by_p_id` la definición **ABRE con su número enlazado**
+> (`<a href="…#nr36"><b>1</b></a>.`), que quedaba como `**1**.` al principio de cada nota.
+> (4) El **título del capítulo viene PARTIDO en dos párrafos** (`chn` = «Chapter 1»,
+> `cht` = el título) y el plan los une en el H1, así que cada trozo se imprimía otra
+> vez debajo del encabezado.
+> **Y la guarda que faltaba desde siempre:** la deduplicación por título EXACTO no
+> miraba la POSICIÓN, así que un párrafo del cuerpo que coincidiera con el título se
+> borraba en silencio a mitad de capítulo. Eso es pérdida de texto, no deduplicación.
+>
 > **Verificar la conversión de un EPUB es fácil y hay que hacerlo:** el texto fuente se
 > saca con BeautifulSoup y se compara token a token con el markdown. El déficit debe
 > quedar EXPLICADO, no solo ser pequeño: en *Astral High Magic*, 195 tokens = 68
