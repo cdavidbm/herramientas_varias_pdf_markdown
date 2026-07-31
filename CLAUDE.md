@@ -858,6 +858,20 @@ un PDF entero como sección.
    (agy ancla notas que el OCR dejó sueltas, y en un aparato con lemas latinos acierta):
    lístalas para verificarlas una a una contra su definición, pero no las rechaces.
 
+5c. **LIBRO GRANDE → `traducir_libro.py`, POR FASES Y REANUDABLE.** Un libro de 200.000+
+   palabras no cabe en una sesión (*Three Books of Occult Philosophy*: 228.000 palabras,
+   214 archivos, ~18 h de motor en serie). No lo orquestes con un `for` de bash que se
+   salte lo hecho **mirando si el archivo de salida existe**: un archivo escrito a medias,
+   o uno que agy resumió, EXISTE igual y se da por bueno para siempre. Aquí el criterio
+   para marcar un archivo como hecho es que **PASE LA VERIFICACIÓN**, y el estado se
+   escribe en un JSON **tras CADA archivo**, así que una sesión cortada pierde como mucho
+   el que estuviera en curso. `--desde/--hasta` acotan un Libro; `--max N` traduce N y
+   para (fases pausables); `--informe` lista lo que falta; `--rehacer` reintenta los que
+   quedaron en fallo.
+   **Y verifica las TABLAS**: si el motor funde dos columnas o se come un renglón, el
+   ratio apenas se mueve y el balance de notas ni se entera. En un libro cuyas tablas son
+   el CONTENIDO —las Escalas de los números de Agripa— eso es pérdida grave e invisible.
+
 6. **RITMO por el límite de sesión:** los agentes que leen imágenes consumen mucho → lanza
    **2 a la vez**, espera, y sigue. **Cada tramo terminado se guarda en disco**, así que una
    sesión que se corte no pierde nada: se reanuda leyendo el estado de `es/` y los parciales de
@@ -873,6 +887,31 @@ un PDF entero como sección.
    MemoryMax=4G` (`--font-fallback "Noto Naskh Arabic"` si hay árabe suelto). Verifica: **0
    «Missing character»** en el log, **balance de notas en=es** (inline==defs por archivo), ratio
    de palabras es/en ~1.0 (sin truncar), y **renderiza 2-3 páginas** para leerlas contra la imagen.
+
+### Tablas que vienen como IMAGEN (y cuáles NO transcribir)
+
+Las ediciones modernas de tratados renacentistas meten las tablas del original como
+**imágenes**, así que el texto no está: no se puede leer, ni buscar, ni traducir.
+Medido en *Three Books of Occult Philosophy* (Purdue), 183 imágenes en 4 familias muy
+distintas, y **tratarlas igual es el error**:
+
+- **Tablas de correspondencias con texto** (las 12 «Escalas de los números» de Agripa) →
+  **transcribir a tabla markdown**. Son 134 filas y son la obra misma. Markdown no tiene
+  celdas combinadas, así que la etiqueta de grupo se deja en blanco en los renglones de
+  continuación (lo más parecido al original) y la columna «mundo» va al final.
+  **La tabla se pone DEBAJO de la lámina, no en su lugar:** la imagen sigue siendo la
+  fuente autoritativa (conserva el hebreo y la maqueta) y la tabla la hace legible.
+- **Palabras sueltas en otro alfabeto puestas como imagen** (65 aquí: `img_009.jpg` son
+  30×16 px con שדי a media frase) → **devolverlas al texto como Unicode**; si no, el
+  capítulo no se puede buscar ni leer entero.
+- **Láminas de escritura densa** (tablas *ziruph* de 22×22 = 484 letras hebreas) →
+  **NO transcribir**. Copiarlas a mano introduce erratas invisibles donde cada letra
+  cuenta; la imagen es la fuente y lo honesto es dejarla, traduciendo solo el título.
+- **Sellos, sigilos, caracteres y diagramas** → se quedan como imagen: son glifos.
+
+**Clasifícalas por DIMENSIONES antes de decidir** (`< 80 px` de alto = palabra inline;
+`> 600×500` = lámina o tabla), no por el capítulo en el que caen: en el mismo capítulo de
+las Escalas conviven una tabla de 850×1127 y cinco palabras hebreas de 30 px.
 
 ## YouTube → markdown de estudio (skill `/youtube`)
 

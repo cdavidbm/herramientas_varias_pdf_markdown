@@ -27,6 +27,7 @@ import md_to_pdf
 import clean_markdown
 import epub_to_markdown
 import citas_en_bloque
+import traducir_libro
 import check_completeness
 import split_chapters
 import fix_ordinals
@@ -904,3 +905,33 @@ class EpubAgrippaPurdue(unittest.TestCase):
         conv = epub_to_markdown.Converter()
         out = "\n".join(conv.convert_file(html, filename="x.html"))
         self.assertIn("in *Dionysii 1049.*", out)
+
+
+class TraducirLibro(unittest.TestCase):
+    """Verificación por archivo de una traducción de libro."""
+
+    def test_tabla_desmontada_se_detecta(self):
+        en = "Texto.\n\n| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n"
+        # El motor funde dos columnas: el ratio no se mueve y las notas cuadran.
+        es = "Texto.\n\n| a b |\n|---|\n| 1 2 |\n| 3 4 |\n"
+        self.assertTrue(any("tabla" in f for f in traducir_libro.verificar_tablas(en, es)))
+
+    def test_renglon_de_tabla_perdido(self):
+        en = "| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n"
+        es = "| a | b |\n|---|---|\n| 1 | 2 |\n"
+        self.assertTrue(traducir_libro.verificar_tablas(en, es))
+
+    def test_tabla_traducida_bien_pasa(self):
+        en = "| Name | Value |\n|---|---|\n| Fire | Heat |\n"
+        es = "| Nombre | Valor |\n|---|---|\n| Fuego | Calor |\n"
+        self.assertEqual(traducir_libro.verificar_tablas(en, es), [])
+
+    def test_verificar_detecta_llamada_perdida(self):
+        en = "Uno[^1] y dos[^2].\n\n[^1]: a\n[^2]: b\n"
+        es = "Uno[^1] y dos.\n\n[^1]: a\n[^2]: b\n"
+        self.assertTrue(any("llamadas" in f for f in traducir_libro.verificar(en, es)))
+
+    def test_verificar_acepta_una_traduccion_correcta(self):
+        en = "# T\n\nUno[^1] dos tres cuatro cinco.\n\n[^1]: nota\n"
+        es = "# T\n\nUno[^1] dos tres cuatro cinco.\n\n[^1]: nota\n"
+        self.assertEqual(traducir_libro.verificar(en, es), [])

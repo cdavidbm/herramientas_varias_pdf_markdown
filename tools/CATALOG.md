@@ -92,4 +92,5 @@
 - `quita_titulillos_fundidos.py` — borra los titulillos de página que el OCR PEGÓ al cuerpo.
 - `reflow_columns.py` — Recompone la prosa que un bisturí partió al mal-leer una maqueta
 - `rescata_capitulos.py` — devuelve al CUERPO los capítulos que acabaron dentro del aparato.
+- `traducir_libro.py` — traduce un libro entero POR FASES, reanudable y verificado.
 
