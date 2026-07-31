@@ -844,3 +844,63 @@ class DensidadJFIF(unittest.TestCase):
                                  subtitles=["*De Imaginibus*, el libro"])
         self.assertIn(r"\emph{De Imaginibus}", pre)
         self.assertNotIn("*De Imaginibus*", pre)
+
+
+class EpubAgrippaPurdue(unittest.TestCase):
+    """Edición Purdue de Agripa (Inner Traditions): pool `by_p_id` y título partido."""
+
+    def test_pool_ftn_se_detecta_por_el_nombre(self):
+        import build_plan
+        for n in ("9781644114179_ftn.xhtml", "book_tn.xhtml", "ftn.xhtml",
+                  "notes.xhtml", "Footnote.xhtml"):
+            self.assertTrue(build_plan.FOOTNOTE_NAME.search(n), n)
+        # …sin cazar palabras corrientes que lo contengan.
+        for n in ("chapter.xhtml", "fiction.xhtml", "content.opf"):
+            self.assertFalse(build_plan.FOOTNOTE_NAME.search(n), n)
+
+    def test_by_p_id_quita_el_marcador_enlazado_del_principio(self):
+        html = ('<p class="ntstx" id="nt36"><a href="c05.xhtml#nr36"><b>1</b></a>. '
+                'Ref. Pico, <em>Heptaplus</em>.</p>')
+        got = epub_to_markdown.load_footnote_lookup(html, fmt="by_p_id")
+        self.assertEqual(got["nt36"], "Ref. Pico, *Heptaplus*.")
+
+    def test_sup_con_ancla_vacia_delante(self):
+        # El <sup> lleva DOS <a>: el ancla de destino (vacía) y el enlace real.
+        # Quedarse con el primero dejaba un `^` suelto: `superior,^[^1]`.
+        html = ('<p>su superior,<sup><a id="nr36"></a>'
+                '<a href="pool.xhtml#nt36">1</a></sup> acepta</p>')
+        conv = epub_to_markdown.Converter(footnote_lookup={"nt36": "cuerpo"},
+                                          footnote_file_marker="pool.xhtml")
+        out = "\n".join(conv.convert_file(html, filename="x.html"))
+        self.assertIn("su superior,[^1] acepta", out)
+        self.assertNotIn("^[^1]", out)
+
+    def test_titulo_partido_en_dos_parrafos_no_se_duplica(self):
+        html = ('<p class="chn">Chapter 1</p><p class="cht">How magicians collect'
+                ' virtues.</p><p>There is a threefold world.</p>')
+        conv = epub_to_markdown.Converter(
+            section_title="Chapter 1. How magicians collect virtues.")
+        out = "\n".join(conv.convert_file(html, filename="x.html"))
+        self.assertNotIn("Chapter 1\n", out)
+        self.assertNotIn("How magicians collect virtues.", out)
+        self.assertIn("There is a threefold world.", out)
+
+    def test_no_suprime_prosa_que_repita_el_titulo_mas_adelante(self):
+        # La guarda es la POSICIÓN: solo la cabecera del documento.
+        html = ("<p>uno</p><p>dos</p><p>tres</p><p>cuatro</p><p>cinco</p>"
+                "<p>seis</p><p>El fuego</p>")
+        conv = epub_to_markdown.Converter(section_title="El fuego")
+        out = "\n".join(conv.convert_file(html, filename="x.html"))
+        self.assertIn("El fuego", out)
+
+    def test_blockquote_sin_mayores_vacios_sobrantes(self):
+        got = epub_to_markdown.tidy_blockquotes(
+            [">", ">", "> texto", ">", ">", "> más", ">", ">"])
+        self.assertEqual(got, ["> texto", ">", "> más"])
+
+    def test_enfasis_con_espacio_interior(self):
+        # `in<em> Dionysii</em>` daría `in* Dionysii*`, que pandoc imprime crudo.
+        html = "<p>ref. Ficino, in<em> Dionysii 1049.</em></p>"
+        conv = epub_to_markdown.Converter()
+        out = "\n".join(conv.convert_file(html, filename="x.html"))
+        self.assertIn("in *Dionysii 1049.*", out)

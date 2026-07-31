@@ -169,6 +169,9 @@ class Converter:
         # namespace ids so two files in one section can't collide).
         self.local_note_ids: set[str] = set()
         self.current_file = ""
+        # Nº de bloques emitidos en el archivo actual: lo usa la supresión del
+        # título partido, que solo debe actuar en la cabecera del documento.
+        self._block_index = 0
         self.used_footnotes: list[tuple[int, str]] = []
         self.footnote_counter = 0
         self.footnote_seen: dict[str, int] = {}
@@ -258,8 +261,14 @@ class Converter:
 
         # Footnote reference: <sup><a href="...{marker}#anchor">N</a></sup>
         if node.name == "sup":
-            a = node.find("a")
-            if isinstance(a, Tag):
+            # OJO: el <sup> puede llevar VARIOS <a> — el primero suele ser el
+            # ancla VACÍA de destino (`<a id="nr36"></a>`) y el segundo el enlace
+            # real al pool. Quedarse con `find("a")` dejaba la llamada sin
+            # resolver y el genérico de abajo emitía un `^` suelto delante del
+            # marcador: `superior,^[^1]`. Hay que buscar el primero CON href útil.
+            for a in node.find_all("a"):
+                if not isinstance(a, Tag):
+                    continue
                 href = _attr(a, "href")
                 if any(m and m in href for m in self.footnote_markers):
                     anchor_id = href.split("#", 1)[1] if "#" in href else href
@@ -269,12 +278,16 @@ class Converter:
             inner = "".join(self._inline(c) for c in node.children).strip()
             return f"^{inner}" if inner else ""
 
-        if node.name == "i" or node.name == "em":
+        # Las marcas van FUERA del espacio: `in<em> Dionysii</em>` daría
+        # `in* Dionysii*`, que pandoc imprime con los asteriscos literales.
+        if node.name in ("i", "em", "b", "strong"):
             inner = "".join(self._inline(c) for c in node.children)
-            return f"*{inner}*" if inner.strip() else ""
-        if node.name in ("b", "strong"):
-            inner = "".join(self._inline(c) for c in node.children)
-            return f"**{inner}**" if inner.strip() else ""
+            if not inner.strip():
+                return inner
+            mark = "*" if node.name in ("i", "em") else "**"
+            lead = inner[:len(inner) - len(inner.lstrip())]
+            trail = inner[len(inner.rstrip()):]
+            return f"{lead}{mark}{inner.strip()}{mark}{trail}"
 
         # Emphasis carried by CSS class (Calibre/Kindle). Keep the marks OUTSIDE
         # the surrounding whitespace: `*foo *bar` renders literally in pandoc.
@@ -380,6 +393,8 @@ class Converter:
             return ["", f"{hashes} {text}", ""]
 
         if name == "p":
+            if node.get_text(strip=True):
+                self._block_index += 1
             # Star separators
             if "star" in classes or node.get_text().strip() in ("***", "* * *"):
                 return ["", "---", ""]
@@ -387,9 +402,23 @@ class Converter:
             # chapter heading, styled as a bold <p> instead of an <h1> (the norm
             # in Calibre/Kindle exports). Suppress it: the plan already emits the
             # H1, and leaving it prints the title twice.
-            if self.section_title_norm:
+            if self.section_title_norm and self._block_index <= 5:
+                # Guarda de POSICIÓN: el encabezado duplicado va siempre en la
+                # cabecera del documento. Sin ella, un párrafo del cuerpo que
+                # coincida con el título se borraría en silencio a mitad del
+                # capítulo — y eso es pérdida de texto, no deduplicación.
                 ptext = re.sub(r"\s+", " ", node.get_text()).strip().lower()
                 if ptext == self.section_title_norm:
+                    return []
+                # El título del capítulo suele venir PARTIDO en dos párrafos
+                # («Chapter 1» + «How magicians collect…», clases chn/cht en la
+                # edición Purdue de Agripa) y el plan los une en un solo H1: cada
+                # trozo por su cuenta es entonces una repetición. Se suprime solo
+                # si el párrafo cae al PRINCIPIO del archivo y su texto es un
+                # fragmento real del título, para no tocar prosa que casualmente
+                # repita palabras del título más adelante.
+                if (self._block_index < 3 and len(ptext) > 3
+                        and ptext.rstrip(".") in self.section_title_norm):
                     return []
             # Book-specific subheadings styled as a bold <p> (plan key
             # `heading_paragraphs`: {css_class: level}). The class may sit on the
@@ -520,6 +549,7 @@ class Converter:
     def convert_file(self, html: str, filename: str = "") -> list[str]:
         soup = BeautifulSoup(html, "html.parser")
         self.current_file = filename
+        self._block_index = 0
         self._index_local_footnotes(soup)
         body = soup.body or soup
         lines = self._block(body)
@@ -591,10 +621,20 @@ def load_footnote_lookup(html: str, fmt: str = "by_a_id",
             anchor_id = _attr(p, "id")
             if not anchor_id:
                 continue
-            # Drop the trailing back-link <a> (e.g. `<<`) if present.
-            for a in list(p.find_all("a")):
+            # Drop the back-link <a> — trailing (`<<`, `↩`) or LEADING. In the
+            # Inner Traditions layout (Purdue's Agrippa) the note opens with its
+            # own number as the link back to the call:
+            #   <p id="nt36"><a href="…#nr36"><b>1</b></a>. body…
+            # so the marker to strip is an <a> whose text is just a number.
+            anchors = [a for a in p.find_all("a") if isinstance(a, Tag)]
+            for i, a in enumerate(anchors):
                 href = _attr(a, "href")
-                if "#" in href and a.get_text(strip=True) in ("<<", "‹‹", "↩", "↑"):
+                if "#" not in href:
+                    continue
+                txt = a.get_text(strip=True)
+                if txt in ("<<", "‹‹", "↩", "↑"):
+                    a.extract()
+                elif i == 0 and re.fullmatch(r"\[?\d+\]?\.?", txt):
                     a.extract()
             # Drop the leading <sup>[N]</sup>
             sup = p.find("sup")
@@ -607,7 +647,10 @@ def load_footnote_lookup(html: str, fmt: str = "by_a_id",
                              italic_classes=italic_classes,
                              bold_classes=bold_classes)
             text = "".join(conv._inline(c) for c in p.children)
+            # Marcador que quede tras extraer el ancla: "N.", "[N]" o el punto
+            # SUELTO que seguía al número enlazado (Inner Traditions).
             text = re.sub(r"^\s*\[?\d+\]?\.?\s*", "", text)
+            text = re.sub(r"^\s*\.\s+", "", text)
             text = re.sub(r"\s+", " ", text).strip()
             if text:
                 out[anchor_id] = text
@@ -646,8 +689,32 @@ def load_footnote_lookup(html: str, fmt: str = "by_a_id",
 # Post-processing
 # ---------------------------------------------------------------------------
 
+def tidy_blockquotes(lines: list[str]) -> str | list[str]:
+    """Quita los `>` VACÍOS sobrantes dentro de una cita.
+
+    Un `<blockquote>` de portadilla mezcla párrafos e imágenes, y como la imagen
+    se emite rodeada de renglones en blanco, la cita sale con rachas de `>`
+    huérfanos (`>`, `>`, `> texto`, `>`, `>`). Un solo `>` entre dos párrafos es
+    el separador correcto; dos seguidos son ruido, y al principio o al final de
+    la cita sobran siempre.
+    """
+    out: list[str] = []
+    for ln in lines:
+        bare = ln.strip() == ">"
+        if bare:
+            # Nunca abrir la cita con un `>` vacío, ni repetirlo.
+            if not out or out[-1].strip() == ">" or not out[-1].lstrip().startswith(">"):
+                continue
+        out.append(ln)
+    # Ni cerrarla con uno.
+    while out and out[-1].strip() == ">":
+        out.pop()
+    return out
+
+
 def tidy_markdown(lines: list[str]) -> str:
     """Collapse multiple blank lines, strip trailing whitespace, normalize."""
+    lines = tidy_blockquotes(lines)
     out: list[str] = []
     prev_blank = False
     for ln in lines:

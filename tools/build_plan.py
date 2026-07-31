@@ -75,7 +75,12 @@ SKIP_TITLE_PATTERNS = re.compile(
 # bolt onto every filename and title; strip it before matching skip patterns.
 _PREFIX = re.compile(r"^[\d\s_\-]+")
 
-FOOTNOTE_NAME = re.compile(r"(footnote|endnote|\bnotas?\b|\bnotes?\b)", re.IGNORECASE)
+# `ftn`/`fn` son la abreviatura habitual del editor para el pool de notas
+# (`9781644114179_ftn.xhtml` en la edición Purdue de Agripa, Inner Traditions).
+# Van anclados a un separador o al final del nombre para no cazar palabras sueltas.
+FOOTNOTE_NAME = re.compile(
+    r"(footnote|endnote|\bnotas?\b|\bnotes?\b|[_\-.]f?tn(?=[_\-.]|$)|^f?tn(?=[_\-.]|$))",
+    re.IGNORECASE)
 
 
 def _norm(base_dir: str, href: str) -> str:
