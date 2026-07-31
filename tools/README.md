@@ -169,6 +169,26 @@ The **operating manual** — which tool to reach for, and why — is the repo's
   `\index`, symbols, page markers) and compile with **LuaLaTeX + `fontspec`**
   (not `inputenc`/`fontenc T1`, which mangle `º`→`ž` under lualatex).
 
+### Translating with agy/Gemini (STANDING POLICY — pick the engine by size)
+
+- **Files over ~4,000 words MUST go through `agy_retranslate_chunks.py`**, not
+  `agy_translate.py`. It verifies EVERY chunk the moment it is translated (ratio +
+  its own `[^N]`), retries only the failing chunk, and splits it in two if it keeps
+  failing.
+- **Short files** can use `agy_translate.py`, which verifies once at the end.
+- **Why this is a policy and not a preference:** the longer the input, the more agy
+  **summarises instead of translating** — and it does so silently. It can skip whole
+  paragraphs of prose **while leaving the footnote apparatus intact**, so the `[^N]`
+  balance signs off on a mutilated chapter (measured: 21/21 notes correct, 1,200 words
+  gone). **Only the word ratio catches it.** Because `agy_translate.py` only checks the
+  whole file at the end, by the time it notices there is no cheap fix: re-running the
+  whole file fails the same way (two passes gave ratios of 0.68 and 0.86).
+- **To find the missing text**, compare the amount of prose BETWEEN consecutive
+  footnote calls: `[^N]` markers are identical in both languages, so they cut both
+  texts at the same points and the deficient stretch stands out.
+- **When reporting, state how many files came out CLEAN**, not just how many failed —
+  counting only failures misrepresents the engine.
+
 ### Markdown → beautiful PDF (memoir/bringhurst, matching the LaTeX classics)
 
 - `md_to_pdf.py` — turns per-chapter study markdown (La Forja output) into a

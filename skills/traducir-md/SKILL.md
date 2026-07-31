@@ -55,6 +55,27 @@ Traduce SOLO el texto en prosa. Deja **literalmente intactos**:
 4. Si un término del glosario te parece mal, NO lo cambies en silencio:
    propónlo al usuario y actualiza el glosario solo con su visto bueno.
 
+## POLÍTICA FIRME: cómo traducir con agy/Gemini (no negociable)
+
+> El usuario lleva MUCHAS sesiones observando el mismo patrón. Tú solo recuerdas la
+> tuya, así que **no lo re-evalúes: aplícalo.**
+
+- **Archivo de más de ~4.000 palabras → `agy_retranslate_chunks.py`, de entrada.**
+  Verifica CADA trozo nada más traducirlo (ratio + sus `[^N]`), reintenta solo el que
+  falla y lo parte en dos si insiste.
+- **Archivo corto → `agy_translate.py`** basta (verifica al final).
+- **Por qué:** cuanto más larga es la entrada, más tiende agy a **RESUMIR en vez de
+  traducir**. Y lo hace en silencio: puede **saltarse párrafos enteros de prosa dejando
+  el aparato de notas cuadrado**, de modo que el balance `[^N]` da el visto bueno y
+  **solo el ratio de palabras delata la pérdida** (medido: 21/21 notas correctas y 1.200
+  palabras ausentes). `agy_translate.py` solo verifica el archivo entero al final, así
+  que cuando lo detecta ya no hay reparación barata: relanzarlo completo vuelve a fallar.
+- **Para localizar el texto perdido**, compara el volumen de texto ENTRE llamadas
+  consecutivas: las `[^N]` son idénticas en ambos idiomas, así que parten los dos textos
+  por los mismos puntos y el tramo con déficit salta a la vista.
+- **Al informar, di cuántos archivos pasaron LIMPIOS, no solo cuántos fallaron.** Contar
+  solo los fallos da la impresión falsa de que agy falla siempre; es sesgo del informe.
+
 ## Procedimiento
 
 1. Confirma idioma destino y localiza el/los archivo(s).
@@ -81,3 +102,9 @@ Traduce SOLO el texto en prosa. Deja **literalmente intactos**:
   `[^N]:`? (mismo conteo que el original).
 - ¿Se conservaron todos los niveles de encabezado?
 - ¿Ninguna URL ni bloque de código fue alterado?
+- **¿El ratio de palabras ES/EN está en ~1.0?** Un ratio bajo es la ÚNICA señal de que
+  agy se saltó prosa: el balance de notas puede cuadrar perfectamente y faltar texto.
+- **¿Hay encabezados REPETIDOS?** Es la firma de que agy reemitió un trozo; el ratio no
+  la detecta.
+- **¿Algún párrafo se quedó sin traducir?** Mídelo por párrafo (palabras funcionales
+  inglesas), no en el conjunto: en global se diluye y no se ve.

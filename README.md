@@ -215,6 +215,15 @@ tools/
 
 ### Límites honestos
 
+- **La traducción con agy/Gemini SIEMPRE se verifica; en archivos largos, por trozo.**
+  Política firme (2026-07-30): todo archivo de más de ~4.000 palabras se traduce con
+  `agy_retranslate_chunks.py`, que comprueba cada trozo nada más traducirlo; los cortos
+  pueden ir con `agy_translate.py`. Motivo: cuanto más larga es la entrada, más tiende
+  agy a **resumir en vez de traducir**, y lo hace de forma silenciosa — puede saltarse
+  párrafos enteros de prosa **dejando el aparato de notas cuadrado**, así que el balance
+  `[^N]` da el visto bueno y solo el ratio de palabras delata la pérdida. Verificar no es
+  desconfianza: es la única forma de ver ese fallo. Y al informar hay que decir **cuántos
+  archivos pasaron limpios**, no solo cuántos fallaron.
 - A **granularidad de archivo**: un EPUB que empaqueta el libro entero en un
   solo `.xhtml` (típico de algunos *rips*) da una sección gruesa — el piso es un
   `.md` por archivo de origen.

@@ -46,6 +46,24 @@ Detecta y reporta:
 Sale con código 1 si hay PROBLEMAS estructurales (🔴); 0 si solo avisos o limpio.
 Para un libro entero, recórrelo en bucle por capítulo y resume al final.
 
+> **El fallo de agy que NINGÚN chequeo de notas ve (obligatorio conocerlo).** agy/Gemini
+> puede **saltarse párrafos enteros de prosa dejando el aparato de notas intacto**: el
+> conjunto de `[^N]` cuadra 21/21, cada cita tiene su definición… y faltan 1.200 palabras.
+> Es decir, **el chequeo de notas da luz verde a un capítulo mutilado**. La ÚNICA señal es
+> el **ratio de palabras**: por eso un ratio bajo nunca se despacha como «el español es más
+> conciso» — se investiga siempre.
+>
+> **Para localizar el hueco** sin releer el capítulo, compara el volumen de texto ENTRE
+> llamadas consecutivas: las `[^N]` son idénticas en original y traducción, así que parten
+> los dos textos por los mismos puntos y el tramo con déficit aparece solo.
+>
+> **Para repararlo**, NO relances el archivo entero (vuelve a fallar por lo mismo): usa
+> `agy_retranslate_chunks.py`, que verifica cada trozo al vuelo. Y de entrada, todo archivo
+> de más de ~4.000 palabras debería haberse traducido ya con esa herramienta.
+>
+> **Al reportar, di cuántos capítulos pasaron LIMPIOS**, no solo cuántos fallaron: contar
+> solo los fallos da una impresión falsa del motor.
+
 ## Capa 2 — Revisión de criterio (la haces tú leyendo)
 
 El script no juzga sentido. Tras pasarlo, revisa:

@@ -712,10 +712,31 @@ un PDF entero como sección.
    en `/tmp/`** (nunca al archivo final, para no colisionar) con notas numeradas 1-based locales;
    **tú consolidas** concatenando los tramos y **renumerando las notas por offset** (script
    Python de ~10 líneas: `re.sub(r'\[\^(\d+)\]', +offset)` + separar cuerpo/definiciones).
-5b. **Si traduces con `agy_translate.py`, VERIFICA Y REINTENTA — no es determinista.** Dos
-   modos de fallo, los dos silenciosos y caros: (a) **reemite un trozo entero** (se ve
+5a-bis. **POLÍTICA FIRME DEL USUARIO (2026-07-30): todo archivo de más de ~4.000 palabras
+   se traduce YA de entrada con `agy_retranslate_chunks.py`, no con `agy_translate.py`.**
+   No es una optimización: es la respuesta al patrón que el usuario lleva viendo en MUCHAS
+   sesiones —«agy siempre es igual»— y que un agente, que solo recuerda la suya, no puede
+   ver. Los fallos de agy se concentran SIEMPRE en los archivos largos: cuanto más larga es
+   la entrada, más tiende a RESUMIR en vez de traducir. `agy_translate.py` verifica el
+   archivo ENTERO al final, así que cuando detecta el problema la única salida es relanzarlo
+   completo… y vuelve a fallar, porque el trozo grande sigue siendo grande (medido en el
+   Picatrix 3.11: dos pasadas, ratio 0.68 y 0.86). `agy_retranslate_chunks.py` verifica
+   CADA TROZO al vuelo (ratio + sus `[^N]`), reintenta solo el que falla y, si insiste, lo
+   parte en dos: ataja el fallo donde ocurre. Para archivos cortos `agy_translate.py` sigue
+   valiendo (41 de 42 limpios a la primera en ese mismo libro).
+   **Y al informar, di SIEMPRE cuántos pasaron limpios, no solo cuántos fallaron:** contar
+   solo los fallos da la impresión de que agy falla siempre, y es un sesgo del informe, no
+   un dato del motor.
+
+5b. **Si traduces con `agy_translate.py`, VERIFICA Y REINTENTA — no es determinista.** Tres
+   modos de fallo, todos silenciosos y caros: (a) **reemite un trozo entero** (se ve
    como ENCABEZADOS REPETIDOS, no por el ratio: medido en un Libro que salió con 13
-   encabezados en vez de 7); (b) **pierde algún anclaje `[^N]`**. Envuelve la llamada en
+   encabezados en vez de 7); (b) **pierde algún anclaje `[^N]`**; (c) **SE SALTA PÁRRAFOS
+   ENTEROS DE PROSA SIN TOCAR EL APARATO DE NOTAS** — el balance `[^N]` cuadra 21/21 y aun
+   así faltan 1.200 palabras (Picatrix 3.11). El control natural (balance de notas) NO lo
+   ve: **solo el ratio lo delata**. Para localizar el hueco, compara el volumen de texto
+   ENTRE llamadas consecutivas: las `[^N]` son idénticas en ambos idiomas, así que parten
+   los dos textos por los mismos puntos y el tramo con déficit salta a la vista. Envuelve la llamada en
    un lanzador que compruebe encabezados repetidos, encabezados EN=ES, figuras idénticas,
    definiciones completas y ratio, y **reintente con `--chunk-words` menor**.
    **Calibra el criterio:** el umbral NO debe ser «cero pérdidas». Relanzar 20.000
@@ -768,7 +789,14 @@ bastan, transcribe leyendo la IMAGEN con un modelo de visión:
   un capítulo coherente.
 - `agy_translate.py cap.md --out cap-es.md --glosario g.md` — el MOTOR de traducción con
   agy/Gemini troceando + QA estructural (lo que usan `/traducir-md` y el paradigma de
-  libro entero); `chunk_defs()` evita truncar el bloque de notas.
+  libro entero); `chunk_defs()` evita truncar el bloque de notas. **Solo para archivos
+  CORTOS** (< ~4.000 palabras): verifica al final, no por trozo.
+- `agy_retranslate_chunks.py cap.md --out cap-es.md --glosario g.md --prompt P.txt` — el
+  mismo trabajo pero **verificando CADA TROZO nada más traducirlo** (ratio + sus `[^N]`),
+  reintentando solo el que falla y partiéndolo en dos si insiste. **Es el que se usa POR
+  DEFECTO en archivos largos** (política firme del usuario, §5a-bis): ahí es donde agy
+  resume en vez de traducir, y `agy_translate` solo se entera cuando ya no hay reparación
+  barata.
 Ayudantes de OCR (los usa la skill `/ocr`): `ocr_preprocess.py` (deskew/contraste/
 binarización antes de tesseract) y `ocr_corruption.py` (detecta texto reconocido corrupto
 para corregirlo con criterio). Detalle fino de todos: `tools/CATALOG.md` y `tools/README.md`.

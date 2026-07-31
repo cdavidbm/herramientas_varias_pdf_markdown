@@ -73,6 +73,7 @@
 
 ## Otros
 - `agy_consolidate.py` — Cose las transcripciones POR PÁGINA de agy/Gemini (o de
+- `agy_retranslate_chunks.py` — retraduce un markdown VERIFICANDO CADA TROZO.
 - `agy_transcribe.py` — Orquesta la TRANSCRIPCIÓN VISUAL de un rango de páginas de un
 - `agy_translate.py` — Traduce un markdown de capítulo/Book a otro idioma con agy/Gemini,
 - `check_scan_margins.py` — Control de calidad del partido de un escaneo 2-up: avisa

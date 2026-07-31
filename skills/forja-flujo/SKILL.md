@@ -43,6 +43,14 @@ tokens (leer solo lo necesario).
 4. **Encadena de verdad:** al terminar un paso, sigue con el siguiente de la
    cadena sin esperar a que te lo pidan, salvo que aparezca una bifurcación real.
 5. **Cita ubicaciones** (archivo › encabezado / página) en toda síntesis.
+6. **Al traducir, elige el motor POR TAMAÑO (política firme del usuario):** archivos de
+   más de ~4.000 palabras van SIEMPRE con `agy_retranslate_chunks.py` (verifica cada
+   trozo al vuelo); los cortos, con `agy_translate.py`. agy resume en vez de traducir
+   cuando la entrada crece, y puede **saltarse prosa dejando el aparato de notas
+   cuadrado** — el balance `[^N]` da el visto bueno y solo el ratio lo delata. Detalle en
+   [[traducir-md]] y [[qa-traduccion]].
+7. **Nunca des una traducción por buena sin verificarla, y reporta los LIMPIOS además de
+   los fallos** (contar solo fallos falsea la impresión del motor).
 
 ## Herramientas del repo (fuente de verdad)
 
