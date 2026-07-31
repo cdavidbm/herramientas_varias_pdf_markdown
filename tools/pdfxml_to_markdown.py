@@ -36,6 +36,14 @@ Trampas conocidas (medidas)
   agrupar da casi el doble de notas de las que hay.
 * El titulillo puede venir en una fuente de versalitas sin `ToUnicode` y
   extraerse como basura (`´²¶·¸¹º»¶´¸²`); se descarta por posición.
+* **LÍMITE CONOCIDO — palabras con punto suscrito partidas.** `pdftohtml` emite
+  los glifos de la fuente `…DotUnder…` FUERA del orden horizontal de su palabra,
+  así que a veces queda un espacio dentro de la transliteración (`al-Ḥ akīm` por
+  `al-Ḥakīm`). No se arregla por geometría —el token vecino ya trae su propio
+  espacio—, y unir «letra con punto + espacio + minúscula» a ciegas es peligroso
+  (`Ṣaliḥ ibn …` es legítimo). Se revisa a mano tras convertir; son pocos casos
+  y se localizan así:
+      grep -o '.\{20\}[ḥṭḍṣḤṬḌṢ] [a-zāīū].\{10\}' salida.md | sort | uniq -c
 
 Uso
 ---
@@ -252,7 +260,52 @@ def render_line(line: list[dict], body: float, counter: dict,
     s = clean_text(s)
     s = re.sub(r"\*(\s+)\*", r"\1", s)          # cursivas contiguas partidas
     s = re.sub(r"[ \t]+", " ", s)
-    return s.strip()
+    return fix_emphasis(s.strip())
+
+
+
+def fix_emphasis(s: str) -> str:
+    """Saca de la cursiva el espacio que la precede al cerrar: «*Picatrix *» .
+
+    El token del espacio viene en la MISMA fuente cursiva, así que queda dentro
+    del énfasis; pandoc entonces no reconoce el cierre y **imprime los asteriscos
+    literales** (se ve en el PDF, no en el markdown). Hay que distinguir el
+    asterisco que ABRE del que CIERRA —un `*` tras espacio puede ser cualquiera
+    de los dos—, así que se recorre la línea llevando el estado, y las negritas
+    `**` se dejan intactas (dos asteriscos adyacentes: tocarlos las destruye).
+    """
+    out: list[str] = []
+    open_em = False
+    i = 0
+    while i < len(s):
+        ch = s[i]
+        if ch == "*":
+            if i + 1 < len(s) and s[i + 1] == "*":      # negrita: se copia tal cual
+                out.append("**"); i += 2; continue
+            if open_em:
+                # cierre: si venimos de espacios, el cierre va ANTES de ellos
+                j = len(out)
+                while j > 0 and out[j - 1] == " ":
+                    j -= 1
+                if j < len(out):
+                    out.insert(j, "*")
+                else:
+                    out.append("*")
+                open_em = False
+            else:
+                out.append("*"); open_em = True
+            i += 1
+            continue
+        out.append(ch); i += 1
+    if open_em:
+        # Énfasis que la línea no llega a cerrar: pandoc imprimiría el asterisco
+        # literal en el PDF (invisible en el markdown). Mejor perder la cursiva
+        # que ensuciar la página.
+        for k in range(len(out) - 1, -1, -1):
+            if out[k] == "*":
+                del out[k]
+                break
+    return "".join(out)
 
 
 def page_markdown(page: dict, body: float, counter: dict, keep_heads: bool,
