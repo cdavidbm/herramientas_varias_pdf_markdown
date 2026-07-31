@@ -100,6 +100,11 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
         subs = ""
         sizes = [r"\LARGE", r"\large", r"\large"]
         for i, s in enumerate([latex_escape(x) for x in subtitles]):
+            # El subtítulo admite el énfasis de markdown: un título de obra
+            # («*De Imaginibus*») pide cursiva, y sin esto los asteriscos se
+            # IMPRIMEN tal cual en la portada.
+            s = re.sub(r"\*\*(.+?)\*\*", r"\\textbf{\1}", s)
+            s = re.sub(r"\*(.+?)\*", r"\\emph{\1}", s)
             subs += "{%s %s\\\\[0.45in]}\n" % (sizes[min(i, len(sizes) - 1)], s)
         gap = "[0.9in]" if subs else "[1in]"
         titleblock = (
@@ -409,10 +414,60 @@ def center_images(tex, maxw=r"0.72\linewidth"):
     width`/`max height` solo reducen: las imágenes pequeñas conservan su tamaño natural."""
     def repl(m):
         path = m.group(1)
+        # `scale` en vez de `max width` cuando el JPEG miente sobre su densidad:
+        # ver check_image_density(). Aquí basta con emitir siempre lo mismo.
         return (r"\begin{center}\includegraphics[max width=%s,"
                 r"max height=0.8\textheight,keepaspectratio]{%s}\end{center}"
                 % (maxw, path))
     return re.sub(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}", repl, tex)
+
+
+def check_image_density(paths, fix=True, dpi=96):
+    """Corrige (o denuncia) los JPEG cuya densidad JFIF es absurda (0 o 1 dpi).
+
+    **Fallo SILENCIOSO y caro de encontrar.** A 1 dpi, una imagen de 653 px de
+    ancho mide 653 PULGADAS; eso desborda la aritmética de dimensiones de TeX
+    (`arithmetic number too big`), `adjustbox` no puede calcular la escala y
+    lualatex **descarta la imagen dejando la leyenda impresa**. El PDF se genera
+    sin error, el recuento de figuras del markdown cuadra y el log de este script
+    no dice nada: solo se ve contando las imágenes del PDF con `pdfimages -list`
+    o mirando la página. Medido en *Astral High Magic*: 3 de 4 cartas
+    astrológicas desaparecieron así.
+
+    El arreglo son 5 bytes del segmento APP0 —unidades + Xdensity + Ydensity—,
+    así que NO recomprime: los píxeles quedan intactos.
+    """
+    import struct
+    tocadas = []
+    for p in paths:
+        p = pathlib.Path(p)
+        if p.suffix.lower() not in (".jpg", ".jpeg") or not p.is_file():
+            continue
+        b = bytearray(p.read_bytes())
+        if b[:2] != b"\xff\xd8":
+            continue
+        i = 2
+        while i < len(b) - 4 and b[i] == 0xFF:
+            seg = struct.unpack(">H", b[i + 2:i + 4])[0]
+            if b[i + 1] == 0xE0 and b[i + 4:i + 9] == b"JFIF\x00":
+                o = i + 4 + 5 + 2          # tras 'JFIF\0' y la versión (2 bytes)
+                units = b[o]
+                xd = struct.unpack(">H", b[o + 1:o + 3])[0]
+                yd = struct.unpack(">H", b[o + 3:o + 5])[0]
+                if units == 0 or xd <= 1 or yd <= 1:
+                    tocadas.append((p, units, xd, yd))
+                    if fix:
+                        b[o] = 1
+                        b[o + 1:o + 3] = struct.pack(">H", dpi)
+                        b[o + 3:o + 5] = struct.pack(">H", dpi)
+                        p.write_bytes(bytes(b))
+                break
+            i += 2 + seg
+    for p, u, x, y in tocadas:
+        print(f"  {'corregida' if fix else 'AVISO'}: densidad JFIF {x}x{y} "
+              f"(unidades={u}) en {p.name} → {dpi} dpi"
+              + ("" if fix else "  ← lualatex la DESCARTARÍA en silencio"))
+    return tocadas
 
 def typeset_wide_tables(tex, min_cols=6):
     """Ajusta la densidad de cada tabla por su nº de columnas:
@@ -616,6 +671,10 @@ def main():
                          "que la numeración automática DIVERJA de la del autor cuando hay "
                          "subapartados sin numerar intercalados (rompería las remisiones). "
                          "Siguen apareciendo en el índice con su página.")
+    ap.add_argument("--no-fix-density", action="store_true",
+                    help="no corregir la densidad JFIF absurda (0/1 dpi) de los "
+                         "JPEG: solo avisar. Sin corregir, lualatex DESCARTA esas "
+                         "imágenes en silencio y deja la leyenda impresa.")
     ap.add_argument("--subtitle", action="append", default=[], metavar="TEXTO",
                     help="línea(s) bajo el título de portada (repetible): "
                          "transliteración, título traducido, mención de edición…")
@@ -638,6 +697,11 @@ def main():
     for m in a.md:
         d = str(pathlib.Path(m).resolve().parent)
         if d not in gdirs: gdirs.append(d)
+
+    # Un JPEG con densidad JFIF de 0/1 dpi desaparece del PDF EN SILENCIO
+    # (ver check_image_density). Se revisa antes de compilar.
+    _jpegs = [q for d in gdirs for q in pathlib.Path(d).rglob("*.jp*g")]
+    check_image_density(_jpegs, fix=not a.no_fix_density)
 
     # AVISO: el griego POLITÓNICO (U+1F00–1FFF: espíritus/acentos, ᾳ) NO está en Latin
     # Modern y se pierde EN SILENCIO sin --font-fallback (el básico en MAYÚSCULAS sí sale,

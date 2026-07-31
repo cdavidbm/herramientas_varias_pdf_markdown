@@ -721,6 +721,17 @@ un PDF entero como sección.
     fondo —`ḳ` U+1E33, `ẖ` U+1E96, `ʻ` U+02BB, `ʼ` U+02BC— ni el árabe. Se arreglan con
     `--font-fallback "Charis SIL"` (fuente SIL, hecha para transliteración: cubre los cuatro)
     y `--arabic-font "Noto Naskh Arabic"`.
+  - **UN JPEG CON DENSIDAD 1 dpi DESAPARECE DEL PDF EN SILENCIO.** Si el JFIF declara
+    `density 1x1` (o unidades = 0), una imagen de 653 px de ancho mide 653 **PULGADAS**:
+    eso desborda la aritmética de dimensiones de TeX (`arithmetic number too big` en el
+    log de lualatex), `adjustbox` no puede calcular la escala y **la imagen se descarta
+    dejando su leyenda impresa**. El PDF se genera sin error, el recuento de figuras del
+    markdown cuadra y el resumen del script no dice nada. **Solo se ve contando las
+    imágenes del PDF (`pdfimages -list x.pdf | tail -n+3 | wc -l`) o mirando la página.**
+    Medido en *Astral High Magic*: 3 de 4 cartas astrológicas se perdieron así, y el
+    origen era el propio EPUB. `md_to_pdf.py` **ya lo corrige solo** antes de compilar
+    (parchea 5 bytes del APP0, sin recomprimir); `--no-fix-density` solo avisa.
+    Comprobación rápida a mano: `file -b img.jpg | grep -o "density [0-9]*x[0-9]*"`.
   - **UNA NOTA SIN LLAMADA NO SE IMPRIME.** pandoc solo saca una nota si existe la LLAMADA
     `[^etiqueta]` en el cuerpo; la definición huérfana se descarta **EN SILENCIO**. Es
     demoledor en libros cuyo aparato se reconstruyó contando marcadores en un escaneo, donde

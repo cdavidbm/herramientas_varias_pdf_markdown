@@ -789,3 +789,58 @@ class CitasEnBloque(unittest.TestCase):
         a, _ = citas_en_bloque.process(md)
         b, _ = citas_en_bloque.process(a)
         self.assertEqual(a, b)
+
+
+class DensidadJFIF(unittest.TestCase):
+    """Un JPEG con densidad 1 dpi desaparece del PDF en silencio."""
+
+    def _jpeg(self, units, xd, yd):
+        import struct
+        # JPEG mínimo: SOI + APP0 (JFIF) + EOI. Basta para el parcheo del APP0.
+        app0 = b"JFIF\x00" + b"\x01\x02" + bytes([units]) + struct.pack(">HH", xd, yd) + b"\x00\x00"
+        return b"\xff\xd8" + b"\xff\xe0" + struct.pack(">H", len(app0) + 2) + app0 + b"\xff\xd9"
+
+    def test_corrige_densidad_1dpi(self):
+        import tempfile, struct
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "carta.jpg"
+            p.write_bytes(self._jpeg(1, 1, 1))
+            tocadas = md_to_pdf.check_image_density([p], fix=True, dpi=96)
+            self.assertEqual(len(tocadas), 1)
+            b = p.read_bytes()
+            o = 2 + 2 + 2 + 5 + 2          # SOI + marcador + longitud + 'JFIF\0' + versión
+            self.assertEqual(b[o], 1)
+            self.assertEqual(struct.unpack(">HH", b[o + 1:o + 5]), (96, 96))
+            # Idempotente: una segunda pasada ya no la toca.
+            self.assertEqual(md_to_pdf.check_image_density([p], fix=True), [])
+
+    def test_unidades_cero_tambien_es_absurdo(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "x.jpg"
+            p.write_bytes(self._jpeg(0, 100, 100))
+            self.assertEqual(len(md_to_pdf.check_image_density([p], fix=True)), 1)
+
+    def test_no_toca_la_densidad_correcta(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "ok.jpg"
+            p.write_bytes(self._jpeg(1, 72, 72))
+            antes = p.read_bytes()
+            self.assertEqual(md_to_pdf.check_image_density([p], fix=True), [])
+            self.assertEqual(p.read_bytes(), antes)
+
+    def test_solo_avisa_si_fix_false(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "y.jpg"
+            p.write_bytes(self._jpeg(1, 1, 1))
+            antes = p.read_bytes()
+            self.assertEqual(len(md_to_pdf.check_image_density([p], fix=False)), 1)
+            self.assertEqual(p.read_bytes(), antes)
+
+    def test_subtitulo_admite_cursiva_markdown(self):
+        pre = md_to_pdf.preamble("T", "A", "spanish", False,
+                                 subtitles=["*De Imaginibus*, el libro"])
+        self.assertIn(r"\emph{De Imaginibus}", pre)
+        self.assertNotIn("*De Imaginibus*", pre)
