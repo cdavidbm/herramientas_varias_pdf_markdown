@@ -798,6 +798,17 @@ un PDF entero como sección.
    solo los fallos da la impresión de que agy falla siempre, y es un sesgo del informe, no
    un dato del motor.
 
+   **CORRECCIÓN MEDIDA (2026-07-31, Astral High Magic): el umbral de 4.000 palabras NO
+   protege.** Un archivo de **1.942 palabras** —menos de la mitad del umbral— salió con
+   **ratio 0.14**: agy devolvió 273 palabras, solo el ÚLTIMO párrafo del cuerpo, con el
+   bloque de notas entero y correcto detrás (así que el aparato cuadraba y solo el ratio lo
+   delataba). Relanzado con `agy_retranslate_chunks.py --chunk-words 500` dio 1.04 a la
+   primera. **Conclusión: el tamaño del archivo no es el discriminante fiable; lo que
+   protege es VERIFICAR POR TROZO.** Usa `agy_retranslate_chunks.py` por defecto en
+   cualquier archivo que no sea trivialmente corto, y reserva `agy_translate.py` para
+   capítulos de pocos cientos de palabras. El umbral de 4.000 sigue siendo el mínimo
+   OBLIGATORIO, no el criterio suficiente.
+
 5b. **Si traduces con `agy_translate.py`, VERIFICA Y REINTENTA — no es determinista.** Tres
    modos de fallo, todos silenciosos y caros: (a) **reemite un trozo entero** (se ve
    como ENCABEZADOS REPETIDOS, no por el ratio: medido en un Libro que salió con 13
