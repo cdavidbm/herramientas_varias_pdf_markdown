@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import forja_common
 import md_to_pdf
 import clean_markdown
+import epub_to_markdown
 import check_completeness
 import split_chapters
 import fix_ordinals
@@ -595,7 +596,7 @@ class AgyTranslate(unittest.TestCase):
         md = ("# Libro\n\n## §1: T\n\nUn párrafo con nota.[^1]\n\n"
               "![fig](../figuras/fig001.png)\n\n"
               "[^1]: definición uno\n[^2]: definición dos\n")
-        body, defs = agy_translate.split_body_defs(md)
+        body, defs, _tail = agy_translate.split_body_defs(md)
         self.assertIn("Un párrafo con nota.[^1]", body)
         self.assertIn("![fig]", body)
         self.assertNotIn("[^1]: definición", body)
@@ -603,7 +604,7 @@ class AgyTranslate(unittest.TestCase):
 
     def test_split_no_defs(self):
         md = "# Solo\n\nCuerpo sin notas.\n"
-        body, defs = agy_translate.split_body_defs(md)
+        body, defs, _tail = agy_translate.split_body_defs(md)
         self.assertEqual(defs, "")
         self.assertIn("Cuerpo sin notas.", body)
 
@@ -617,3 +618,103 @@ class AgyTranslate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class EpubEmphasisAndPool(unittest.TestCase):
+    """Calibre/Kindle EPUBs: emphasis by CSS class y pool de notas plano.
+
+    Medido en *Astral High Magic* (Warnock, Renaissance Astrology 2012).
+    """
+
+    def test_styles_from_css(self):
+        css = """
+        .italic { font-style: italic; }
+        .bold { font-weight: bold }
+        .calibre12 { font-style: italic; font-size: 1em }
+        .peso { font-weight: 700 }
+        .nada { color: red }
+        p.tit, span.tit2 { font-weight: bold }
+        .a .b { font-style: italic }
+        """
+        ital, bold = epub_to_markdown.styles_from_css(css)
+        self.assertEqual(ital, {"italic", "calibre12"})
+        self.assertEqual(bold, {"bold", "peso", "tit", "tit2"})
+        # Un selector DESCENDIENTE no debe aportar clases: sobre-aplicaría.
+        self.assertNotIn("b", ital)
+
+    def test_italic_span_becomes_markdown(self):
+        html = ('<p>Cita de <span class="italic">Picatrix</span> y de '
+                '<span class="bold">Thabit</span>.</p>')
+        conv = epub_to_markdown.Converter(italic_classes={"italic"},
+                                          bold_classes={"bold"})
+        out = "\n".join(conv.convert_file(html, filename="x.html"))
+        self.assertIn("*Picatrix*", out)
+        self.assertIn("**Thabit**", out)
+
+    def test_emphasis_marks_outside_whitespace(self):
+        # `*foo *` con el espacio DENTRO no lo renderiza pandoc.
+        html = '<p>ver <span class="italic">De Imaginibus </span>ahora</p>'
+        conv = epub_to_markdown.Converter(italic_classes={"italic"})
+        out = "\n".join(conv.convert_file(html, filename="x.html"))
+        self.assertIn("*De Imaginibus* ahora", out)
+
+    def test_source_newline_does_not_break_line(self):
+        # Un salto de línea del FUENTE es espacio en HTML; conservarlo dejaba la
+        # llamada de nota sola en su renglón (pandoc la haría párrafo aparte).
+        html = '<p>fin de la frase.\n<sup><a href="pool.html#n1">5</a></sup>\n</p>'
+        conv = epub_to_markdown.Converter(footnote_lookup={"n1": "cuerpo"},
+                                          footnote_file_marker="pool.html")
+        out = "\n".join(conv.convert_file(html, filename="x.html"))
+        self.assertIn("frase. [^1]", out.replace("\n", " "))
+        self.assertNotRegex(out, r"(?m)^\[\^1\]")
+
+    def test_pool_by_a_id_split(self):
+        # Las 68 notas del libro viven en UN solo <p>, separadas por <br/>.
+        html = ('<p class="calibre_14">\n'
+                '<a id="fp1"></a>1. <span class="italic">Centiloquium</span> af. 9. '
+                '<span>[</span><a href="c.html#x">return</a><span>]</span><br/><br/>\n'
+                '<a id="fp2"></a>2. Segunda nota. '
+                '<span>[</span><a href="c.html#y">return</a><span>]</span><br/><br/>\n'
+                '</p>')
+        got = epub_to_markdown.load_footnote_lookup(
+            html, fmt="by_a_id_split", italic_classes={"italic"})
+        self.assertEqual(set(got), {"fp1", "fp2"})
+        self.assertEqual(got["fp2"], "Segunda nota.")
+        # La cursiva del pool se conserva y el "[return]" desaparece entero.
+        self.assertIn("*Centiloquium*", got["fp1"])
+        self.assertNotIn("return", got["fp1"])
+        self.assertNotIn("[", got["fp1"])
+
+    def test_bold_paragraph_repeating_title_is_dropped(self):
+        html = '<p class="c3"><span class="bold">Chapter 1</span></p><p>Texto.</p>'
+        conv = epub_to_markdown.Converter(bold_classes={"bold"},
+                                          section_title="Chapter 1")
+        out = "\n".join(conv.convert_file(html, filename="x.html"))
+        self.assertNotIn("**Chapter 1**", out)
+        self.assertIn("Texto.", out)
+
+    def test_heading_paragraphs_promotes_and_strips_bold(self):
+        # Dos <span> en negrita adyacentes dejaban `**` en medio del título.
+        html = ('<p class="c3"><span class="sub"><span class="bold">Version I: </span>'
+                '</span><span class="sub"><span class="bold">Part Three</span></span></p>')
+        conv = epub_to_markdown.Converter(bold_classes={"bold"},
+                                          heading_paragraphs={"sub": 2})
+        out = "\n".join(conv.convert_file(html, filename="x.html"))
+        self.assertIn("## Version I: Part Three", out)
+        self.assertNotIn("*", out)
+
+    def test_images_kept_when_image_dir_set(self):
+        html = '<p><img src="images/00002.jpg" alt="Carta"/></p>'
+        conv = epub_to_markdown.Converter(image_dir="imagenes")
+        out = "\n".join(conv.convert_file(html, filename="x.html"))
+        self.assertIn("![Carta](imagenes/00002.jpg)", out)
+        self.assertEqual(conv.used_images, {"images/00002.jpg"})
+        # Sin image_dir se mantiene el comportamiento anterior (se descartan).
+        conv2 = epub_to_markdown.Converter()
+        self.assertNotIn("![", "\n".join(conv2.convert_file(html, filename="x.html")))
+
+    def test_image_skip(self):
+        html = '<p><img src="images/calibre_cover.jpg"/></p>'
+        conv = epub_to_markdown.Converter(image_dir="img",
+                                          image_skip={"calibre_cover.jpg"})
+        self.assertNotIn("![", "\n".join(conv.convert_file(html, filename="x.html")))

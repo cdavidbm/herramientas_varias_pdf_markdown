@@ -604,6 +604,54 @@ python3 $T/epub_to_markdown.py plan.json --dry-run && python3 $T/epub_to_markdow
 ```
 EPUB muy ilustrado → `epub_illustrated_to_markdown.py`.
 
+> **EPUB DE CALIBRE/KINDLE: LA CURSIVA SE PIERDE ENTERA Y EN SILENCIO.** Estos EPUB
+> **casi nunca usan `<i>`/`<em>`**: el énfasis va en una CLASE
+> (`<span class="italic">`, o una opaca `<span class="calibre12">` cuya regla es
+> `font-style: italic`). Un conversor que solo mire etiquetas saca el texto entero
+> —el ratio da 0.99 y el balance de notas cuadra— con **cero cursivas**, y en una
+> edición académica la cursiva ES información: títulos de obra, transliteraciones,
+> tecnicismos. La señal está en el CSS del propio libro, así que `epub_to_markdown.py`
+> lo lee (`styles_from_css`) y deriva qué clases son cursiva/negrita: general, no una
+> lista de nombres por libro. **Compruébalo en un segundo:**
+> `unzip -p x.epub '*.css' | grep -c font-style` frente a
+> `grep -c '<i>\|<em>' *.html`. Medido en *Astral High Magic* (Warnock): 94 `<span
+> class="italic">` y **0** `<i>`; con el arreglo, 157 cursivas recuperadas.
+> **Dos trampas:** las marcas van FUERA del espacio (`*De Imaginibus *ahora` no lo
+> renderiza pandoc), y un selector DESCENDIENTE (`.a .b`) no debe aportar clases o
+> sobre-aplica.
+>
+> **Pool de notas PLANO (todas dentro de UN `<p>`, separadas por `<br/>`):**
+> `footnote_format: "by_a_id_split"`. Los parsers por párrafo no ven ninguna nota
+> aquí, porque no hay un elemento por nota: **la frontera es el ancla vacía**
+> `<a id="filepos…"></a>`, así que se parte el HTML crudo por ella. El `[return]`
+> del final se quita con sus corchetes. (Los otros dos formatos —`by_a_id_any` para
+> un `<p>` por nota, `by_p_id`— siguen igual.)
+>
+> **Otros tres defectos medidos en el mismo libro, todos invisibles en el markdown:**
+> (1) el título del capítulo sale DOS veces, porque el libro lo maqueta como `<p>` en
+> negrita y la deduplicación solo miraba `<h1>`-`<h6>` → ahora se suprime todo párrafo
+> cuyo texto ÍNTEGRO sea el título de la sección; (2) un **salto de línea del FUENTE**
+> dentro del párrafo es un espacio en HTML, pero conservarlo tal cual deja la llamada de
+> nota **sola en su renglón**, y pandoc la convierte en párrafo aparte (una llamada
+> `[^N]` NUNCA abre párrafo: si lo hace, es este defecto); (3) las **imágenes se
+> descartaban en silencio** — en un libro de talismanes son las cartas astrológicas, es
+> decir contenido, y el texto las cita («the chart shown above»). Usa
+> `--images imagenes --image-skip calibre_cover.jpg`: copia solo las que el markdown
+> referencia de verdad.
+>
+> **Subtítulos maquetados como `<p>` en negrita** (aquí «Version I:», «Version J:»,
+> «Agrippa Bk II», «Commentary on Chapter N»): promuévelos con la clave de plan
+> `"heading_paragraphs": {"clase": 2}` — el conocimiento del libro va en el PLAN, no en
+> el conversor. Ojo: dos `<span>` en negrita adyacentes dejan un `**` EN MEDIO del
+> título, así que hay que quitar todas las negritas del encabezado (las cursivas no:
+> en un título son significativas).
+>
+> **Verificar la conversión de un EPUB es fácil y hay que hacerlo:** el texto fuente se
+> saca con BeautifulSoup y se compara token a token con el markdown. El déficit debe
+> quedar EXPLICADO, no solo ser pequeño: en *Astral High Magic*, 195 tokens = 68
+> «return» (los enlaces de vuelta) + 14×9 del `<title>` repetido en cada documento + 1
+> «Footnotes». Ratio 0.9921 y **cero prosa perdida**.
+
 ## Esquema de `plan.json`
 ```json
 {

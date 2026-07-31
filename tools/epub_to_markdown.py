@@ -95,6 +95,38 @@ NOTE_ID_RE = re.compile(r"(footnote|endnote|fn|note|nota)[-_]?\d", re.IGNORECASE
 NOTE_CLASS_RE = re.compile(r"(footnote|endnote|nota|note)", re.IGNORECASE)
 
 
+def styles_from_css(css: str) -> tuple[set[str], set[str]]:
+    """Return ({classes that are italic}, {classes that are bold}) from a stylesheet.
+
+    Calibre/Kindle EPUBs almost never use <i>/<em>: the emphasis lives in a
+    class (`<span class="italic">`, or an opaque `<span class="calibre12">`
+    whose rule is `font-style: italic`). Reading it from the book's OWN CSS
+    keeps this general instead of hardcoding class names per book.
+    """
+    italic: set[str] = set()
+    bold: set[str] = set()
+    # Strip comments, then walk `selector { body }` rules.
+    css = re.sub(r"/\*.*?\*/", " ", css, flags=re.S)
+    for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        is_it = re.search(r"font-style\s*:\s*(italic|oblique)", body, re.I)
+        # `font-weight: bold` or a numeric weight of 600+.
+        is_bd = (re.search(r"font-weight\s*:\s*bold", body, re.I)
+                 or re.search(r"font-weight\s*:\s*([6-9]\d\d)", body))
+        if not (is_it or is_bd):
+            continue
+        for part in sel.split(","):
+            # Only take plain class selectors (`.italic`, `p.foo`): a compound
+            # or descendant selector would over-apply.
+            m = re.fullmatch(r"\s*[a-zA-Z0-9]*\.([A-Za-z0-9_-]+)\s*", part)
+            if not m:
+                continue
+            if is_it:
+                italic.add(m.group(1))
+            if is_bd:
+                bold.add(m.group(1))
+    return italic, bold
+
+
 class Converter:
     """Converts a soup body into markdown lines.
 
@@ -106,8 +138,28 @@ class Converter:
 
     def __init__(self, footnote_lookup: dict[str, str] | None = None,
                  footnote_file_marker: str | list[str] = "Footnote.xhtml",
-                 section_title: str = ""):
+                 section_title: str = "",
+                 italic_classes: set[str] | None = None,
+                 bold_classes: set[str] | None = None,
+                 heading_paragraphs: dict[str, int] | None = None,
+                 image_dir: str = "",
+                 image_skip: set[str] | None = None):
         self.footnote_lookup = footnote_lookup or {}
+        # Emphasis carried by CSS CLASS instead of <i>/<em> (Calibre and most
+        # Kindle exports do this: <span class="italic"> or <span class="calibre12">
+        # whose rule is `font-style: italic`). Derived from the book's own
+        # stylesheets by styles_from_css(), so this is not a hardcoded guess.
+        self.italic_classes = italic_classes or set()
+        self.bold_classes = bold_classes or set()
+        # {css_class: heading level} for books whose subheadings are bold <p>s
+        # rather than <hN> (plan key `heading_paragraphs`).
+        self.heading_paragraphs = heading_paragraphs or {}
+        # Relative dir used in the markdown link, e.g. "imagenes". Empty = drop
+        # images (previous behaviour). `image_skip` holds basenames to ignore
+        # (the cover, decorative rules...).
+        self.image_dir = image_dir
+        self.image_skip = image_skip or set()
+        self.used_images: set[str] = set()
         # Normalised section title, used to suppress an in-document heading that
         # merely repeats the plan-provided H1 (a very common EPUB duplication,
         # independent of the book's CSS classes).
@@ -161,7 +213,12 @@ class Converter:
 
     def _inline(self, node) -> str:
         if isinstance(node, NavigableString):
-            return str(node)
+            # A newline in the SOURCE is just whitespace in HTML, but keeping it
+            # verbatim breaks the line mid-sentence — and when it lands right
+            # before a <sup> note ref, the call ends up alone on its own line,
+            # which pandoc then renders as a separate paragraph. Collapse it to
+            # a space; a real line break only comes from <br>, handled below.
+            return re.sub(r"[ \t]*\n[ \t\r\n]*", " ", str(node))
         if not isinstance(node, Tag):
             return ""
         if node.name in SKIP_TAGS:
@@ -169,8 +226,21 @@ class Converter:
 
         classes = _classes(node)
         # Drop decorative pagebreaks and images
-        if _attr(node, "epub:type") == "pagebreak" or node.name == "img":
+        if _attr(node, "epub:type") == "pagebreak":
             return ""
+        if node.name == "img":
+            # Images are CONTENT in illustrated books (charts, talismans,
+            # diagrams) and dropping them is a silent loss. With --images they
+            # are copied out and linked; without it we keep the old behaviour.
+            src = _attr(node, "src")
+            if not self.image_dir or not src:
+                return ""
+            name = src.rsplit("/", 1)[-1]
+            if name in self.image_skip:
+                return ""
+            self.used_images.add(src)
+            alt = _attr(node, "alt").strip()
+            return f"\n\n![{alt}]({self.image_dir}/{name})\n\n"
         if "image" in classes:
             return ""
         # Special HarperCollins font spans just carry their content
@@ -205,6 +275,24 @@ class Converter:
         if node.name in ("b", "strong"):
             inner = "".join(self._inline(c) for c in node.children)
             return f"**{inner}**" if inner.strip() else ""
+
+        # Emphasis carried by CSS class (Calibre/Kindle). Keep the marks OUTSIDE
+        # the surrounding whitespace: `*foo *bar` renders literally in pandoc.
+        cls_italic = any(c in self.italic_classes for c in classes)
+        cls_bold = any(c in self.bold_classes for c in classes)
+        if (cls_italic or cls_bold) and node.name in ("span", "i", "em", "b",
+                                                      "strong", "font"):
+            inner = "".join(self._inline(c) for c in node.children)
+            if not inner.strip():
+                return inner
+            lead = inner[:len(inner) - len(inner.lstrip())]
+            trail = inner[len(inner.rstrip()):]
+            core = inner.strip()
+            if cls_bold:
+                core = f"**{core}**"
+            if cls_italic:
+                core = f"*{core}*"
+            return f"{lead}{core}{trail}"
         if node.name == "br":
             return "\n"
         if node.name == "a":
@@ -295,6 +383,35 @@ class Converter:
             # Star separators
             if "star" in classes or node.get_text().strip() in ("***", "* * *"):
                 return ["", "---", ""]
+            # A paragraph whose WHOLE text is the section title is the book's own
+            # chapter heading, styled as a bold <p> instead of an <h1> (the norm
+            # in Calibre/Kindle exports). Suppress it: the plan already emits the
+            # H1, and leaving it prints the title twice.
+            if self.section_title_norm:
+                ptext = re.sub(r"\s+", " ", node.get_text()).strip().lower()
+                if ptext == self.section_title_norm:
+                    return []
+            # Book-specific subheadings styled as a bold <p> (plan key
+            # `heading_paragraphs`: {css_class: level}). The class may sit on the
+            # <p> or on a descendant <span>; Calibre nests them either way.
+            if self.heading_paragraphs:
+                seen = set(classes)
+                for sp in node.find_all(("span", "div")):
+                    seen.update(_classes(sp))
+                for cls, level in self.heading_paragraphs.items():
+                    if cls in seen:
+                        text = re.sub(r"\s+", " ", self._inline(node)).strip()
+                        # Drop the BOLD marks: a heading is already emphatic, and
+                        # `## **X**` renders the asterisks in the TOC. A heading
+                        # built from two adjacent bold spans ("Version I:" +
+                        # "Part Three…") leaves `**` mid-string too, so remove
+                        # them all — but keep single-`*` italics, which are
+                        # meaningful in a title (work names, transliterations).
+                        text = text.replace("**", "")
+                        text = re.sub(r"\s+", " ", text).strip()
+                        if not text:
+                            return []
+                        return ["", f"{'#' * level} {text}", ""]
             # Footnote paragraphs (in essays) → handled by caller via footnote file,
             # but if we encounter them inline here, emit as footnote body.
             if "footnote" in classes:
@@ -413,7 +530,9 @@ class Converter:
 # Footnote loader
 # ---------------------------------------------------------------------------
 
-def load_footnote_lookup(html: str, fmt: str = "by_a_id") -> dict[str, str]:
+def load_footnote_lookup(html: str, fmt: str = "by_a_id",
+                         italic_classes: set[str] | None = None,
+                         bold_classes: set[str] | None = None) -> dict[str, str]:
     """Parse a footnote-pool file into {anchor_id -> markdown body}.
 
     Three formats are supported:
@@ -430,9 +549,39 @@ def load_footnote_lookup(html: str, fmt: str = "by_a_id") -> dict[str, str]:
       Same idea as `by_a_id` but the paragraph carries an arbitrary class, so
       we accept ANY <p> whose first <a> has an id, and strip the surrounding
       brackets of the leading `[N]` marker.
+    * `by_a_id_split` (Calibre/Kindle *flat* pool, e.g. Warnock & Greer's
+      *Astral High Magic*):
+        <p class="calibre_14">
+          <a id="filepos…"></a>1. body… [<a href="…">return</a>]<br/><br/>
+          <a id="filepos…"></a>2. body… [<a href="…">return</a>]<br/><br/>
+        </p>
+      ALL the notes live inside ONE paragraph, separated by <br/>, so there is
+      no per-note element to iterate over: the note boundary is the empty
+      `<a id=…></a>` anchor itself, and we split the raw HTML on it.
     """
     soup = BeautifulSoup(html, "html.parser")
     out: dict[str, str] = {}
+
+    if fmt == "by_a_id_split":
+        parts = re.split(r'<a\s+id="([^"]+)"\s*>\s*</a>', html)
+        # parts = [preamble, id1, body1, id2, body2, …]
+        for anchor_id, chunk in zip(parts[1::2], parts[2::2]):
+            frag = BeautifulSoup(chunk, "html.parser")
+            # Drop the trailing back-link ("[return]") and its brackets.
+            for a in list(frag.find_all("a")):
+                if a.get_text(strip=True).lower() in ("return", "back", "↩", "↑"):
+                    a.decompose()
+            conv = Converter(footnote_lookup={},
+                             italic_classes=italic_classes,
+                             bold_classes=bold_classes)
+            text = "".join(conv._inline(c) for c in frag.children)
+            text = re.sub(r"\[\s*\]\s*$", "", text.strip())
+            # Leading note number left behind by the extracted anchor ("12. ").
+            text = re.sub(r"^\s*\d+\.\s*", "", text)
+            text = re.sub(r"\s+", " ", text).strip()
+            if text:
+                out[anchor_id] = text
+        return out
 
     if fmt == "by_p_id":
         # Find all paragraphs with an id (they may be inside <div class="nota">).
@@ -454,7 +603,9 @@ def load_footnote_lookup(html: str, fmt: str = "by_a_id") -> dict[str, str]:
                 # Match patterns like "[1]" or "1"
                 if re.fullmatch(r"\[?\d+\]?", inner):
                     sup.extract()
-            conv = Converter(footnote_lookup={})
+            conv = Converter(footnote_lookup={},
+                             italic_classes=italic_classes,
+                             bold_classes=bold_classes)
             text = "".join(conv._inline(c) for c in p.children)
             text = re.sub(r"^\s*\[?\d+\]?\.?\s*", "", text)
             text = re.sub(r"\s+", " ", text).strip()
@@ -477,7 +628,9 @@ def load_footnote_lookup(html: str, fmt: str = "by_a_id") -> dict[str, str]:
         if not anchor_id:
             continue
         a.extract()
-        conv = Converter(footnote_lookup={})
+        conv = Converter(footnote_lookup={},
+                             italic_classes=italic_classes,
+                             bold_classes=bold_classes)
         text = "".join(conv._inline(c) for c in p.children)
         # Leading marker left behind by the extracted <a>: "N." or the
         # brackets of "[N]" (by_a_id_any).
@@ -523,6 +676,11 @@ def main() -> int:
     ap.add_argument("--out", type=Path, help="Override output dir")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", type=str, help="Only process sections whose title contains this substring")
+    ap.add_argument("--images", type=str, default="",
+                    help="Extract images into OUTPUT_DIR/NAME and link them "
+                         "from the markdown (default: drop images)")
+    ap.add_argument("--image-skip", type=str, default="",
+                    help="Comma-separated image basenames to ignore (e.g. the cover)")
     args = ap.parse_args()
 
     plan = json.loads(args.plan.read_text(encoding="utf-8"))
@@ -569,6 +727,26 @@ def main() -> int:
                 print(f"info: no 'text/' folder; using OPF dir as text root: "
                       f"{text_root.relative_to(tmp_path)}", file=sys.stderr)
 
+        # Emphasis-by-class map, read from the book's own stylesheets. Without
+        # it, a Calibre/Kindle EPUB loses ALL its italics in silence (they are
+        # <span class="italic">, never <i>), and in an academic text the italic
+        # IS information: work titles, transliterations, technical terms.
+        css_all = "\n".join(p.read_text(encoding="utf-8", errors="replace")
+                            for p in sorted(tmp_path.rglob("*.css")))
+        italic_classes, bold_classes = styles_from_css(css_all)
+        if italic_classes or bold_classes:
+            print(f"info: emphasis classes from CSS: "
+                  f"{len(italic_classes)} italic, {len(bold_classes)} bold",
+                  file=sys.stderr)
+
+        heading_paragraphs = {str(k): int(v) for k, v in
+                              (plan.get("heading_paragraphs") or {}).items()}
+        image_dir = args.images or str(plan.get("image_dir") or "")
+        image_skip = {s.strip() for s in
+                      (args.image_skip or plan.get("image_skip") or "").split(",")
+                      if s.strip()}
+        all_used_images: set[str] = set()
+
         # Load footnote lookup. `footnote_file` can be:
         #   - a string (single pool file, e.g. Footnote.xhtml or appendix001.html)
         #   - a list of strings (multiple pool files merged, e.g. Smith's
@@ -589,7 +767,9 @@ def main() -> int:
             fn_path = text_root / fn
             if fn_path.is_file():
                 merged = load_footnote_lookup(fn_path.read_text(encoding="utf-8"),
-                                              fmt=fn_format)
+                                              fmt=fn_format,
+                                              italic_classes=italic_classes,
+                                              bold_classes=bold_classes)
                 # Detect collisions; warn if the same anchor lives in two pool files.
                 for k, v in merged.items():
                     if k in footnote_lookup and footnote_lookup[k] != v:
@@ -623,7 +803,12 @@ def main() -> int:
                 marker_for_conv = fn_files  # list — converter checks each
             conv = Converter(footnote_lookup=footnote_lookup,
                              footnote_file_marker=marker_for_conv,
-                             section_title=title)
+                             section_title=title,
+                             italic_classes=italic_classes,
+                             bold_classes=bold_classes,
+                             heading_paragraphs=heading_paragraphs,
+                             image_dir=image_dir,
+                             image_skip=image_skip)
             parts: list[str] = [f"# {title}", ""]
 
             missing = []
@@ -655,9 +840,27 @@ def main() -> int:
                 continue
 
             out_path.write_text(content, encoding="utf-8")
+            all_used_images |= conv.used_images
             wc = len(content.split())
             print(f"  [{i:03d}] wrote {slug}.md  ({wc} words)")
             total += 1
+
+        # Copy out only the images actually referenced by the written markdown.
+        if image_dir and all_used_images and not args.dry_run:
+            img_out = output_dir / image_dir
+            img_out.mkdir(parents=True, exist_ok=True)
+            copied = 0
+            for src in sorted(all_used_images):
+                cand = (text_root / src).resolve()
+                if not cand.is_file():
+                    hits = list(tmp_path.rglob(src.rsplit("/", 1)[-1]))
+                    if not hits:
+                        print(f"warning: image not found in EPUB: {src}", file=sys.stderr)
+                        continue
+                    cand = hits[0]
+                (img_out / cand.name).write_bytes(cand.read_bytes())
+                copied += 1
+            print(f"info: copied {copied} image(s) into {img_out}", file=sys.stderr)
 
         print(f"\nDone. {total} section(s) {'planned' if args.dry_run else 'written'} in {output_dir}")
     return 0
