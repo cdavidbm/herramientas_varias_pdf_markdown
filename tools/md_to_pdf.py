@@ -81,7 +81,8 @@ _TABLE_SIZE_CMD = {"normal": "", "small": r"\small",
 
 def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback="",
              fontsize=12, geometry=DEFAULT_GEOMETRY, tocdepth="subsection",
-             chapstyle="bringhurst", arabfont="", short_headers=False, leading=None):
+             chapstyle="bringhurst", arabfont="", short_headers=False, leading=None,
+             subtitles=()):
     unichars = "\n".join(
         r"\newunicodechar{%s}{{\normalfont\%s}}" % (u, c) for u, c in UNI2CMD.items())
     gpath = (r"\graphicspath{%s}" % "".join("{%s/}" % d for d in graphicspath)
@@ -93,10 +94,19 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
     titleblock = ""
     if title:
         authorline = (r"{\small\scshape %s} \\" % author) if author else ""
+        # Subtítulos escalonados bajo el título (transliteración, título en la
+        # lengua del lector, mención de edición…). El primero va destacado y el
+        # resto en cuerpo menor, con un filete entre el bloque y el pie.
+        subs = ""
+        sizes = [r"\LARGE", r"\large", r"\large"]
+        for i, s in enumerate([latex_escape(x) for x in subtitles]):
+            subs += "{%s %s\\\\[0.45in]}\n" % (sizes[min(i, len(sizes) - 1)], s)
+        gap = "[0.9in]" if subs else "[1in]"
         titleblock = (
-            "\\begin{titlingpage}\n\\centering\n"
-            "{\\Huge\\scshape \\textsl{%s}\\\\ [1in]}\n%s\n"
-            "\\end{titlingpage}\n" % (title, authorline))
+            "\\begin{titlingpage}\n\\centering\n\\vspace*{1.2in}\n"
+            "{\\Huge\\scshape \\textsl{%s}\\\\ %s}\n%s"
+            "\\vfill\n%s\n"
+            "\\end{titlingpage}\n" % (title, gap, subs, authorline))
     # tocdepth=subsection: el índice incluye las tablas/subsecciones de apéndices
     # (que van «starred» pero con \addcontentsline), no solo los capítulos.
     # \clearpage ANTES y después: el índice abre siempre en página propia, aunque lo
@@ -110,9 +120,19 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
     if short_headers:
         # \rhchapname = el «Capítulo/Chapter» de babel, capturado ANTES de que el estilo de
         # capítulo vacíe \chaptername (los estilos hacen \renewcommand{\chaptername}{}).
-        chaptermark = (r"\renewcommand{\chaptermark}[1]{\markboth"
-                       r"{\ifnum\value{chapter}>0 \rhchapname\ \thechapter\else #1\fi}"
-                       r"{\ifnum\value{chapter}>0 \rhchapname\ \thechapter\else #1\fi}}")
+        # En los capítulos SIN numerar el titulillo repetía el título ENTERO, y en
+        # este fondo son larguísimos («Libro Uno, Capítulo Siete: En qué grado
+        # existe todo en el universo, y muchas otras cosas…»): desbordaban el
+        # encabezado hasta pegarse al cuerpo. \forjacorto recorta por los dos
+        # puntos —donde acaba el rótulo— y deja intacto el título sin ellos.
+        chaptermark = (
+            "\\makeatletter\n"
+            "\\def\\forja@corta#1:#2\\forja@fin{#1}\n"
+            "\\newcommand{\\forjacorto}[1]{\\forja@corta#1:\\forja@fin}\n"
+            "\\makeatother\n"
+            r"\renewcommand{\chaptermark}[1]{\markboth"
+            r"{\ifnum\value{chapter}>0 \rhchapname\ \thechapter\else \forjacorto{#1}\fi}"
+            r"{\ifnum\value{chapter}>0 \rhchapname\ \thechapter\else \forjacorto{#1}\fi}}")
     else:
         chaptermark = (r"\renewcommand{\chaptermark}[1]{\markboth"
                        r"{\ifnum\value{chapter}>0 \thechapter.\ \fi #1}"
@@ -220,7 +240,7 @@ FRONT_RE = re.compile(
     r"^#\s+(prefacio|preface|pr[oó]logo|proemio|introducci[oó]n|introduction|"
     r"agradecimientos|acknowledg\w*|dedicatoria|nota\s+(?:preliminar|del|de)\b)", re.I)
 
-def classify_roles(files):
+def classify_roles(files, front_matter: int = 0):
     """Reparte los archivos según su encabezado H1.
 
     · Si el libro tiene capítulos «Capítulo/Chapter N»: esos son los numerados;
@@ -230,6 +250,14 @@ def classify_roles(files):
       tramo inicial de archivos sin H1 o con título de front (portada, prefacio,
       introducción, agradecimientos…); todo lo demás son divisiones sin numerar,
       auto-rotuladas (Parte 1, Apéndice A, Glosario, Bibliografía, Índice)."""
+    if front_matter:
+        # Reparto EXPLÍCITO: los N primeros archivos son front-matter (numeración
+        # romana). Se usa cuando la heurística de títulos no acierta —p. ej. un
+        # «Estudio introductorio» ajeno, o capítulos rotulados «Libro Uno,
+        # Capítulo Uno» que no casan con «Capítulo N»— y evita arrastrar al
+        # front-matter secciones que SÍ son parte de la obra (el Prólogo).
+        return ["front" if i < front_matter else "appendix"
+                for i in range(len(files))]
     h1s = []
     for f in files:
         h1s.append(next((ln for ln in pathlib.Path(f).read_text(encoding="utf-8",
@@ -342,9 +370,22 @@ def star_sections(tex):
         if cmd == "paragraph":
             out.append(r"\%s*{%s}" % (cmd, title))
         else:
-            out.append(r"\%s*{%s}\addcontentsline{toc}{%s}{%s}" % (cmd, title, cmd, toctext))
+            # Titulillo: en un capítulo SIN numerar, memoir repite el título
+            # entero, y los de este fondo son larguísimos («Libro Uno, Capítulo
+            # Siete: En qué grado existe todo en el universo, y muchas otras
+            # cosas…»): desbordan el encabezado y se pegan al cuerpo. Se recorta
+            # por los dos puntos, que es justo donde acaba el rótulo.
+            mark = ""
+            if cmd == "chapter" and SHORT_MARKS:
+                corto = title.split(":")[0].strip()
+                if corto and corto != title:
+                    mark = r"\chaptermark{%s}" % title
+            out.append(r"\%s*{%s}%s\addcontentsline{toc}{%s}{%s}"
+                       % (cmd, title, mark, cmd, toctext))
         i = k + 1
     return "".join(out)
+
+SHORT_MARKS = False   # --short-headers: recorta el titulillo por los dos puntos
 
 _COLALIGN = {"l": r"\raggedright", "c": r"\centering", "r": r"\raggedleft"}
 
@@ -575,6 +616,12 @@ def main():
                          "que la numeración automática DIVERJA de la del autor cuando hay "
                          "subapartados sin numerar intercalados (rompería las remisiones). "
                          "Siguen apareciendo en el índice con su página.")
+    ap.add_argument("--subtitle", action="append", default=[], metavar="TEXTO",
+                    help="línea(s) bajo el título de portada (repetible): "
+                         "transliteración, título traducido, mención de edición…")
+    ap.add_argument("--front-matter", type=int, default=0, metavar="N",
+                    help="los N primeros archivos son front-matter (numeración "
+                         "ROMANA): úsalo cuando la heurística de títulos no acierte")
     ap.add_argument("--start-chapter", type=int, default=None, metavar="N",
                     help="arranca la numeración de capítulos en N (def: 1). Para obras "
                          "MULTIVOLUMEN cuyo tomo continúa la numeración del anterior "
@@ -603,7 +650,9 @@ def main():
                 f"AVISO: griego politónico en «{pathlib.Path(hit).name}» y sin --font-fallback; "
                 "Latin Modern lo descarta en silencio. Usa --font-fallback \"GFS Artemisia\".\n")
 
-    roles = classify_roles(a.md)
+    global SHORT_MARKS
+    SHORT_MARKS = a.short_headers
+    roles = classify_roles(a.md, a.front_matter)
     texs = [md_to_latex(m, r) for m, r in zip(a.md, roles)]
     front = "\n\n".join(t for t, r in zip(texs, roles) if r == "front")
     mainb = "\n\n".join(t for t, r in zip(texs, roles) if r != "front")
@@ -631,7 +680,8 @@ def main():
         mainstart += "\\setcounter{chapter}{%d}\n" % (a.start_chapter - 1)
     doc = (preamble(a.title, a.author, a.lang, a.toc, gdirs, a.footnotes, fallback,
                     a.fontsize, a.geometry, a.toc_depth, a.chapter_style, arabtex,
-                    short_headers=a.short_headers, leading=a.leading)
+                    short_headers=a.short_headers, leading=a.leading,
+                    subtitles=a.subtitle)
            + front + mainstart + mainb + "\n\\end{document}\n")
 
     out = pathlib.Path(a.out).resolve()

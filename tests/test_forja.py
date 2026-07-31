@@ -26,6 +26,7 @@ import forja_common
 import md_to_pdf
 import clean_markdown
 import epub_to_markdown
+import citas_en_bloque
 import check_completeness
 import split_chapters
 import fix_ordinals
@@ -718,3 +719,73 @@ class EpubEmphasisAndPool(unittest.TestCase):
         conv = epub_to_markdown.Converter(image_dir="img",
                                           image_skip={"calibre_cover.jpg"})
         self.assertNotIn("![", "\n".join(conv.convert_file(html, filename="x.html")))
+
+
+class CitasEnBloque(unittest.TestCase):
+    """Párrafos que son una cita entera → `>`. Medido en *Astral High Magic*."""
+
+    def test_cita_simple_pierde_las_comillas_envolventes(self):
+        md = 'Plotino dice,\n\n"Creo, por tanto, que aquellos sabios."[^4]\n'
+        out, st = citas_en_bloque.process(md)
+        self.assertIn("> Creo, por tanto, que aquellos sabios.[^4]", out)
+        self.assertNotIn('"', out)
+        self.assertEqual(st["cita"], 1)
+
+    def test_comillas_interiores_se_respetan(self):
+        md = '"Dijo el rey "basta" y calló."\n'
+        out, _ = citas_en_bloque.process(md)
+        self.assertEqual(out.strip(), '> Dijo el rey "basta" y calló.')
+
+    def test_cita_multiparrafo_lleva_mayor_en_el_separador(self):
+        # Sin `>` en el renglón separador, pandoc ve DOS citas distintas.
+        md = ('"Primer párrafo de la cita que no cierra\n\n'
+              'Segundo párrafo, sigue dentro\n\n'
+              'y aquí cierra la cita."\n\nProsa del autor.\n')
+        out, st = citas_en_bloque.process(md)
+        self.assertIn("> Primer párrafo", out)
+        self.assertIn("\n>\n", out)
+        self.assertIn("> y aquí cierra la cita.", out)
+        self.assertIn("\nProsa del autor.", out)
+        self.assertNotIn("> Prosa del autor", out)
+        self.assertEqual(st["cita_multiparrafo"], 2)
+
+    def test_cita_que_cierra_a_media_linea_se_parte(self):
+        md = ('"…living Images."[^45] Agrippa goes on to note that timing matters,\n')
+        out, st = citas_en_bloque.process(md)
+        self.assertEqual(st["cita_partida"], 1)
+        self.assertIn("> …living Images.[^45]", out)
+        self.assertRegex(out, r"(?m)^Agrippa goes on to note")
+
+    def test_no_toca_encabezados_listas_ni_notas(self):
+        md = '# Título\n\n- "un ítem entrecomillado"\n\n[^1]: "una definición"\n'
+        out, st = citas_en_bloque.process(md)
+        self.assertEqual(st["cita"], 0)
+        self.assertNotIn(">", out)
+
+    def test_llamadas_de_nota_se_pegan(self):
+        t, n = citas_en_bloque.glue_footnotes("la ciencia de las imágenes [^1] y luego")
+        self.assertIn("imágenes[^1]", t)
+        self.assertEqual(n, 1)
+
+    def test_punto_espurio_tras_la_llamada(self):
+        t, _ = citas_en_bloque.glue_footnotes('miserable."[^3]. Y sigue')
+        self.assertIn('miserable."[^3] Y sigue', t)
+
+    def test_encabezado_no_se_come_el_renglon_en_blanco(self):
+        # La trampa: `\s*$` en multilínea pega el encabezado al párrafo.
+        out = citas_en_bloque.fix_headings("## Version I:\n\nThabit dijo\n")
+        self.assertEqual(out, "## Version I\n\nThabit dijo\n")
+
+    def test_encabezado_ya_pegado_se_separa(self):
+        out = citas_en_bloque.fix_headings("## Versión I\nThabit dijo\n")
+        self.assertEqual(out, "## Versión I\n\nThabit dijo\n")
+
+    def test_comillas_tipograficas_alternan(self):
+        self.assertEqual(citas_en_bloque.curl_quotes('dijo "hola" y "adiós"'),
+                         'dijo “hola” y “adiós”')
+
+    def test_idempotente(self):
+        md = 'Plotino dice,\n\n"Creo que sí."[^4]\n\nY sigue.\n'
+        a, _ = citas_en_bloque.process(md)
+        b, _ = citas_en_bloque.process(a)
+        self.assertEqual(a, b)

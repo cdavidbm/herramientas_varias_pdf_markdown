@@ -205,6 +205,23 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   PIXEL A PIXEL con `pdfimages -png -f N -l N x.pdf fig` — más limpio y sin gastar cuota;
   invierte las que salgan en negativo (brillo bajo) y, si dos comparten página, asígnalas
   por orden arriba→abajo. (Medido en Sahl: 56 figuras raster directas, 0 agy.)
+- `citas_en_bloque.py ./markdown/*.md [--apply] [--comillas]` — los párrafos que son
+  una **CITA ENTERA** salen del converter como prosa normal entrecomillada, porque la
+  maqueta las marcaba con la SANGRÍA y esa señal no sobrevive. El markdown se lee, pero
+  una cita de cinco renglones queda **indistinguible de la voz del autor**, que es justo
+  lo que hay que ver de un vistazo. Las pasa a `>` y les quita las comillas que las
+  envuelven (el bloque ya lo dice; dejar las dos cosas es redundante), respetando las
+  interiores. Tres casos que un `sed` no cubre: **citas de VARIOS párrafos** (la comilla
+  de cierre está tres párrafos más abajo, y entre dos bloques `>` separados por un
+  renglón EN BLANCO pandoc ve DOS citas: el separador tiene que llevar su propio `>`);
+  **cita que cierra a media línea** con la frase de transición del autor pegada detrás
+  («…living Images."[^45] Agrippa goes on to note…»), que hay que PARTIR; y las
+  **llamadas de nota** (`imágenes [^1]` va sin espacio; un punto tras la llamada cuando
+  la frase ya cerró con `."` sobra). Medido en *Astral High Magic*: 23 citas, 3
+  continuaciones, 1 partida, 40 llamadas pegadas.
+  **Trampa cara:** un regex `^(#+ .*?)\s*:\s*$` en multilínea **se come el renglón en
+  blanco siguiente** y pega el encabezado al párrafo (`\s` incluye `\n`) — hay que anclar
+  con `[ \t]*`. No se ve leyendo el markdown por encima y lo estropea entero.
 - `split_chapters.py libro.md --plan plan.json` (o `--by-heading 2`) — trocea en
   capítulos. Exige UNA de las dos banderas; el `.md` va siempre como posicional.
 - `verse_paragraphs.py libro/*.md [--apply]` — texto **VERSIFICADO** (Abū Maʿshar,
@@ -602,6 +619,11 @@ dudes de si un título es título o de dónde está el corte de columna.
 python3 $T/build_plan.py "libro.epub" > plan.json   # spine + TOC (genérico)
 python3 $T/epub_to_markdown.py plan.json --dry-run && python3 $T/epub_to_markdown.py plan.json
 ```
+> **Pool de notas al final del libro → `footnotes_redistribute.py libro.md --apply`
+> ANTES de trocear.** Si las definiciones `[^N]:` viven todas juntas al final, al
+> partir por capítulos se van ENTERAS al último archivo y los demás quedan con las
+> llamadas huérfanas. Las reparte al capítulo donde está su primera llamada; las que
+> no tengan llamada se conservan y se reportan, nunca se borran.
 EPUB muy ilustrado → `epub_illustrated_to_markdown.py`.
 
 > **EPUB DE CALIBRE/KINDLE: LA CURSIVA SE PIERDE ENTERA Y EN SILENCIO.** Estos EPUB
