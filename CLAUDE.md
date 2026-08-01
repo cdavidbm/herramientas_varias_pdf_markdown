@@ -868,6 +868,13 @@ un PDF entero como sección.
    el que estuviera en curso. `--desde/--hasta` acotan un Libro; `--max N` traduce N y
    para (fases pausables); `--informe` lista lo que falta; `--rehacer` reintenta los que
    quedaron en fallo.
+   **NUNCA BORRES el archivo traducido para rehacerlo:** el motor lo SOBRESCRIBE, así
+   que borrarlo no aporta nada y quita la red de seguridad si el reintento sale peor.
+   Basta con desmarcarlo en el estado. Y no lo desmarques a mano: el estado guarda la
+   **huella del ORIGEN**, así que el propio programa detecta qué archivos cambiaron y los
+   devuelve a la cola. Medido a base de fallar: una normalización de espacios tocó 78
+   archivos cuando de verdad afectaba a 3, y desmarcar «los que cambiaron» a ojo tiró 33
+   traducciones buenas.
    **Y verifica las TABLAS**: si el motor funde dos columnas o se come un renglón, el
    ratio apenas se mueve y el balance de notas ni se entera. En un libro cuyas tablas son
    el CONTENIDO —las Escalas de los números de Agripa— eso es pérdida grave e invisible.

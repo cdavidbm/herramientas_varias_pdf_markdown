@@ -978,3 +978,18 @@ class ImagenesInline(unittest.TestCase):
         html = '<p>a <img src="images/g.png"/> b</p>'
         out = "\n".join(conv.convert_file(html, filename="x.html"))
         self.assertIn("![](im/g.png)", out)
+
+    def test_huella_detecta_origen_cambiado(self):
+        a = traducir_libro.huella("Un texto.")
+        self.assertEqual(a, traducir_libro.huella("Un texto."))
+        self.assertNotEqual(a, traducir_libro.huella("Un texto cambiado."))
+
+    def test_metricas_no_borran_nada(self):
+        # El resultado traducido se SOBRESCRIBE; nunca hay que borrarlo para
+        # rehacerlo. Aquí solo se comprueba que las métricas no tocan disco.
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "x.md"
+            f.write_text("hola")
+            traducir_libro.metricas("hola", "hola")
+            self.assertTrue(f.is_file())

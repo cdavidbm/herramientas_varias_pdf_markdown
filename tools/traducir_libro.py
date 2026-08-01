@@ -113,6 +113,20 @@ def verificar_tablas(en: str, es: str) -> list[str]:
     return fallos
 
 
+def huella(texto: str) -> str:
+    """Huella del archivo ORIGEN, guardada junto al resultado.
+
+    Sin esto, «¿hay que retraducir este archivo?» se resuelve a mano, y a mano se
+    falla: en Agripa cambié 78 archivos con una normalización de espacios que solo
+    afectaba de verdad a 3, y di de baja 33 traducciones buenas. Con la huella, el
+    propio programa sabe cuáles cambiaron. **Y nunca hace falta BORRAR el .md
+    traducido**: el motor lo sobrescribe, así que borrarlo solo quita la red de
+    seguridad si algo sale mal.
+    """
+    import hashlib
+    return hashlib.sha1(texto.encode("utf-8")).hexdigest()[:16]
+
+
 def metricas(en: str, es: str) -> dict:
     return {"ratio": round(len(cuerpo(es).split()) / max(1, len(cuerpo(en).split())), 3),
             "llamadas": len(set(REF.findall(es))),
@@ -138,6 +152,7 @@ def traducir_uno(src: Path, dst: Path, glosario: Path, prompt: Path,
         fallos.append(f"el motor salió con código {p.returncode}")
     info["fallos"] = fallos
     info["estado"] = "ok" if not fallos else "fallo"
+    info["huella_en"] = huella(en)
     return src.name, info
 
 
@@ -172,6 +187,20 @@ def main() -> int:
         todos = [f for f in todos if f.name >= a.desde]
     if a.hasta:
         todos = [f for f in todos if f.name[:len(a.hasta)] <= a.hasta]
+
+    # Un archivo hecho cuyo ORIGEN ha cambiado desde entonces vuelve a la cola,
+    # sin tocar el .md traducido (el motor lo sobrescribe cuando le toque).
+    rehacer_por_cambio = []
+    for f in todos:
+        e = estado.get(f.name, {})
+        if e.get("estado") == "ok" and e.get("huella_en") and \
+                e["huella_en"] != huella(f.read_text(encoding="utf-8")):
+            rehacer_por_cambio.append(f.name)
+            e["estado"] = "origen_cambiado"
+    if rehacer_por_cambio:
+        print(f"aviso: {len(rehacer_por_cambio)} archivo(s) con el ORIGEN cambiado "
+              f"vuelven a la cola: {', '.join(n[:28] for n in rehacer_por_cambio[:5])}"
+              + (" …" if len(rehacer_por_cambio) > 5 else ""))
 
     hechos = [f for f in todos if estado.get(f.name, {}).get("estado") == "ok"]
     fallidos = [f for f in todos if estado.get(f.name, {}).get("estado") == "fallo"]
