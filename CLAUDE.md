@@ -577,6 +577,16 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
 > línea siguiente**, no la absoluta: los párrafos en BLOQUE (citas, párrafos numerados
 > `[3]`) tienen todas sus líneas metidas y con un umbral absoluto se parten una a una.
 
+> **LA APERTURA DE CAPÍTULO NO LLEVA TITULILLO: esa es la señal.** Al fijar los límites
+> de troceo es fácil tomar por arranque una página INTERIOR cuyo titulillo diga
+> «152 CHAPTER FOUR» —el número es el de esa página, no el del comienzo—. La apertura
+> real trae el rótulo SOLO, sin cifra. Buscando `^(CHAPTER \w+|APPENDIX \w+|BIBLIOGRAPHY)$`
+> como primera línea salen todos los límites de una vez y verificados. Medido en Lehrich:
+> el cap. 4 empieza en la p. 161, no en la 166, y el error se delató por las
+> **definiciones 1-6 DUPLICADAS** en el capítulo anterior (el segundo juego era del
+> capítulo siguiente). Un aparato con la secuencia ROTA es la señal de que el límite
+> está mal, mucho antes que cualquier ratio.
+
 > **CIFRAS DEL CUERPO TOMADAS POR LLAMADAS DE NOTA.** `--footnotes` separa el pie por
 > CUERPO DE LETRA, así que cualquier cifra compuesta en otro tamaño se convierte en un
 > `[^N]` falso: las de un **cuadrado mágico**, las páginas de una **referencia
