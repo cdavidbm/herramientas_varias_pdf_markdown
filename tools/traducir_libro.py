@@ -72,6 +72,14 @@ def verificar(en: str, es: str) -> list[str]:
         fallos.append(f"encabezados {len(HEAD.findall(en))}≠{len(HEAD.findall(es))}")
     if IMG.findall(en) != IMG.findall(es):
         fallos.append("figuras distintas")
+    # Una VALLA DE CÓDIGO en la salida del motor es demoledora y silenciosa: todo
+    # lo que quede dentro se maqueta como texto literal, y las llamadas `[^N]` de
+    # ahí dentro DEJAN DE SER llamadas, así que sus notas desaparecen del PDF sin
+    # que nada lo delate —el recuento de encabezados incluso cuadra, porque el
+    # regex de `#` casa igual dentro de la valla—. Medido en Agripa: un archivo
+    # con medio capítulo encerrado en ```markdown y 6 notas perdidas.
+    if re.search(r"(?m)^```", es) and not re.search(r"(?m)^```", en):
+        fallos.append("VALLA DE CÓDIGO en la traducción (```) que el original no tiene")
     titulos = re.findall(r"(?m)^#+ (.+)$", es)
     if len(titulos) != len(set(titulos)):
         fallos.append("encabezado REPETIDO (agy reemitió un trozo)")

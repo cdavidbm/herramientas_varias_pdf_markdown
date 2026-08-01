@@ -82,7 +82,7 @@ _TABLE_SIZE_CMD = {"normal": "", "small": r"\small",
 def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback="",
              fontsize=12, geometry=DEFAULT_GEOMETRY, tocdepth="subsection",
              chapstyle="bringhurst", arabfont="", short_headers=False, leading=None,
-             subtitles=()):
+             subtitles=(), chapsize="\\LARGE"):
     unichars = "\n".join(
         r"\newunicodechar{%s}{{\normalfont\%s}}" % (u, c) for u, c in UNI2CMD.items())
     gpath = (r"\graphicspath{%s}" % "".join("{%s/}" % d for d in graphicspath)
@@ -186,7 +186,7 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
   \renewcommand{\chapternamenum}{}
   \renewcommand{\printchapternum}{}
   \renewcommand{\afterchapternum}{}
-  \renewcommand{\printchaptertitle}[1]{\raggedright\LARGE\bfseries\MakeUppercase{##1}}
+  \renewcommand{\printchaptertitle}[1]{\raggedright%(chapsize)s\bfseries\MakeUppercase{##1}}
   \renewcommand{\afterchaptertitle}{\vskip 0.3em \hrule\vskip\onelineskip}
 }
 \setsecheadstyle{\bfseries\raggedright}
@@ -228,7 +228,8 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
 %(toctex)s""" % dict(lang=lang, unichars=unichars, titleblock=titleblock,
                      toctex=toctex, gpath=gpath, fn=fn, fallback=fallback,
                      fontsize=fontsize, geometry=geometry, chapstyle=chapstyle,
-                     arabic=arabfont, chaptermark=chaptermark, leading=leadingtex)
+                     arabic=arabfont, chaptermark=chaptermark, leading=leadingtex,
+                     chapsize=chapsize)
 
 # Detección del prefijo de capítulo numerado en el H1: «Capítulo N —», «Chapter N —»,
 # «Capítulo N: …» o simplemente «NN —» (numeración por dígitos, p. ej. «# 05 — La Luna»).
@@ -589,12 +590,24 @@ def md_to_latex(mdfile, role):
         relocate_heading_footnotes(pathlib.Path(mdfile).read_text(encoding="utf-8")))
     if FIG_CAPTIONS:
         src = split_image_captions(src)
-    if role == "chapter":                    # memoir numera; quitar el prefijo literal
+    # Con OWN_SEC_NUMS el título YA numera («# Capítulo 50. …») y memoir NO debe
+    # numerar: su contador es corrido (1..N sobre todos los archivos) y en un libro
+    # cuyos capítulos reinician por Libro daba «184» donde el original dice 50 —y
+    # pegado al título, porque el prefijo literal sí se había quitado—.
+    if role == "chapter" and not OWN_SEC_NUMS:   # memoir numera; quitar el prefijo literal
         lines = src.split("\n")
         for i, ln in enumerate(lines):
             if ln.startswith("# "):
                 lines[i] = "# " + PREF_RE.sub("", ln[2:]); break
         src = "\n".join(lines)
+    # Titulillo EXPLÍCITO: `<!-- titulillo: Libro I · cap. 50 -->` tras el H1.
+    # Es la única forma fiable de poner «Libro X, capítulo Y» en la cabecera, porque
+    # ni memoir ni el título saben a qué Libro pertenece el capítulo.
+    marca = ""
+    m = re.search(r"(?m)^<!--\s*titulillo:\s*(.+?)\s*-->\s*$", src)
+    if m:
+        marca = m.group(1)
+        src = src[:m.start()] + src[m.end():]
     r = subprocess.run(
         ["pandoc", "-f", "gfm+raw_attribute", "-t", "latex", "--top-level-division=chapter", "--wrap=none"],
         input=src, capture_output=True, text=True)
@@ -606,10 +619,22 @@ def md_to_latex(mdfile, role):
     elif role == "front":                    # secciones sin nº
         tex = star_sections(tex)
     elif role == "chapter" and OWN_SEC_NUMS:  # el propio título ya numera: no duplicar
-        tex = star_sections(tex)
+        tex = star_sections(make_unnumbered(tex))
     # las tablas se reparten al ancho de página en TODOS los roles (también capítulos):
     # antes solo se envolvían en front/apéndices y las de los capítulos desbordaban.
     tex = wrap_table_columns(tex)
+    if marca:
+        # Se aplica AL FINAL: `make_unnumbered` emite su propio \markboth con el
+        # título ENTERO y, si el nuestro va antes, lo pisa. Aquí se SUSTITUYE ese
+        # markboth largo por el corto; si no lo hay (capítulo numerado), se inserta
+        # detrás del \chapter.
+        corto = "\\markboth{%s}{%s}" % (marca, marca)
+        if re.search(r"\\markboth\{", tex):
+            tex = re.sub(r"\\markboth\{(?:[^{}]|\{[^{}]*\})*\}\{(?:[^{}]|\{[^{}]*\})*\}",
+                         corto.replace("\\", "\\\\"), tex, count=1)
+        else:
+            tex = re.sub(r"(\\chapter\*?\{(?:[^{}]|\{[^{}]*\})*\})",
+                         "\\1\n" + corto.replace("\\", "\\\\"), tex, count=1)
     return typeset_wide_tables(center_images(tex))   # imágenes centradas/acotadas; tablas anchas apaisadas
 
 def main():
@@ -651,6 +676,10 @@ def main():
                     default="bringhurst", metavar="ESTILO",
                     help="estilo del título de capítulo: bringhurst (versalitas, def.) "
                          "o mayuscula (más grande, negrita, MAYÚSCULAS)")
+    ap.add_argument("--chapter-size", default="LARGE", metavar="TAM",
+                    help="tamaño del título de APERTURA de capítulo con --chapter-style "
+                         "mayuscula: LARGE (def.), large, normalsize… Con títulos muy "
+                         "largos, «large» evita que ocupen media página.")
     ap.add_argument("--toc-depth", choices=("chapter", "section", "subsection"),
                     default="subsection", metavar="NIVEL",
                     help="profundidad del índice (def: subsection). chapter = un solo nivel.")
@@ -759,6 +788,7 @@ def main():
     doc = (preamble(a.title, a.author, a.lang, a.toc, gdirs, a.footnotes, fallback,
                     a.fontsize, a.geometry, a.toc_depth, a.chapter_style, arabtex,
                     short_headers=a.short_headers, leading=a.leading,
+                    chapsize="\\" + a.chapter_size,
                     subtitles=a.subtitle)
            + front + mainstart + mainb + "\n\\end{document}\n")
 

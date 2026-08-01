@@ -1038,3 +1038,13 @@ class HebreoYSangria(unittest.TestCase):
         es = "Uno dos tres.\n\n" + notas + "\n"
         self.assertNotIn("ratio", " ".join(traducir_libro.verificar(en, es)))
         self.assertTrue(any("NOTAS" in f for f in traducir_libro.verificar(en, es)))
+
+    def test_valla_de_codigo_se_detecta(self):
+        en = "# T\n\nUn párrafo con nota.[^1]\n\n[^1]: nota\n"
+        es = "```markdown\n# T\n\nUn párrafo con nota.[^1]\n```\n\n[^1]: nota\n"
+        self.assertTrue(any("VALLA" in f for f in traducir_libro.verificar(en, es)))
+
+    def test_valla_legitima_del_original_no_falla(self):
+        en = "# T\n\n```\ncodigo\n```\n"
+        es = "# T\n\n```\ncodigo\n```\n"
+        self.assertFalse(any("VALLA" in f for f in traducir_libro.verificar(en, es)))

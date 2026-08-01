@@ -804,6 +804,20 @@ un PDF entero como sección.
   - **Y una llamada DENTRO DE UN ENCABEZADO también se descarta.** `## §10.1: Título—Sahl[^2]`
     pierde la nota (y ensucia el índice). Sácala al primer párrafo del capítulo: 28 casos en
     *Nine Judges*, 28 notas recuperadas.
+  - **EL TITULILLO LARGO SE PEGA AL CUERPO, y memoir REGENERA la marca.** Con títulos
+    de capítulo largos, el titulillo desborda el encabezado y se confunde con el párrafo.
+    Poner un `\markboth` propio NO basta: memoir vuelve a componer la marca al maquetar
+    la página y pisa el que hayas añadido antes. **Hay que SUSTITUIR el `\markboth` que
+    el propio conversor emite, no añadir otro.** El texto corto va explícito en el
+    markdown, `<!-- titulillo: Libro I · capítulo 50 -->` tras el H1, porque ni memoir ni
+    el título saben a qué Libro pertenece el capítulo. Medido en Agripa (214 capítulos).
+  - **`--own-section-numbers` NO bastaba: memoir seguía numerando.** El conversor quitaba
+    el «Capítulo N.» del título para no duplicar, pero dejaba que memoir pusiera el suyo
+    —y su contador es CORRIDO sobre todos los archivos—, así que en un libro cuyos
+    capítulos reinician por Libro salía «184» donde el original dice 50, **pegado al
+    título** en el índice. Ahora con esa bandera el título conserva su número y el
+    capítulo va sin numerar. Y `--chapter-size large` encoge el título de APERTURA:
+    un título largo pasó de 9 renglones a 5, y el libro de 822 a 808 páginas.
   - **RENDERIZA UNA PÁGINA Y MÍRALA: es el único control que ve esto.** En un muestreo salió
     un **titulillo de página impreso a media prosa** («*§§7.60-71: MERCANCÍAS ¢” PRECIOS 279*»,
     con el `&` destrozado y el folio dentro). Iba en CURSIVA, así que el limpiador que solo
