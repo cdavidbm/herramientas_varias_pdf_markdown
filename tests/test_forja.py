@@ -932,8 +932,8 @@ class TraducirLibro(unittest.TestCase):
         self.assertTrue(any("llamadas" in f for f in traducir_libro.verificar(en, es)))
 
     def test_verificar_acepta_una_traduccion_correcta(self):
-        en = "# T\n\nUno[^1] dos tres cuatro cinco.\n\n[^1]: nota\n"
-        es = "# T\n\nUno[^1] dos tres cuatro cinco.\n\n[^1]: nota\n"
+        en = "# T\n\nOne[^1] two three four five.\n\n[^1]: a short note\n"
+        es = "# T\n\nUno[^1] dos tres cuatro cinco.\n\n[^1]: una nota breve\n"
         self.assertEqual(traducir_libro.verificar(en, es), [])
 
 
@@ -1015,3 +1015,26 @@ class HebreoYSangria(unittest.TestCase):
             "\\babelprovide[import=he, onchar=ids fonts]{hebrew}")
         self.assertIn("import=ar", pre)
         self.assertIn("import=he", pre)
+
+    def test_notas_sin_traducir_se_detectan(self):
+        notas = "[^1]: although certainly argued phenomenon universal beyond western metaphysics historical application theory oblique hints presumably because neither historian expert eastern intellectual currents further reference passage explicit divine emanation numeration angelic hierarchy scripture."
+        en = "Cuerpo.\n\n" + notas + "\n"
+        # El motor devolvió el bloque de notas INTACTO: cuerpo traducido, notas no.
+        es = "Cuerpo traducido.\n\n" + notas + "\n"
+        self.assertTrue(traducir_libro.verificar_notas_traducidas(en, es))
+
+    def test_notas_traducidas_pasan(self):
+        en = "[^1]: although certainly argued phenomenon universal beyond western metaphysics historical application theory oblique hints presumably because neither historian expert eastern intellectual currents further reference passage explicit divine emanation numeration angelic hierarchy scripture."
+        es = "[^1]: aunque ciertamente sostenido fenómeno universal allende occidental metafísica histórica aplicación teoría oblicuas indicios presumiblemente porque tampoco historiador experto orientales intelectuales corrientes ulterior referencia pasaje explícito divina emanación numeración angélica jerarquía escritura."
+        self.assertEqual(traducir_libro.verificar_notas_traducidas(en, es), [])
+
+    def test_sin_notas_no_opina(self):
+        self.assertEqual(traducir_libro.verificar_notas_traducidas("a", "b"), [])
+
+    def test_el_ratio_no_ve_las_notas_sin_traducir(self):
+        # Por qué hace falta el control: el ratio EXCLUYE las definiciones.
+        notas = "[^1]: although certainly argued phenomenon universal beyond western metaphysics historical application theory oblique hints presumably because neither historian expert eastern intellectual currents further reference passage explicit divine emanation numeration angelic hierarchy scripture."
+        en = "Uno dos tres.\n\n" + notas + "\n"
+        es = "Uno dos tres.\n\n" + notas + "\n"
+        self.assertNotIn("ratio", " ".join(traducir_libro.verificar(en, es)))
+        self.assertTrue(any("NOTAS" in f for f in traducir_libro.verificar(en, es)))

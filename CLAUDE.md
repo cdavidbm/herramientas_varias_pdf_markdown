@@ -892,6 +892,14 @@ un PDF entero como sección.
    devuelve a la cola. Medido a base de fallar: una normalización de espacios tocó 78
    archivos cuando de verdad afectaba a 3, y desmarcar «los que cambiaron» a ojo tiró 33
    traducciones buenas.
+   **Y verifica que el APARATO se haya TRADUCIDO.** Punto ciego caro: el cuerpo sale
+   traducido y el bloque `## Notes` vuelve INTACTO en el idioma origen. No lo ve ningún
+   otro control —los `[^N]` cuadran, el ratio EXCLUYE las definiciones por diseño, y la
+   comparación de encabezados mira los niveles `#`, no su texto—. Se detecta comparando
+   el vocabulario de las definiciones con el del original: si coincide >80 %, no se
+   tradujo. **Guarda:** un aparato que sea solo referencias bibliográficas es
+   legítimamente casi idéntico en ambos idiomas, así que solo se juzga con ≥25 palabras
+   distintas. Medido en Agripa: **32 archivos del Libro III**, todos consecutivos.
    **Y verifica las TABLAS**: si el motor funde dos columnas o se come un renglón, el
    ratio apenas se mueve y el balance de notas ni se entera. En un libro cuyas tablas son
    el CONTENIDO —las Escalas de los números de Agripa— eso es pérdida grave e invisible.

@@ -76,7 +76,39 @@ def verificar(en: str, es: str) -> list[str]:
     if len(titulos) != len(set(titulos)):
         fallos.append("encabezado REPETIDO (agy reemitió un trozo)")
     fallos += verificar_tablas(en, es)
+    fallos += verificar_notas_traducidas(en, es)
     return fallos
+
+
+def defs_texto(t: str) -> str:
+    """El texto de TODAS las definiciones de nota, sin sus etiquetas."""
+    return " ".join(re.findall(r"(?m)^\[\^[^\]]+\]:\s*(.+)$", t))
+
+
+def verificar_notas_traducidas(en: str, es: str) -> list[str]:
+    """El aparato puede quedarse ENTERO en el idioma origen sin que salte nada.
+
+    Punto ciego medido en Agripa (32 archivos del Libro III): el cuerpo salía
+    traducido y el bloque `## Notes` volvía intacto en inglés. No lo ve NINGÚN
+    otro control: los `[^N]` cuadran, el ratio EXCLUYE las definiciones por
+    diseño, y la comparación de encabezados mira los niveles `#`, no su texto.
+    Aquí se compara el texto de las definiciones con el del original: si es
+    prácticamente el mismo, no se tradujo.
+    """
+    a, b = defs_texto(en), defs_texto(es)
+    if not a.strip() or not b.strip():
+        return []
+    pa = set(re.findall(r"[a-záéíóúñ]{4,}", a.lower()))
+    pb = set(re.findall(r"[a-záéíóúñ]{4,}", b.lower()))
+    # Guarda: un aparato que sea SOLO referencias bibliográficas («– Giorgio,
+    # *Harmonia* 3:8») es legítimamente casi idéntico en los dos idiomas. Solo
+    # se juzga cuando hay prosa suficiente para que la coincidencia signifique algo.
+    if len(pa) < 25:
+        return []
+    igual = len(pa & pb) / len(pa)
+    if igual > 0.80:
+        return [f"NOTAS SIN TRADUCIR ({igual*100:.0f} % de palabras idénticas al original)"]
+    return []
 
 
 def tablas(t: str) -> list[list[int]]:
