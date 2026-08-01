@@ -920,6 +920,11 @@ un PDF entero como sección.
    tradujo. **Guarda:** un aparato que sea solo referencias bibliográficas es
    legítimamente casi idéntico en ambos idiomas, así que solo se juzga con ≥25 palabras
    distintas. Medido en Agripa: **32 archivos del Libro III**, todos consecutivos.
+   **Esa guarda deja un hueco, y se tapa con el ENCABEZADO**: el conversor siempre
+   escribe `## Notes`, así que si ese rótulo sigue ahí en la traducción, el bloque no se
+   tocó — y esa señal SÍ vale cuando el aparato es corto y bibliográfico, que es justo
+   donde la comparación de vocabulario se abstiene. Los dos controles se complementan:
+   el vocabulario para los aparatos largos, el encabezado para los cortos.
    **Y verifica las TABLAS**: si el motor funde dos columnas o se come un renglón, el
    ratio apenas se mueve y el balance de notas ni se entera. En un libro cuyas tablas son
    el CONTENIDO —las Escalas de los números de Agripa— eso es pérdida grave e invisible.

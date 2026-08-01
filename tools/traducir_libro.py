@@ -95,20 +95,28 @@ def verificar_notas_traducidas(en: str, es: str) -> list[str]:
     Aquí se compara el texto de las definiciones con el del original: si es
     prácticamente el mismo, no se tradujo.
     """
+    # Señal barata y exacta que la guarda de tamaño no puede dar: el ENCABEZADO
+    # del aparato. El conversor siempre escribe «## Notes», así que si sigue ahí
+    # en la traducción, el bloque no se tocó — aunque sea corto y bibliográfico,
+    # que es justo el caso donde la comparación de vocabulario se abstiene.
+    fallos = []
+    if re.search(r"(?m)^#+\s+Notes\s*$", en) and re.search(r"(?m)^#+\s+Notes\s*$", es):
+        fallos.append("el encabezado «Notes» sigue sin traducir")
+
     a, b = defs_texto(en), defs_texto(es)
     if not a.strip() or not b.strip():
-        return []
+        return fallos
     pa = set(re.findall(r"[a-záéíóúñ]{4,}", a.lower()))
     pb = set(re.findall(r"[a-záéíóúñ]{4,}", b.lower()))
     # Guarda: un aparato que sea SOLO referencias bibliográficas («– Giorgio,
     # *Harmonia* 3:8») es legítimamente casi idéntico en los dos idiomas. Solo
     # se juzga cuando hay prosa suficiente para que la coincidencia signifique algo.
     if len(pa) < 25:
-        return []
+        return fallos
     igual = len(pa & pb) / len(pa)
     if igual > 0.80:
-        return [f"NOTAS SIN TRADUCIR ({igual*100:.0f} % de palabras idénticas al original)"]
-    return []
+        fallos.append(f"NOTAS SIN TRADUCIR ({igual*100:.0f} % de palabras idénticas al original)")
+    return fallos
 
 
 def tablas(t: str) -> list[list[int]]:
