@@ -577,6 +577,18 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
 > línea siguiente**, no la absoluta: los párrafos en BLOQUE (citas, párrafos numerados
 > `[3]`) tienen todas sus líneas metidas y con un umbral absoluto se parten una a una.
 
+> **MAQUETA SIN RENGLÓN EN BLANCO ENTRE PÁRRAFOS** (composición erudita: Brill y
+> similares solo sangran la primera línea) → `pdf_rich_to_markdown.py --indent-paragraphs`.
+> Sin ella el capítulo sale como UN párrafo gigante —el bisturí solo parte por salto
+> vertical— y, peor, **las citas en bloque quedan sepultadas dentro y `pdf_blocks.py` ya
+> no puede recuperarlas**. La sangría se mide **relativa a la línea SIGUIENTE, no en
+> absoluto**: en una cita en bloque TODAS las líneas van metidas y un umbral absoluto la
+> partiría renglón a renglón. Medido en Lehrich: 25 párrafos → 52, mismas palabras.
+> **Y el ORDEN de la receta importa:** bisturí → promover el título de capítulo →
+> `pdf_blocks` → quitar titulillos. Si se quitan los titulillos antes, el emparejamiento
+> contra el PDF falla; si no se promueve el título antes, el epígrafe se detecta como
+> cita y **se traga el encabezado del capítulo**.
+
 > **PDF DIGITAL con la capa de texto INCOMPLETA** (nativo, `pdftotext` da prosa legible,
 > pero faltan cosas que NADIE ve) → `pdfxml_to_markdown.py`. Medido en Attrell & Porreca,
 > *Picatrix* (Penn State, 2019). Tres pérdidas simultáneas y todas silenciosas:
@@ -741,6 +753,11 @@ un PDF entero como sección.
     fondo —`ḳ` U+1E33, `ẖ` U+1E96, `ʻ` U+02BB, `ʼ` U+02BC— ni el árabe. Se arreglan con
     `--font-fallback "Charis SIL"` (fuente SIL, hecha para transliteración: cubre los cuatro)
     y `--arabic-font "Noto Naskh Arabic"`.
+  - **EL HEBREO SE PIERDE EN SILENCIO sin `--hebrew-font`.** Latin Modern no lo tiene y
+    el log no avisa, igual que con el árabe. `--hebrew-font "Noto Serif Hebrew"` declara
+    el locale de babel (`import=he` + `Script=Hebrew`); el `bidi=basic` del preámbulo ya
+    reordena de derecha a izquierda. Imprescindible en el fondo cabalístico: los nombres
+    divinos y las Escalas de Agripa salen como huecos. Convive con `--arabic-font`.
   - **UN JPEG CON DENSIDAD 1 dpi DESAPARECE DEL PDF EN SILENCIO.** Si el JFIF declara
     `density 1x1` (o unidades = 0), una imagen de 653 px de ancho mide 653 **PULGADAS**:
     eso desborda la aritmética de dimensiones de TeX (`arithmetic number too big` en el

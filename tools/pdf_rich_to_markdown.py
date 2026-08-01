@@ -500,6 +500,11 @@ def main() -> int:
                          "paralelo): se salta la detección automática, que no llega "
                          "cuando el canal se mueve de página a página o el bloque "
                          "ocupa pocas filas. Ej: --force-columns 96-133")
+    ap.add_argument("--indent-paragraphs", action="store_true",
+                    help="parte párrafos también por la SANGRÍA de primera línea "
+                         "(maquetas sin renglón en blanco entre párrafos). La sangría "
+                         "se mide relativa a la línea SIGUIENTE, para no despedazar "
+                         "las citas en bloque, que van todas metidas.")
     ap.add_argument("--body-size", type=float,
                     help="cuerpo del texto corrido en pt (def: se detecta solo)")
     a = ap.parse_args()
@@ -534,9 +539,26 @@ def main() -> int:
                 leads.append(d)
     lead = sorted(leads)[len(leads) // 2] if leads else 16.0
 
+    # Sangría de PRIMERA LÍNEA: muchas maquetas académicas (Brill, y en general la
+    # composición erudita) no dejan renglón en blanco entre párrafos, solo sangran
+    # la primera línea. Sin esto el capítulo entero sale como UN párrafo y, peor,
+    # las citas en bloque quedan sepultadas dentro y ya no se pueden recuperar.
+    # **La sangría se mide RELATIVA A LA LÍNEA SIGUIENTE, no en absoluto**: en un
+    # párrafo en bloque (cita, verso) TODAS las líneas van metidas, y un umbral
+    # absoluto lo partiría renglón a renglón.
+    idx_body = [i for i, r in enumerate(rows) if r[1] != FOOT]
+    sangrada: set[int] = set()
+    if a.indent_paragraphs:
+        for k, i in enumerate(idx_body[:-1]):
+            r, nxt = rows[i], rows[idx_body[k + 1]]
+            if r[0] != nxt[0] or r[1] != nxt[1]:
+                continue                          # otra página/columna: no comparar
+            if r[3] - nxt[3] > r[5] * 0.5:        # x0 mayor que el de la siguiente
+                sangrada.add(i)
+
     ncol = 0
     foot_txt: list[str] = []                      # renglones del pie, en orden
-    for pno, col, y, x, txt, size in rows:
+    for _i, (pno, col, y, x, txt, size) in enumerate(rows):
         if col == FOOT:
             foot_txt.append(txt)
             continue
@@ -546,6 +568,8 @@ def main() -> int:
                 newp = True                       # cambio de página o de columna
             elif (prev_y - y) > lead * a.gap:
                 newp = True                       # salto grande: párrafo nuevo
+        if a.indent_paragraphs and prev_y is not None and _i in sangrada:
+            newp = True                           # primera línea sangrada
         if newp and cur:
             paras.append(" ".join(cur))
             cur = []

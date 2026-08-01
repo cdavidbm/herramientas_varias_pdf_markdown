@@ -638,6 +638,11 @@ def main():
                     help="opciones del paquete geometry (márgenes). Por defecto = estilo "
                          "janegca. Ej. compacto: 'top=1.6cm, bottom=1.6cm, outer=1.8cm, "
                          "inner=1.8cm, heightrounded'.")
+    ap.add_argument("--hebrew-font", metavar="FUENTE", default="",
+                    help="activa escritura HEBREA correcta (de derecha a izquierda) "
+                         "declarando el locale de babel con esta fuente, p. ej. "
+                         "'Noto Serif Hebrew'. Sin ella, el hebreo se pierde EN "
+                         "SILENCIO: Latin Modern no lo tiene y el log no avisa.")
     ap.add_argument("--arabic-font", metavar="FUENTE", default="",
                     help="activa escritura ÁRABE correcta (ligada y de derecha a izquierda) "
                          "declarando el locale de babel con esta fuente, p.ej. 'Noto Naskh Arabic'. "
@@ -737,6 +742,15 @@ def main():
         # sin Script=Arabic las letras salen sueltas.
         arabtex = ("\\babelprovide[import=ar, onchar=ids fonts]{arabic}\n"
                    "\\babelfont[arabic]{rm}[Script=Arabic]{%s}" % a.arabic_font)
+    if a.hebrew_font:
+        # Mismo mecanismo para el HEBREO, que también es de derecha a izquierda
+        # (`bidi=basic` ya está en el preámbulo). Imprescindible en el fondo
+        # cabalístico: sin esto los nombres divinos y las tablas de Agripa salen
+        # como huecos, y el log de lualatex no dice nada.
+        if arabtex:
+            arabtex += "\n"
+        arabtex += ("\\babelprovide[import=he, onchar=ids fonts]{hebrew}\n"
+                    "\\babelfont[hebrew]{rm}[Script=Hebrew]{%s}" % a.hebrew_font)
     # --start-chapter N: arranca la numeración de capítulos en N (obras multivolumen,
     # p. ej. el Vol. II que continúa en el cap. 61). setcounter a N-1 antes del 1er \chapter.
     mainstart = "\n\\mainmatter\n"

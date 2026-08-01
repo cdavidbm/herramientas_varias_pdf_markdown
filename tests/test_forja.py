@@ -993,3 +993,25 @@ class ImagenesInline(unittest.TestCase):
             f.write_text("hola")
             traducir_libro.metricas("hola", "hola")
             self.assertTrue(f.is_file())
+
+
+class HebreoYSangria(unittest.TestCase):
+    """Hebreo en el PDF y párrafos por sangría de primera línea."""
+
+    def test_hebrew_font_declara_el_locale(self):
+        import subprocess, sys, tempfile, os
+        # Se comprueba en el preámbulo generado, sin compilar.
+        pre = md_to_pdf.preamble("T", "", "spanish", False, arabfont=
+            "\\babelprovide[import=he, onchar=ids fonts]{hebrew}\n"
+            "\\babelfont[hebrew]{rm}[Script=Hebrew]{Noto Serif Hebrew}")
+        self.assertIn("import=he", pre)
+        self.assertIn("Script=Hebrew", pre)
+        # bidi=basic ya venía: es lo que reordena de derecha a izquierda.
+        self.assertIn("bidi=basic", pre)
+
+    def test_arabe_y_hebreo_conviven(self):
+        pre = md_to_pdf.preamble("T", "", "spanish", False, arabfont=
+            "\\babelprovide[import=ar, onchar=ids fonts]{arabic}\n"
+            "\\babelprovide[import=he, onchar=ids fonts]{hebrew}")
+        self.assertIn("import=ar", pre)
+        self.assertIn("import=he", pre)
