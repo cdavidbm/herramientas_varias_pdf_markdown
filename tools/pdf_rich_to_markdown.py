@@ -595,6 +595,25 @@ def main() -> int:
         # trozos[0] = cola de una nota que venía de antes del rango: se descarta
         for k in range(1, len(trozos) - 1, 2):
             notes.append((int(trozos[k]), trozos[k + 1].strip()))
+    # Una llamada cuyo número SUPERA la última definición no puede ser real: son
+    # cifras del cuerpo puestas en otro tamaño (las de un cuadrado mágico, las
+    # páginas de una referencia bibliográfica) que el separador por CUERPO toma
+    # por volados. Medido en Lehrich: el cap. 3 tiene 89 notas y salían llamadas
+    # hasta la 947, justo el capítulo de los cuadrados mágicos. Se devuelven a
+    # texto plano en vez de borrarlas: la cifra era contenido.
+    maxdef = max((n for n, _ in notes), default=0)
+    falsas = 0
+    def _restaura(m):
+        nonlocal falsas
+        if int(m.group(1)) > maxdef:
+            falsas += 1
+            return m.group(1)
+        return m.group(0)
+    md = re.sub(r"\[\^(\d{1,4})\]", _restaura, md)
+    if falsas:
+        print(f"  {falsas} llamada(s) falsas devueltas a texto "
+              f"(número > última definición, {maxdef})", file=sys.stderr)
+
     if notes:
         md += "\n\n" + "\n\n".join(
             f"[^{n}]: {t}" if t else f"[^{n}]:" for n, t in notes)

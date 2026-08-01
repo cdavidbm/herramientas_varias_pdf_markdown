@@ -577,6 +577,16 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
 > línea siguiente**, no la absoluta: los párrafos en BLOQUE (citas, párrafos numerados
 > `[3]`) tienen todas sus líneas metidas y con un umbral absoluto se parten una a una.
 
+> **CIFRAS DEL CUERPO TOMADAS POR LLAMADAS DE NOTA.** `--footnotes` separa el pie por
+> CUERPO DE LETRA, así que cualquier cifra compuesta en otro tamaño se convierte en un
+> `[^N]` falso: las de un **cuadrado mágico**, las páginas de una **referencia
+> bibliográfica** («*Opera*, 2:1089-1101»). Medido en Lehrich: el cap. 3 —el de los
+> cuadrados mágicos— tiene 89 notas y salían llamadas hasta la **947**, y la bibliografía
+> daba 73 llamadas con CERO definiciones. Regla que lo ataja: **una llamada cuyo número
+> supera la última definición no puede ser real**, y se devuelve a texto plano (la cifra
+> era contenido, no se borra). Y en las secciones que NO tienen notas —bibliografía,
+> apéndices— sencillamente no uses `--footnotes`.
+
 > **MAQUETA SIN RENGLÓN EN BLANCO ENTRE PÁRRAFOS** (composición erudita: Brill y
 > similares solo sangran la primera línea) → `pdf_rich_to_markdown.py --indent-paragraphs`.
 > Sin ella el capítulo sale como UN párrafo gigante —el bisturí solo parte por salto
