@@ -1017,15 +1017,21 @@ class HebreoYSangria(unittest.TestCase):
         self.assertIn("import=he", pre)
 
     def test_notas_sin_traducir_se_detectan(self):
-        notas = "[^1]: although certainly argued phenomenon universal beyond western metaphysics historical application theory oblique hints presumably because neither historian expert eastern intellectual currents further reference passage explicit divine emanation numeration angelic hierarchy scripture."
+        notas = "\n".join(f"[^{i}]: Although it could certainly be argued that this "
+                          f"phenomenon remains universal beyond metaphysics, number {i}."
+                          for i in range(1, 9))
         en = "Cuerpo.\n\n" + notas + "\n"
         # El motor devolvió el bloque de notas INTACTO: cuerpo traducido, notas no.
         es = "Cuerpo traducido.\n\n" + notas + "\n"
         self.assertTrue(traducir_libro.verificar_notas_traducidas(en, es))
 
     def test_notas_traducidas_pasan(self):
-        en = "[^1]: although certainly argued phenomenon universal beyond western metaphysics historical application theory oblique hints presumably because neither historian expert eastern intellectual currents further reference passage explicit divine emanation numeration angelic hierarchy scripture."
-        es = "[^1]: aunque ciertamente sostenido fenómeno universal allende occidental metafísica histórica aplicación teoría oblicuas indicios presumiblemente porque tampoco historiador experto orientales intelectuales corrientes ulterior referencia pasaje explícito divina emanación numeración angélica jerarquía escritura."
+        en = "\n".join(f"[^{i}]: Although it could certainly be argued that this "
+                        f"phenomenon remains universal beyond metaphysics, number {i}."
+                        for i in range(1, 9))
+        es = "\n".join(f"[^{i}]: Aunque ciertamente podría sostenerse que este "
+                        f"fenómeno permanece universal más allá de la metafísica, {i}."
+                        for i in range(1, 9))
         self.assertEqual(traducir_libro.verificar_notas_traducidas(en, es), [])
 
     def test_sin_notas_no_opina(self):
@@ -1033,7 +1039,9 @@ class HebreoYSangria(unittest.TestCase):
 
     def test_el_ratio_no_ve_las_notas_sin_traducir(self):
         # Por qué hace falta el control: el ratio EXCLUYE las definiciones.
-        notas = "[^1]: although certainly argued phenomenon universal beyond western metaphysics historical application theory oblique hints presumably because neither historian expert eastern intellectual currents further reference passage explicit divine emanation numeration angelic hierarchy scripture."
+        notas = "\n".join(f"[^{i}]: A rather long English footnote which was simply "
+                          f"left completely untranslated right here, number {i}."
+                          for i in range(1, 9))
         en = "Uno dos tres.\n\n" + notas + "\n"
         es = "Uno dos tres.\n\n" + notas + "\n"
         self.assertNotIn("ratio", " ".join(traducir_libro.verificar(en, es)))
@@ -1048,3 +1056,24 @@ class HebreoYSangria(unittest.TestCase):
         en = "# T\n\n```\ncodigo\n```\n"
         es = "# T\n\n```\ncodigo\n```\n"
         self.assertFalse(any("VALLA" in f for f in traducir_libro.verificar(en, es)))
+
+    def test_aparato_bibliografico_no_da_falso_positivo(self):
+        # Casi todo son títulos y nombres propios que NO cambian de idioma; solo
+        # la prosa que los rodea se traduce. No debe marcarse.
+        en = "\n".join([
+            "[^1]: *De occulta philosophia libri tres* (Cologne, 1531/33); see Abbreviations for details.",
+            "[^2]: Gershom Scholem, *Major Trends in Jewish Mysticism* (New York: Schocken, 1946), see also 28.",
+            "[^3]: Moshe Idel, *Kabbalah: New Perspectives* (New Haven: Yale, 1988), for a brief historiography.",
+            "[^4]: Frances Yates, *Giordano Bruno*, esp. chapter 8, pages 144-56, in which magic is discussed."])
+        es = "\n".join([
+            "[^1]: *De occulta philosophia libri tres* (Colonia, 1531/33); véase Abreviaturas para los detalles.",
+            "[^2]: Gershom Scholem, *Major Trends in Jewish Mysticism* (Nueva York: Schocken, 1946), véase también 28.",
+            "[^3]: Moshe Idel, *Kabbalah: New Perspectives* (New Haven: Yale, 1988), para una breve historiografía.",
+            "[^4]: Frances Yates, *Giordano Bruno*, esp. capítulo 8, páginas 144-56, donde se trata la magia."])
+        self.assertEqual(traducir_libro.verificar_notas_traducidas(en, es), [])
+
+    def test_notas_de_una_palabra_latina_no_cuentan(self):
+        # *Westphaliae.* es idéntica en los dos idiomas con toda razón.
+        en = "[^1]: Hermann V Archbishop of Cologne (1477-1552).\n[^2]: *Wydae.*\n[^3]: *Westphaliae.*\n[^4]: *Mechlinia.*\n"
+        es = "[^1]: Hermann V, arzobispo de Colonia (1477-1552).\n[^2]: *Wydae.*\n[^3]: *Westphaliae.*\n[^4]: *Mechlinia.*\n"
+        self.assertEqual(traducir_libro.verificar_notas_traducidas(en, es), [])

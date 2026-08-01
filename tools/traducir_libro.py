@@ -111,19 +111,26 @@ def verificar_notas_traducidas(en: str, es: str) -> list[str]:
     if re.search(r"(?m)^#+\s+Notes\s*$", en) and re.search(r"(?m)^#+\s+Notes\s*$", es):
         fallos.append("el encabezado «Notes» sigue sin traducir")
 
-    a, b = defs_texto(en), defs_texto(es)
-    if not a.strip() or not b.strip():
+    # El discriminante NO puede ser el vocabulario ni las palabras funcionales: un
+    # aparato de referencias es casi todo títulos y nombres propios —muchos en
+    # INGLÉS de forma legítima—, y da 88 % de coincidencia estando perfectamente
+    # traducido (medido en Lehrich). Lo que sí es concluyente es comparar CADA
+    # definición con la SUYA: una nota traducida difiere de su original; una que
+    # volvió intacta es idéntica carácter por carácter.
+    dn = lambda t: {n: re.sub(r"\s+", " ", x).strip()
+                    for n, x in re.findall(r"(?m)^\[\^([^\]]+)\]:\s*(.+)$", t)}
+    A, B = dn(en), dn(es)
+    # Solo cuentan las definiciones con PROSA suficiente: una nota que es una sola
+    # palabra latina (*Westphaliae.*) es idéntica en los dos idiomas con toda
+    # razón, y con tres así el archivo salía marcado sin motivo.
+    comunes = [k for k in set(A) & set(B) if len(A[k].split()) >= 6]
+    if len(comunes) < 3:
         return fallos
-    pa = set(re.findall(r"[a-záéíóúñ]{4,}", a.lower()))
-    pb = set(re.findall(r"[a-záéíóúñ]{4,}", b.lower()))
-    # Guarda: un aparato que sea SOLO referencias bibliográficas («– Giorgio,
-    # *Harmonia* 3:8») es legítimamente casi idéntico en los dos idiomas. Solo
-    # se juzga cuando hay prosa suficiente para que la coincidencia signifique algo.
-    if len(pa) < 25:
-        return fallos
-    igual = len(pa & pb) / len(pa)
-    if igual > 0.80:
-        fallos.append(f"NOTAS SIN TRADUCIR ({igual*100:.0f} % de palabras idénticas al original)")
+    iguales = sum(1 for k in comunes if A[k] == B[k])
+    prop = iguales / len(comunes)
+    if prop > 0.6:
+        fallos.append(f"NOTAS SIN TRADUCIR ({iguales} de {len(comunes)} definiciones "
+                      f"IDÉNTICAS al original)")
     return fallos
 
 

@@ -933,11 +933,16 @@ un PDF entero como sección.
    **Y verifica que el APARATO se haya TRADUCIDO.** Punto ciego caro: el cuerpo sale
    traducido y el bloque `## Notes` vuelve INTACTO en el idioma origen. No lo ve ningún
    otro control —los `[^N]` cuadran, el ratio EXCLUYE las definiciones por diseño, y la
-   comparación de encabezados mira los niveles `#`, no su texto—. Se detecta comparando
-   el vocabulario de las definiciones con el del original: si coincide >80 %, no se
-   tradujo. **Guarda:** un aparato que sea solo referencias bibliográficas es
-   legítimamente casi idéntico en ambos idiomas, así que solo se juzga con ≥25 palabras
-   distintas. Medido en Agripa: **32 archivos del Libro III**, todos consecutivos.
+   comparación de encabezados mira los niveles `#`, no su texto—. Medido en Agripa:
+   **32 archivos del Libro III**, todos consecutivos.
+   **El discriminante correcto es comparar CADA definición con la SUYA**, no el
+   vocabulario: un aparato de referencias es casi todo títulos y nombres propios —muchos
+   en inglés con toda legitimidad— y da **88 % de vocabulario común estando perfectamente
+   traducido** (medido en Lehrich, que me costó un falso positivo). Una nota traducida
+   DIFIERE de su original; una que volvió intacta es idéntica carácter por carácter.
+   **Dos guardas necesarias:** solo cuentan las definiciones con ≥6 palabras (una nota
+   que es una sola palabra latina, `*Westphaliae.*`, es idéntica con razón) y hacen falta
+   al menos 3 de ellas.
    **Esa guarda deja un hueco, y se tapa con el ENCABEZADO**: el conversor siempre
    escribe `## Notes`, así que si ese rótulo sigue ahí en la traducción, el bloque no se
    tocó — y esa señal SÍ vale cuando el aparato es corto y bibliográfico, que es justo
