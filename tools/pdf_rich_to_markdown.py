@@ -601,18 +601,28 @@ def main() -> int:
     # por volados. Medido en Lehrich: el cap. 3 tiene 89 notas y salían llamadas
     # hasta la 947, justo el capítulo de los cuadrados mágicos. Se devuelven a
     # texto plano en vez de borrarlas: la cifra era contenido.
-    maxdef = max((n for n, _ in notes), default=0)
+    # Regla robusta: la cadena de llamadas es ASCENDENTE y **nunca retrocede**, pero
+    # sí puede SALTAR (una nota puede quedarse sin llamada en el original). Un número
+    # que va hacia atrás, o que no tiene definición, es una cifra del cuerpo —la de un
+    # cuadrado mágico, la página de una referencia— y se devuelve a texto plano.
+    # OJO: exigir que avance de UNO EN UNO rompe el capítulo entero al primer hueco;
+    # medido en Lehrich, la nota 25 no tiene llamada y esa regla estricta invalidó 120
+    # llamadas buenas en cascada.
+    nums = {n for n, _ in notes}
+    esperado = [min(nums) if nums else 1]
     falsas = 0
     def _restaura(m):
         nonlocal falsas
-        if int(m.group(1)) > maxdef:
-            falsas += 1
-            return m.group(1)
-        return m.group(0)
+        n = int(m.group(1))
+        if nums and n >= esperado[0] and n in nums:
+            esperado[0] = n + 1
+            return m.group(0)
+        falsas += 1
+        return m.group(1)
     md = re.sub(r"\[\^(\d{1,4})\]", _restaura, md)
     if falsas:
         print(f"  {falsas} llamada(s) falsas devueltas a texto "
-              f"(número > última definición, {maxdef})", file=sys.stderr)
+              f"(rompían la cadena ascendente de notas)", file=sys.stderr)
 
     if notes:
         md += "\n\n" + "\n\n".join(

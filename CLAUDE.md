@@ -592,10 +592,14 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
 > `[^N]` falso: las de un **cuadrado mágico**, las páginas de una **referencia
 > bibliográfica** («*Opera*, 2:1089-1101»). Medido en Lehrich: el cap. 3 —el de los
 > cuadrados mágicos— tiene 89 notas y salían llamadas hasta la **947**, y la bibliografía
-> daba 73 llamadas con CERO definiciones. Regla que lo ataja: **una llamada cuyo número
-> supera la última definición no puede ser real**, y se devuelve a texto plano (la cifra
-> era contenido, no se borra). Y en las secciones que NO tienen notas —bibliografía,
-> apéndices— sencillamente no uses `--footnotes`.
+> daba 73 llamadas con CERO definiciones. **La regla que lo ataja es la CADENA
+> ASCENDENTE**: las llamadas van en orden y **nunca retroceden**, así que un número que
+> va hacia atrás —o que no tiene definición— es una cifra del cuerpo y se devuelve a
+> texto plano (era contenido; no se borra). **Pero la cadena sí puede SALTAR**: exigir
+> que avance de uno en uno rompe el capítulo entero al primer hueco —medido en Lehrich,
+> la nota 25 no tiene llamada en el original y esa regla estricta invalidó 120 llamadas
+> buenas en cascada—. Y en las secciones que NO tienen notas —bibliografía, apéndices—
+> sencillamente no uses `--footnotes`.
 
 > **MAQUETA SIN RENGLÓN EN BLANCO ENTRE PÁRRAFOS** (composición erudita: Brill y
 > similares solo sangran la primera línea) → `pdf_rich_to_markdown.py --indent-paragraphs`.
