@@ -136,6 +136,25 @@ def verificar_notas_traducidas(en: str, es: str) -> list[str]:
     if prop > 0.6:
         fallos.append(f"NOTAS SIN TRADUCIR ({iguales} de {len(comunes)} definiciones "
                       f"IDÉNTICAS al original)")
+        return fallos
+
+    # La proporción GLOBAL no basta, y falla justo donde más duele. Medido en
+    # Lehrich: el capítulo 1 devolvió sin traducir las notas 54-102 y el 4 las
+    # 98-124, y el archivo pasó con 57 % y 59 % —por debajo del umbral por un
+    # pelo—, porque en un aparato bibliográfico MUCHAS notas son legítimamente
+    # idénticas (una ficha con lugar y editorial en inglés lo es). Diluida entre
+    # ellas, una tanda de notas de PROSA sin traducir no mueve el porcentaje.
+    # El discriminante fino es la PROSA: una definición con varias palabras
+    # función inglesas y ninguna diferencia respecto al original no se tradujo,
+    # y basta UNA para reportarla. Una ficha pura no dispara: casi no tiene
+    # palabras función («Yates, *Giordano Bruno* (Chicago: …, 1964), 130»).
+    prosa = [k for k in comunes
+             if A[k] == B[k] and len(A[k].split()) >= 8 and len(_ING.findall(A[k])) >= 3]
+    if prosa:
+        m = sorted(prosa, key=lambda s: (len(s), s))
+        fallos.append(f"{len(prosa)} definición(es) de nota SIN TRADUCIR "
+                      f"(idénticas al original y con prosa): {', '.join(m[:12])}"
+                      + (" …" if len(m) > 12 else ""))
     return fallos
 
 
