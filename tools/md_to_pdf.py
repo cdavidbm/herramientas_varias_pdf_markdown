@@ -836,6 +836,41 @@ def main():
     info = subprocess.run(["pdfinfo", str(out)], capture_output=True, text=True).stdout
     pages = next((l.split()[-1] for l in info.splitlines() if l.startswith("Pages")), "?")
     print(f"  {out.name}: {pages} páginas ({len(a.md)} capítulos)")
+    avisa_caracteres_perdidos(a.md, out)
+
+
+def avisa_caracteres_perdidos(mds, pdf):
+    """Compara el repertorio NO ASCII del markdown con el del PDF ya compilado.
+
+    Es el ÚNICO control que ve esta clase de pérdida, y hay que medirlo, no leer el
+    log: si la fuente principal no tiene un carácter y no hay reserva que lo cubra,
+    lualatex lo descarta y el PDF se genera sin error. Medido dos veces en el mismo
+    libro: Agripa salió con 130 de sus 232 caracteres griegos perdidos por compilar
+    con una sola `--font-fallback`, con el recuento de páginas y el de notas
+    intactos. Buscar «Missing character» en el log es menos fiable —no siempre se
+    emite— y el aviso de `--font-fallback` solo salta cuando NO hay ninguna.
+    """
+    try:
+        txt = subprocess.run(["pdftotext", "-layout", str(pdf), "-"],
+                             capture_output=True, text=True, timeout=180).stdout
+    except Exception:
+        return
+    if not txt.strip():
+        return
+    fuente = set()
+    for f in mds:
+        for c in pathlib.Path(f).read_text(encoding="utf-8", errors="replace"):
+            if ord(c) > 127 and c.isprintable() and not c.isspace():
+                fuente.add(c)
+    faltan = sorted(fuente - {c for c in txt if ord(c) > 127})
+    if faltan:
+        muestra = "".join(faltan[:60])
+        sys.stderr.write(
+            f"  AVISO: {len(faltan)} carácter(es) del markdown NO están en el PDF: "
+            f"{muestra}\n         Latin Modern no los tiene y se han descartado en "
+            f"silencio. Añade --font-fallback (es REPETIBLE: p. ej. \"Charis SIL\" "
+            f"para transliteración Y \"GFS Artemisia\" para griego), --hebrew-font o "
+            f"--arabic-font según el caso.\n")
 
 if __name__ == "__main__":
     main()
