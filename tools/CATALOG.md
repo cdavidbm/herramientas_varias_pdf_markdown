@@ -78,6 +78,7 @@
 - `agy_translate.py` — Traduce un markdown de capítulo/Book a otro idioma con agy/Gemini,
 - `check_scan_margins.py` — Control de calidad del partido de un escaneo 2-up: avisa
 - `citas_en_bloque.py` — convierte en `>` los párrafos que son una CITA ENTERA, y
+- `cose_parrafos.py` — une los párrafos que un bisturí PARTIÓ en el salto de página.
 - `coteja_aparato.py` — contrasta el aparato de notas de un .md contra el PIE IMPRESO del PDF.
 - `crop_figure.py` — Recorta una FIGURA (carta astral, diagrama, rueda zodiacal…)
 - `embed_figures_from_captions.py` — Añade las FIGURAS (cartas, diagramas) a un libro ya

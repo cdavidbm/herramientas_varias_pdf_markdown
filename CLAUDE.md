@@ -205,6 +205,17 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   PIXEL A PIXEL con `pdfimages -png -f N -l N x.pdf fig` — más limpio y sin gastar cuota;
   invierte las que salgan en negativo (brillo bajo) y, si dos comparten página, asígnalas
   por orden arriba→abajo. (Medido en Sahl: 56 figuras raster directas, 0 agy.)
+- `cose_parrafos.py ./es/*.md [--apply]` — **el bisturí abre párrafo nuevo en cada
+  CAMBIO DE PÁGINA**, así que un párrafo que cruza de página sale roto A MEDIA FRASE
+  («…subdividió el abanico. En numerosas ␤␤ ocasiones Idel ha argumentado…»). Se lee,
+  pero al maquetar salen dos párrafos con sangría donde el libro tiene uno. Medido en
+  Lehrich: **251**; en Agripa, 22. **La señal es DOBLE y hay que exigir las dos:** el
+  párrafo anterior no cierra frase Y el siguiente abre en MINÚSCULA; con una sola se
+  cosen párrafos legítimos. **Y nunca se cose alrededor de una CITA EN BLOQUE**: ahí la
+  frase del autor entra en la cita y sale de ella, y eso es la estructura del ORIGINAL.
+  La causa raíz ya está corregida en `pdf_rich_to_markdown.py --indent-paragraphs`, que
+  deja decidir a la SANGRÍA en vez de al salto de página; esta tool es para los libros
+  ya convertidos.
 - `citas_en_bloque.py ./markdown/*.md [--apply] [--comillas]` — los párrafos que son
   una **CITA ENTERA** salen del converter como prosa normal entrecomillada, porque la
   maqueta las marcaba con la SANGRÍA y esa señal no sobrevive. El markdown se lee, pero

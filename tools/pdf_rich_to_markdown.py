@@ -564,8 +564,14 @@ def main() -> int:
             continue
         newp = False
         if prev_y is not None:
-            if pno != prev_page or col != prev_col:
-                newp = True                       # cambio de página o de columna
+            if col != prev_col:
+                newp = True                       # cambio de columna
+            elif pno != prev_page and not a.indent_paragraphs:
+                # El cambio de PÁGINA no basta para abrir párrafo: un párrafo que
+                # cruza de página saldría PARTIDO a media frase (medido: 251 en
+                # Lehrich). Con --indent-paragraphs decide la SANGRÍA, que es la
+                # señal real; sin ella se conserva el comportamiento anterior.
+                newp = True
             elif (prev_y - y) > lead * a.gap:
                 newp = True                       # salto grande: párrafo nuevo
         if a.indent_paragraphs and prev_y is not None and _i in sangrada:

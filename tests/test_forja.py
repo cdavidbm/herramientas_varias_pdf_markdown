@@ -27,6 +27,7 @@ import md_to_pdf
 import clean_markdown
 import epub_to_markdown
 import citas_en_bloque
+import cose_parrafos
 import traducir_libro
 import check_completeness
 import split_chapters
@@ -1077,3 +1078,37 @@ class HebreoYSangria(unittest.TestCase):
         en = "[^1]: Hermann V Archbishop of Cologne (1477-1552).\n[^2]: *Wydae.*\n[^3]: *Westphaliae.*\n[^4]: *Mechlinia.*\n"
         es = "[^1]: Hermann V, arzobispo de Colonia (1477-1552).\n[^2]: *Wydae.*\n[^3]: *Westphaliae.*\n[^4]: *Mechlinia.*\n"
         self.assertEqual(traducir_libro.verificar_notas_traducidas(en, es), [])
+
+
+class CoseParrafos(unittest.TestCase):
+    """Párrafos partidos por el salto de página."""
+
+    def test_cose_frase_partida(self):
+        md = "Idel subdividió el abanico. En numerosas\n\nocasiones ha argumentado que sí.\n"
+        out, n = cose_parrafos.cose(md)
+        self.assertEqual(n, 1)
+        self.assertIn("En numerosas ocasiones ha argumentado", out)
+
+    def test_no_cose_si_la_frase_cierra(self):
+        md = "Idel subdividió el abanico.\n\nen numerosas ocasiones lo dijo.\n"
+        self.assertEqual(cose_parrafos.cose(md)[1], 0)
+
+    def test_no_cose_si_abre_en_mayuscula(self):
+        md = "Idel subdividió el abanico y\n\nScholem no estuvo de acuerdo.\n"
+        self.assertEqual(cose_parrafos.cose(md)[1], 0)
+
+    def test_nunca_cose_alrededor_de_una_cita(self):
+        # La frase entra en la cita y sale de ella: es la estructura del ORIGINAL.
+        md = ("la extensión del lenguaje es\n\n> lógicamente superior al habla,\n\n"
+              "y con sus virtudes. La escritura descansa.\n")
+        out, n = cose_parrafos.cose(md)
+        self.assertEqual(n, 0)
+        self.assertIn("\n\n> lógicamente", out)
+
+    def test_no_toca_notas_ni_encabezados(self):
+        md = "# Título\n\n[^1]: una nota\n\n[^2]: otra nota\n"
+        self.assertEqual(cose_parrafos.cose(md)[1], 0)
+
+    def test_llamada_de_nota_cuenta_como_cierre(self):
+        md = "Esto ya cerró la frase.[^12]\n\nasí que esto no se cose.\n"
+        self.assertEqual(cose_parrafos.cose(md)[1], 0)
