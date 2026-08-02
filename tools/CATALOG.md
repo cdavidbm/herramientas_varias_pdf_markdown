@@ -86,6 +86,7 @@
 - `footnote_chain.py` — Separa el APARATO de notas del CUERPO cuando la única señal fiable
 - `footnotes_from_pdf.py` — Reconstruye el APARATO DE NOTAS leyendo el del PDF original.
 - `footnotes_redistribute.py` — mueve las definiciones `[^N]:` agrupadas al final
+- `glifos_janus_a_unicode.py` ⚠ — restituye los glifos astrológicos de un PDF compuesto
 - `hebreo_sp_a_unicode.py` — devuelve a Unicode el hebreo de un PDF que lo compone
 - `imprime_sin_anclar.py` — evita que el PDF se coma las notas que no tienen llamada.
 - `limpia_dudas.py` — resuelve las marcas `[?: …]` que el traductor dejó como deuda declarada.
