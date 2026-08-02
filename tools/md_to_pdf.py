@@ -857,12 +857,25 @@ def avisa_caracteres_perdidos(mds, pdf):
         return
     if not txt.strip():
         return
+    # Dos correcciones sin las cuales el aviso grita en falso en casi todos los libros:
+    # los GLIFOS ASTROLÓGICOS van en starfont, que los imprime perfectamente pero los
+    # extrae como letras ASCII; y el árabe se extrae en FORMAS DE PRESENTACIÓN, fuera
+    # de su bloque Unicode. Normalizar con NFKD hay que hacerlo en los DOS lados, o la
+    # `á` del markdown deja de encontrarse y un libro en español sale con «á é í ñ
+    # ausentes».
+    import unicodedata
+    nk = lambda s: unicodedata.normalize("NFKD", s)
+    star = "star" in subprocess.run(["pdffonts", str(pdf)], capture_output=True,
+                                    text=True).stdout.lower()
     fuente = set()
     for f in mds:
-        for c in pathlib.Path(f).read_text(encoding="utf-8", errors="replace"):
+        for c in nk(pathlib.Path(f).read_text(encoding="utf-8", errors="replace")):
             if ord(c) > 127 and c.isprintable() and not c.isspace():
+                if star and (0x2600 <= ord(c) <= 0x27BF
+                             or 0x2295 <= ord(c) <= 0x2297):  # ⊕ Tierra, ⊗ Fortuna
+                    continue
                 fuente.add(c)
-    faltan = sorted(fuente - {c for c in txt if ord(c) > 127})
+    faltan = sorted(fuente - {c for c in nk(txt) if ord(c) > 127})
     if faltan:
         muestra = "".join(faltan[:60])
         sys.stderr.write(

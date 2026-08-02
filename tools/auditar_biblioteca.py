@@ -105,7 +105,8 @@ def perdidos_en_pdf(files: list[Path], pdf: Path) -> tuple[list[str], int]:
     for f in files:
         for c in nk(f.read_text(encoding="utf-8", errors="replace")):
             if ord(c) > 127 and c.isprintable() and not c.isspace():
-                if hay_star and 0x2600 <= ord(c) <= 0x27BF:
+                if hay_star and (0x2600 <= ord(c) <= 0x27BF
+                                 or 0x2295 <= ord(c) <= 0x2297):
                     continue                      # glifo de starfont: se imprime
                 fuente.add(c)
     falta = sorted(fuente - presentes - set("*_`#[]"))
