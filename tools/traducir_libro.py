@@ -85,6 +85,11 @@ def verificar(en: str, es: str) -> list[str]:
         fallos.append("encabezado REPETIDO (agy reemitió un trozo)")
     fallos += verificar_tablas(en, es)
     fallos += verificar_notas_traducidas(en, es)
+    sin = parrafos_sin_traducir(es)
+    if sin:
+        pal = sum(len(p.split()) for p in sin)
+        fallos.append(f"{len(sin)} párrafo(s) SIN TRADUCIR ({pal} palabras): "
+                      f"«{sin[0][:60]}…»")
     return fallos
 
 
@@ -180,6 +185,44 @@ def huella(texto: str) -> str:
     """
     import hashlib
     return hashlib.sha1(texto.encode("utf-8")).hexdigest()[:16]
+
+
+# Palabras funcionales: son las que de verdad marcan el idioma de un párrafo. Los
+# sustantivos y nombres propios pueden coincidir (títulos, latín, transliteraciones),
+# pero «the/of/and» frente a «el/de/y» no.
+_ING = re.compile(r"\b(the|of|and|with|which|that|this|from|have|has|been|were|would|"
+                  r"there|their|these|those|for|not|but|are|is|it|as|by|to|in|on|his|"
+                  r"her|its|such|than|then|when|where|while|also|both|each|any)\b", re.I)
+_ESP = re.compile(r"\b(el|la|los|las|de|del|y|con|que|para|por|una|un|unos|unas|se|es|"
+                  r"son|su|sus|como|en|más|pero|no|al|lo|esta|este|estos|estas|ese|esa|"
+                  r"cuando|donde|mientras|también|cada|entre|sobre|sin|desde)\b", re.I)
+
+
+def parrafos_sin_traducir(es: str, min_pal: int = 15) -> list[str]:
+    """Párrafos que volvieron en el IDIOMA ORIGEN.
+
+    **El ratio de palabras NO ve esto**, y es su punto ciego más caro: un trozo sin
+    traducir ocupa aproximadamente lo mismo que ocuparía traducido, así que el ratio
+    sale perfecto. Medido en Lehrich: 13 párrafos seguidos —1.260 palabras— en inglés
+    dentro de un archivo con ratio 1.073 que había pasado TODOS los demás controles.
+
+    Se decide por PALABRAS FUNCIONALES, no por vocabulario: los nombres propios, los
+    títulos y el latín coinciden en ambos idiomas, pero «the/of/and» frente a
+    «el/de/y» no. Se ignoran las definiciones de nota (las juzga
+    verificar_notas_traducidas) y los bloques cortos, donde la señal no es fiable.
+    """
+    malos = []
+    for p in es.split("\n\n"):
+        s = p.strip()
+        if not s or s.startswith(("[^", "|", "!", "#")):
+            continue
+        cuerpo_p = re.sub(r"(?m)^>\s?", "", s)
+        if len(cuerpo_p.split()) < min_pal:
+            continue
+        ni, ne = len(_ING.findall(cuerpo_p)), len(_ESP.findall(cuerpo_p))
+        if ni > ne:
+            malos.append(s)
+    return malos
 
 
 def metricas(en: str, es: str) -> dict:

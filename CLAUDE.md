@@ -822,6 +822,12 @@ un PDF entero como sección.
     título** en el índice. Ahora con esa bandera el título conserva su número y el
     capítulo va sin numerar. Y `--chapter-size large` encoge el título de APERTURA:
     un título largo pasó de 9 renglones a 5, y el libro de 822 a 808 páginas.
+  - **DEMASIADA HIFENACIÓN: `--less-hyphenation`.** En castellano justificado a medida
+    estrecha, LaTeX llega a partir el **10 % de los renglones**, y cientos de esos cortes
+    dejan fragmentos de una o dos letras. La bandera sube `\lefthyphenmin`/`righthyphenmin`
+    a 3, penaliza el guion y da `emergencystretch`, para que TeX estire los espacios antes
+    de partir la palabra. Medido en Agripa: **del 8,3 % al 2,3 %** de renglones partidos,
+    al coste de 1 página de cada 57.
   - **RENDERIZA UNA PÁGINA Y MÍRALA: es el único control que ve esto.** En un muestreo salió
     un **titulillo de página impreso a media prosa** («*§§7.60-71: MERCANCÍAS ¢” PRECIOS 279*»,
     con el `&` destrozado y el folio dentro). Iba en CURSIVA, así que el limpiador que solo
@@ -894,6 +900,18 @@ un PDF entero como sección.
    cualquier archivo que no sea trivialmente corto, y reserva `agy_translate.py` para
    capítulos de pocos cientos de palabras. El umbral de 4.000 sigue siendo el mínimo
    OBLIGATORIO, no el criterio suficiente.
+
+5b-bis. **EL RATIO NO VE UN TROZO SIN TRADUCIR: mide VOLUMEN, no IDIOMA.** Un trozo que
+   vuelve en el idioma origen ocupa aproximadamente lo mismo que ocuparía traducido, así
+   que el ratio sale perfecto. Medido en Lehrich: **13 párrafos seguidos —1.260 palabras—
+   en inglés** dentro de un archivo con ratio 1.073 que había pasado TODOS los demás
+   controles (notas, tablas, encabezados, figuras). Lo detectó el usuario leyendo, no la
+   verificación. `parrafos_sin_traducir()` lo decide por **palabras funcionales** —los
+   nombres propios, los títulos y el latín coinciden en ambos idiomas, pero «the/of/and»
+   frente a «el/de/y» no— e ignora las definiciones de nota y los bloques cortos.
+   **Falsos positivos legítimos que hay que saber leer:** las entradas de bibliografía y
+   las listas de abreviaturas son títulos en inglés con solo un par de palabras
+   traducibles; ahí la señal salta con razón y no hay nada que arreglar.
 
 5b. **Si traduces con `agy_translate.py`, VERIFICA Y REINTENTA — no es determinista.** Tres
    modos de fallo, todos silenciosos y caros: (a) **reemite un trozo entero** (se ve

@@ -82,7 +82,7 @@ _TABLE_SIZE_CMD = {"normal": "", "small": r"\small",
 def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback="",
              fontsize=12, geometry=DEFAULT_GEOMETRY, tocdepth="subsection",
              chapstyle="bringhurst", arabfont="", short_headers=False, leading=None,
-             subtitles=(), chapsize="\\LARGE"):
+             subtitles=(), chapsize="\\LARGE", hyphen=""):
     unichars = "\n".join(
         r"\newunicodechar{%s}{{\normalfont\%s}}" % (u, c) for u, c in UNI2CMD.items())
     gpath = (r"\graphicspath{%s}" % "".join("{%s/}" % d for d in graphicspath)
@@ -162,6 +162,7 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
 \RecustomVerbatimEnvironment{verbatim}{Verbatim}{breaklines,breakanywhere,fontsize=\small}
 \usepackage{amssymb}
 %% --- geometría (por defecto = ediciones janegca Valens/Doroteo; override con --geometry) ---
+%(hyphen)s
 \usepackage[%(geometry)s]{geometry}
 %(leading)s
 \usepackage[colorlinks=true, linkcolor=black, urlcolor=blue, unicode]{hyperref}
@@ -229,7 +230,7 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
                      toctex=toctex, gpath=gpath, fn=fn, fallback=fallback,
                      fontsize=fontsize, geometry=geometry, chapstyle=chapstyle,
                      arabic=arabfont, chaptermark=chaptermark, leading=leadingtex,
-                     chapsize=chapsize)
+                     chapsize=chapsize, hyphen=hyphen)
 
 # Detección del prefijo de capítulo numerado en el H1: «Capítulo N —», «Chapter N —»,
 # «Capítulo N: …» o simplemente «NN —» (numeración por dígitos, p. ej. «# 05 — La Luna»).
@@ -676,6 +677,11 @@ def main():
                     default="bringhurst", metavar="ESTILO",
                     help="estilo del título de capítulo: bringhurst (versalitas, def.) "
                          "o mayuscula (más grande, negrita, MAYÚSCULAS)")
+    ap.add_argument("--less-hyphenation", action="store_true",
+                    help="reduce la hifenación: no parte dejando fragmentos de 1-2 "
+                         "letras y prefiere estirar los espacios antes que partir la "
+                         "palabra. En castellano justificado a medida estrecha, LaTeX "
+                         "llega a partir el 10 %% de los renglones.")
     ap.add_argument("--chapter-size", default="LARGE", metavar="TAM",
                     help="tamaño del título de APERTURA de capítulo con --chapter-style "
                          "mayuscula: LARGE (def.), large, normalsize… Con títulos muy "
@@ -789,6 +795,13 @@ def main():
                     a.fontsize, a.geometry, a.toc_depth, a.chapter_style, arabtex,
                     short_headers=a.short_headers, leading=a.leading,
                     chapsize="\\" + a.chapter_size,
+                    hyphen=("%% menos hifenación: no partir dejando fragmentos de 1-2\n"
+                            "%% letras, penalizar el guion y dejar que TeX estire los\n"
+                            "%% espacios (emergencystretch) antes de partir la palabra.\n"
+                            "\\lefthyphenmin=3 \\righthyphenmin=3\n"
+                            "\\hyphenpenalty=500 \\tolerance=1800\n"
+                            "\\setlength{\\emergencystretch}{3em}"
+                            if a.less_hyphenation else ""),
                     subtitles=a.subtitle)
            + front + mainstart + mainb + "\n\\end{document}\n")
 
