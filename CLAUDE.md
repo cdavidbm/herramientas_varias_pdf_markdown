@@ -853,9 +853,17 @@ un PDF entero como sección.
     tiene ni el griego ni los signos de transliteración; con una sola fuente de reserva
     se arregla la mitad y **la otra mitad desaparece en silencio** (medido en Lehrich:
     con `Charis SIL` sola se perdieron `κνοςό`). Pasa `--font-fallback "Charis SIL"
-    --font-fallback "GFS Artemisia"`. El aviso automático del script solo salta cuando NO
-    hay ninguna, así que **el control que de verdad lo ve es el de siempre**: comparar el
-    conjunto de caracteres no ASCII del markdown con el del PDF extraído.
+    --font-fallback "GFS Artemisia"`; y a veces hacen falta TRES —el `ϙ` (koppa) de
+    Agripa no está ni en Charis SIL ni en Artemisia, sino en `GFS Didot`, y la nota que
+    lo perdía trataba justamente de ese símbolo—. **`md_to_pdf` ya lo comprueba solo al
+    terminar** (compara el repertorio no ASCII del markdown con el del PDF extraído y
+    avisa de lo que falte): documentarlo no bastó, porque el mismo libro perdió el griego
+    DOS veces. No busques «Missing character» en el log —no siempre se emite— ni te fíes
+    del aviso viejo, que solo salta cuando NO hay ninguna fuente de reserva.
+  - **GUARDA LA RECETA DE COMPILACIÓN JUNTO AL LIBRO** (`_BUILD_PDF.sh` en su carpeta), no
+    en el scratch de la sesión. La segunda pérdida de griego de Agripa fue exactamente
+    eso: el guion bueno se había borrado y se recompiló con una versión temprana a la que
+    le faltaba la segunda `--font-fallback`.
   - **`--figure-captions` + una leyenda propia = la leyenda IMPRESA DOS VECES** (una del
     texto alternativo de la imagen y otra tuya). Si tus leyendas ya llevan el número de
     figura y la referencia, no pases la bandera.
