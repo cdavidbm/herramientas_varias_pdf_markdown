@@ -507,6 +507,16 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   paréntesis sin cerrar): «*Recti* [?: Reefi]» no perdió nada, «asoció a [?: …]» perdió
   «Trismegisto». Y cuidado: una marca puede estar sustituyendo a un conector —`[?: *¢>*]`
   era un `&`, y borrarlo dejaba «Éxito fracaso en la vida»—.
+- **EL APARATO CRÍTICO LATINO NUMERA LAS LÍNEAS: eso es un control de completitud GRATIS
+  y exacto.** En una edición crítica bilingüe, la columna del original suele llevar el número
+  de línea cada cinco renglones. Si el archivo convertido empieza con el marcador «30» en vez
+  de «5», faltan 29 líneas y no hay que discutirlo. Medido en Ficino: el rango de páginas del
+  *Apologia* arrancaba dos páginas tarde y se había perdido la apertura entera —encabezamiento,
+  salutación a los tres Pedros y el párrafo con los tres reproches, 449 palabras y tres notas—.
+  **Ningún control de los de §3d lo habría visto**: no hay con qué comparar el ratio porque el
+  archivo entero está desplazado, el balance de notas cuadra (las llamadas perdidas se fueron
+  con su texto) y el markdown se lee sin sobresaltos, solo que empieza por «Responde primero…».
+  Comprueba SIEMPRE que el primer marcador de línea del original sea el primero de la sección.
 - **UN ENCABEZADO EN EL SITIO EQUIVOCADO ESCONDE UNA LAGUNA DE TRADUCCIÓN, y el ratio
   GLOBAL no la ve.** Si el título va centrado en dos renglones y el bisturí promueve solo el
   SEGUNDO, la primera mitad queda de párrafo suelto al final del capítulo anterior —y el
