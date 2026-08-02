@@ -507,6 +507,16 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   paréntesis sin cerrar): «*Recti* [?: Reefi]» no perdió nada, «asoció a [?: …]» perdió
   «Trismegisto». Y cuidado: una marca puede estar sustituyendo a un conector —`[?: *¢>*]`
   era un `&`, y borrarlo dejaba «Éxito fracaso en la vida»—.
+- **EL CONVERSOR PUEDE COMERSE LA PRIMERA LÍNEA DE LA PÁGINA junto con el titulillo.** El
+  filtro de cabecera trabaja por posición, y en las páginas donde el hueco bajo el titulillo
+  es algo menor de lo normal se lleva por delante **la primera línea de texto**. Medido en la
+  introducción de Kaske & Clark: **14 páginas, 194 palabras**, siempre a mitad de frase y por
+  eso invisibles al leer («When Andreas Leenius "corrected"» ␤␤ «can best be seen in…»).
+  **El control es barato y hay que hacerlo siempre en un libro largo:** compara el recuento de
+  `djvutxt`/`pdftotext` CRUDO del rango de páginas con el del markdown; los titulillos explican
+  ~4 palabras por página y lo que sobre es pérdida real (aquí, 534 de déficit y solo 356
+  explicables). Para localizarlas, comprueba página a página si su **primera línea larga**
+  aparece en el markdown, y reinsértala empalmando con la última línea de la página anterior.
 - **EL APARATO CRÍTICO LATINO NUMERA LAS LÍNEAS: eso es un control de completitud GRATIS
   y exacto.** En una edición crítica bilingüe, la columna del original suele llevar el número
   de línea cada cinco renglones. Si el archivo convertido empieza con el marcador «30» en vez
