@@ -539,7 +539,9 @@ def relocate_heading_footnotes(text):
                 out[i] = out[i].rstrip() + " " + "".join(pending); break
     return "\n".join(out)
 
-_NOTE_HEAD_RE = re.compile(r"^#{1,6}\s+(Notes|Notas)\s*$", re.I)
+# El título puede llevar cola («Notas del comentario», «Notes to the text»): lo que
+# autoriza a borrarlo no es el título exacto sino que DEBAJO solo haya definiciones.
+_NOTE_HEAD_RE = re.compile(r"^#{1,6}\s+(Notes|Notas)\b[^\n]*$", re.I)
 
 def strip_empty_note_heading(text):
     """Quita un encabezado «## Notas»/«## Notes» cuyo contenido son SOLO definiciones de

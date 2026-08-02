@@ -555,6 +555,24 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   «llamadas ⊆ definiciones» daba limpio. La cadena de cada capítulo debe ser **1..N completa
   y en orden estricto**; un número repetido o fuera de orden es una llamada mal etiquetada
   que apunta a otra nota.
+- **UNA NOTA QUE FALTA CON SU LLAMADA NO ROMPE NINGÚN BALANCE: cuéntalas contra la FUENTE.**
+  El control anterior compara llamadas con definiciones DENTRO del markdown, así que no ve
+  las notas que se perdieron ENTERAS —definición y volado a la vez— cuando el partidor por
+  cadena falló: el aparato queda internamente coherente y el ratio de palabras del cuerpo ni
+  se entera, porque lo perdido es el pie, no la prosa. Medido en Ficino, Libro I: el markdown
+  tenía **53 notas donde el impreso lleva 90**, y las 37 ausentes —1.700 palabras de
+  comentario— habían pasado la auditoría entera, la traducción y el PDF. **Lo que sí lo ve
+  es contar por sección contra el texto crudo del comentario**: si la sección 1.23 numera
+  hasta la 6 y el markdown tiene una, faltan cinco. La numeración SUPERVIVIENTE lo delata
+  gratis: un capítulo cuyas notas van `1, 2, 3, 8` tiene un agujero, no una numeración rara.
+  **Para reanclarlas no hace falta adivinar:** el volado perdido casi siempre sigue en el
+  cuerpo como basura de OCR pegada a la palabra (`Politics*`, `also,.5`, `Quintilian6`,
+  `scholars7`, `clear.'`, `it..3`, `i)14`), y cada residuo cae exactamente donde iba la
+  llamada. **La señal barata de que hay que mirar** es una definición TRUNCADA que acaba en
+  «…p.» o «…n.»: el partidor cortó en el número de una referencia de página (`p. 10.`) y
+  ese mismo fallo se llevó por delante las notas siguientes. Ojo también con la fusión en
+  sentido contrario: la última nota de una sección puede haberse tragado la primera de la
+  siguiente (aquí `1.6-7` contenía entera la `1.7-1`).
 - **ENCABEZADOS PARTIDOS EN DOS RENGLONES**: si un título va centrado en dos líneas, el
   bisturí promueve solo la primera y deja la segunda como párrafo suelto que empieza en
   minúscula. Se cose al título (sin coma si es continuación genitiva, «…del significador»
