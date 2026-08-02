@@ -871,9 +871,8 @@ def avisa_caracteres_perdidos(mds, pdf):
     for f in mds:
         for c in nk(pathlib.Path(f).read_text(encoding="utf-8", errors="replace")):
             if ord(c) > 127 and c.isprintable() and not c.isspace():
-                if star and (0x2600 <= ord(c) <= 0x27BF
-                             or 0x2295 <= ord(c) <= 0x2297):  # ⊕ Tierra, ⊗ Fortuna
-                    continue
+                if star and c in UNI2CMD:
+                    continue     # glifo de starfont: se imprime, se extrae ASCII
                 fuente.add(c)
     faltan = sorted(fuente - {c for c in nk(txt) if ord(c) > 127})
     if faltan:

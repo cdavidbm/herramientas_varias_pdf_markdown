@@ -33,6 +33,7 @@ import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from md_to_pdf import UNI2CMD                                     # noqa: E402
 from cose_parrafos import cose                                    # noqa: E402
 from traducir_libro import (verificar_notas_traducidas,           # noqa: E402
                             parrafos_sin_traducir)
@@ -105,9 +106,8 @@ def perdidos_en_pdf(files: list[Path], pdf: Path) -> tuple[list[str], int]:
     for f in files:
         for c in nk(f.read_text(encoding="utf-8", errors="replace")):
             if ord(c) > 127 and c.isprintable() and not c.isspace():
-                if hay_star and (0x2600 <= ord(c) <= 0x27BF
-                                 or 0x2295 <= ord(c) <= 0x2297):
-                    continue                      # glifo de starfont: se imprime
+                if hay_star and c in UNI2CMD:
+                    continue                      # glifo de starfont
                 fuente.add(c)
     falta = sorted(fuente - presentes - set("*_`#[]"))
     # Una tabla que NO se renderizó sale como texto corrido con sus pipes a la vista.
