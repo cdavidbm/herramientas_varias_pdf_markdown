@@ -507,6 +507,34 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   paréntesis sin cerrar): «*Recti* [?: Reefi]» no perdió nada, «asoció a [?: …]» perdió
   «Trismegisto». Y cuidado: una marca puede estar sustituyendo a un conector —`[?: *¢>*]`
   era un `&`, y borrarlo dejaba «Éxito fracaso en la vida»—.
+- **UN ENCABEZADO EN EL SITIO EQUIVOCADO ESCONDE UNA LAGUNA DE TRADUCCIÓN, y el ratio
+  GLOBAL no la ve.** Si el título va centrado en dos renglones y el bisturí promueve solo el
+  SEGUNDO, la primera mitad queda de párrafo suelto al final del capítulo anterior —y el
+  encabezado puede acabar **mil palabras más abajo de donde empieza el capítulo**. Entonces
+  el traductor cierra el capítulo donde dice el encabezado y **el tramo intermedio no se
+  traduce nunca**. Medido en Ficino, *De vita* III: cinco títulos partidos (caps. 3, 12, 15,
+  22 y 25) y el del 12 desplazado, con **1.484 palabras perdidas** —el capítulo entero sobre
+  el bezoar, la peonía y la triaca—. Ratio global 0,98; **ratio de ESE capítulo 0,62**.
+  **Por eso el control de completitud de una traducción se mide POR CAPÍTULO, no por
+  archivo**; y un título que empieza en MINÚSCULA es la señal barata de que está partido.
+- **SEPARAR LAS NOTAS DE UN COMENTARIO POR LA CADENA ASCENDENTE: cuatro trampas medidas.**
+  Cuando el aparato vive en un bloque aparte («3.16 / 1. … 2. …»), se trocea buscando el
+  número siguiente de la cadena, como en `footnote_chain.py`. Pero: (1) la guarda del número
+  tiene que excluir el **guion**, o «Enn 4.4.41.6-8» parte la nota 7 y le roba el cuerpo a la
+  8; (2) una nota puede **abrir con un dígito** («32. 4 *ad fin.*, ed. Frette»), así que
+  exigir mayúscula detrás corta la cadena a la mitad —hace falta un patrón de reserva
+  anclado a principio de renglón—; (3) el OCR escribe la nota 1 como **«l.»** (ele), y sin
+  normalizarlo la cadena engancha el «1» de un «10.» de más abajo y **se pierde el capítulo
+  entero**; (4) prueba SIEMPRE primero el patrón de principio de renglón. Un partidor sin
+  estas guardas junta notas cortas con la anterior y trocea las largas en cinco: en Ficino
+  daba claves fantasma («3.17-46», «3.16-41») que **parecían definiciones válidas**.
+- **UNA NOTA SIN LLAMADA NO SE IMPRIME, y el escaneo se come los volados.** Al auditar el
+  aparato no basta con «toda llamada tiene definición»: hay que comprobar **al revés**, que
+  toda definición tenga llamada. En Ficino, 67 de 274 no la tenían —el volado había quedado
+  como `Lion5`, `straw 1`, `Ptolemy29`, `crowned 9`, una comilla suelta o nada—, y el balance
+  «llamadas ⊆ definiciones» daba limpio. La cadena de cada capítulo debe ser **1..N completa
+  y en orden estricto**; un número repetido o fuera de orden es una llamada mal etiquetada
+  que apunta a otra nota.
 - **ENCABEZADOS PARTIDOS EN DOS RENGLONES**: si un título va centrado en dos líneas, el
   bisturí promueve solo la primera y deja la segunda como párrafo suelto que empieza en
   minúscula. Se cose al título (sin coma si es continuación genitiva, «…del significador»
