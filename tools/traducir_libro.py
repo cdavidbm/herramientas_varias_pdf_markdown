@@ -198,7 +198,7 @@ _ESP = re.compile(r"\b(el|la|los|las|de|del|y|con|que|para|por|una|un|unos|unas|
                   r"cuando|donde|mientras|también|cada|entre|sobre|sin|desde)\b", re.I)
 
 
-def parrafos_sin_traducir(es: str, min_pal: int = 15) -> list[str]:
+def parrafos_sin_traducir(es: str, min_pal: int = 5) -> list[str]:
     """Párrafos que volvieron en el IDIOMA ORIGEN.
 
     **El ratio de palabras NO ve esto**, y es su punto ciego más caro: un trozo sin
@@ -217,10 +217,14 @@ def parrafos_sin_traducir(es: str, min_pal: int = 15) -> list[str]:
         if not s or s.startswith(("[^", "|", "!", "#")):
             continue
         cuerpo_p = re.sub(r"(?m)^>\s?", "", s)
-        if len(cuerpo_p.split()) < min_pal:
+        n_pal = len(cuerpo_p.split())
+        if n_pal < min_pal:
             continue
         ni, ne = len(_ING.findall(cuerpo_p)), len(_ESP.findall(cuerpo_p))
-        if ni > ne:
+        # En bloques CORTOS (títulos de sección, leyendas) basta una funcional
+        # inglesa y ninguna española: «*Magic Squares and Figures*». En los largos
+        # se exige mayoría, para no marcar prosa con muchos títulos citados.
+        if (ni > ne) if n_pal >= 15 else (ni >= 1 and ne == 0):
             malos.append(s)
     return malos
 

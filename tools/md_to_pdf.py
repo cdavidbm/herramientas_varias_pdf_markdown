@@ -328,7 +328,13 @@ def make_unnumbered(tex):
                     d -= 1
                     if d == 0:
                         toc_title = title[s + 1:j]; break
+    # `\chapter*` NO mueve el contador de capítulo, así que con `--footnotes chapter`
+    # (que reinicia POR capítulo) las notas de un apéndice CONTINÚAN la numeración del
+    # último capítulo numerado — nota «222» donde el original dice 14. Se reinicia a
+    # mano. Medido en Lehrich, donde además el front-matter explícito manda TODOS los
+    # archivos a esta rama y el libro entero salía con la numeración corrida.
     repl = (r"\chapter*{%s}\addcontentsline{toc}{chapter}{%s}\markboth{%s}{%s}"
+            r"\setcounter{footnote}{0}"
             % (title, toc_title, toc_title, toc_title))
     return tex[:m.start()] + repl + tex[i + 1:]
 

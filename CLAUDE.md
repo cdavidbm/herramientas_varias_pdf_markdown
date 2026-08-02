@@ -209,13 +209,58 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   CAMBIO DE PÁGINA**, así que un párrafo que cruza de página sale roto A MEDIA FRASE
   («…subdividió el abanico. En numerosas ␤␤ ocasiones Idel ha argumentado…»). Se lee,
   pero al maquetar salen dos párrafos con sangría donde el libro tiene uno. Medido en
-  Lehrich: **251**; en Agripa, 22. **La señal es DOBLE y hay que exigir las dos:** el
-  párrafo anterior no cierra frase Y el siguiente abre en MINÚSCULA; con una sola se
-  cosen párrafos legítimos. **Y nunca se cose alrededor de una CITA EN BLOQUE**: ahí la
+  Lehrich: **251**; en Agripa, 22. **La señal decisiva es que el párrafo anterior NO
+  CIERRA FRASE**, y hay que definir «cerrar» con cuidado: un `)` o un `»` sueltos NO
+  cierran nada, así que el cierre exige puntuación TERMINAL de verdad (`. ! ? … : ;`).
+  Exigir ADEMÁS que el siguiente abra en minúscula —la primera versión— deja fuera dos
+  casos frecuentes y medidos: `…las imágenes (el tipo A)` ␤␤ `en la magia celeste` (el
+  paréntesis fingía cierre) y `…para ambos pensadores, aunque` ␤␤ `Ficino, para
+  defender…` (continúa en MAYÚSCULA). Por eso se une también tras **coma** —ningún
+  párrafo termina en coma— y tras **palabra función abierta** (preposición, conjunción,
+  artículo, relativo), que no puede ser la última de un párrafo pase lo que pase detrás.
+  **Los ADVERBIOS de enlace NO van en esa lista** («además», «también», *also*): sí
+  cierran el renglón que ENTRA en una cita en bloque, y meterlos funde la entradilla con
+  la cita. Ese caso —coma + bloque largo en mayúscula— se reporta como `DUDOSO` y no se
+  une. Guardas: un **subtítulo en cursiva** o una **leyenda de figura** tampoco cierran
+  frase y son bloques completos; hay que excluirlos o son falsos positivos garantizados.
+  **Y nunca se cose alrededor de una CITA EN BLOQUE**: ahí la
   frase del autor entra en la cita y sale de ella, y eso es la estructura del ORIGINAL.
   La causa raíz ya está corregida en `pdf_rich_to_markdown.py --indent-paragraphs`, que
   deja decidir a la SANGRÍA en vez de al salto de página; esta tool es para los libros
   ya convertidos.
+- **HEBREO (o griego) COMPUESTO CON UNA FUENTE ASCII: se extrae como basura latina y
+  NADA lo delata.** Muchas monografías de los 90-2000 no usan Unicode: meten el hebreo
+  con una TrueType mapeada sobre ASCII (`SPTiberian`, `SuperHebrew`, `WP-GreekCentury`),
+  sin `ToUnicode`. Sale `(K)lmw)` donde el libro imprime `ומלאך`, y el ratio cuadra —los
+  caracteres están, uno por letra—, el balance de notas cuadra y el corrector lo toma por
+  una sigla. En un libro sobre cábala eso es el objeto del capítulo, no un adorno.
+  `hebreo_sp_a_unicode.py libro.pdf ./es/*.md [--apply]` lo restituye **sin adivinar**:
+  no detecta «lo que parece hebreo» —`why`, `myth` y `thy` se escriben solo con letras
+  del repertorio SP— sino que le PREGUNTA AL PDF qué cadenas van en esa fuente
+  (`pdftohtml -xml` da texto + `fontspec`) y sustituye solo esas. **Dos trampas medidas
+  en Lehrich:** (1) hay que **INVERTIR** la cadena entera, espacios incluidos, porque el
+  PDF guarda los glifos en orden VISUAL y el hebreo se lee al revés —así se arregla de
+  paso el orden de las PALABRAS: `hxwd hwhy K)lmw` → `ומלאך יהוה דוחה`—; (2) sin
+  **frontera de token** las cadenas de dos o tres letras casan DENTRO de palabras
+  corrientes (*t·hy·s*, *w·hy*) y salen **405 «restituciones» donde hay 54**, sembrando
+  el texto de hebreo a media palabra. La frontera no puede ser `\b` (aquí `)` y `(` son
+  letras): exige que no haya letra ni dígito pegados a los lados. Y sustituye **de más
+  largo a más corto**, o el trozo corto parte el largo por la mitad.
+  El **griego** de estas fuentes sale FRAGMENTADO (`pdftohtml` emite un carácter suelto y
+  el resto en la fuente normal), así que ahí no vale el mismo automatismo: localiza las
+  páginas con `pdffonts`/`fontspec`, **renderízalas y lee la palabra** (`[NVD:"6@<]` era
+  `φαρμακον`; `*,\<TF4H`, `δείνωσις`).
+- **SUBTÍTULOS DE SECCIÓN PEGADOS AL PÁRRAFO.** Si el libro marca sus apartados con una
+  línea en CURSIVA (no con cuerpo mayor), el bisturí no los ve como encabezado y quedan
+  fundidos al párrafo que abren: `*Planetary Characters* The construction of…`. En el
+  markdown pasa desapercibido, y al maquetar el libro entero se queda **sin estructura
+  interna** y el índice solo lista capítulos. Medido en Lehrich: **86 por idioma**.
+  Se promueven a `##`, pero **verifícalo contra el PDF antes**: un subtítulo real aparece
+  como LÍNEA SUELTA en `pdftotext` (86/86 confirmados, 0 falsos positivos), mientras que
+  un párrafo que empieza por un título de obra en cursiva NO. Dos avisos: el patrón se
+  escapa cuando el párrafo arranca con OTRA cursiva (`*Character and Hieroglyph* *DOP*
+  does not…`), y una regla de «bloque entero en cursiva» **promueve las LEYENDAS DE
+  FIGURA a encabezado** —5 por idioma— si no las excluyes.
 - `citas_en_bloque.py ./markdown/*.md [--apply] [--comillas]` — los párrafos que son
   una **CITA ENTERA** salen del converter como prosa normal entrecomillada, porque la
   maqueta las marcaba con la SANGRÍA y esa señal no sobrevive. El markdown se lee, pero
@@ -804,6 +849,26 @@ un PDF entero como sección.
     origen era el propio EPUB. `md_to_pdf.py` **ya lo corrige solo** antes de compilar
     (parchea 5 bytes del APP0, sin recomprimir); `--no-fix-density` solo avisa.
     Comprobación rápida a mano: `file -b img.jpg | grep -o "density [0-9]*x[0-9]*"`.
+  - **`--font-fallback` ES REPETIBLE, y un libro suele necesitar DOS.** Latin Modern no
+    tiene ni el griego ni los signos de transliteración; con una sola fuente de reserva
+    se arregla la mitad y **la otra mitad desaparece en silencio** (medido en Lehrich:
+    con `Charis SIL` sola se perdieron `κνοςό`). Pasa `--font-fallback "Charis SIL"
+    --font-fallback "GFS Artemisia"`. El aviso automático del script solo salta cuando NO
+    hay ninguna, así que **el control que de verdad lo ve es el de siempre**: comparar el
+    conjunto de caracteres no ASCII del markdown con el del PDF extraído.
+  - **`--figure-captions` + una leyenda propia = la leyenda IMPRESA DOS VECES** (una del
+    texto alternativo de la imagen y otra tuya). Si tus leyendas ya llevan el número de
+    figura y la referencia, no pases la bandera.
+  - **`\chapter*` NO reinicia el contador de notas**, así que con `--footnotes chapter`
+    un apéndice —o el libro entero si usaste `--front-matter N`, que manda TODOS los
+    archivos a esa rama— sale con la numeración CORRIDA: nota «222» donde el original
+    dice 14. Ya está corregido en `make_unnumbered` (emite `\setcounter{footnote}{0}`),
+    pero comprueba siempre el primer número de nota de un capítulo intermedio.
+  - **`*x*.*` no se renderiza:** un `*` seguido de PUNTO no abre cursiva en pandoc, así
+    que los asteriscos salen IMPRESOS (`Hismael*.*`). Y la maqueta corta la cursiva en el
+    salto de renglón, con lo que el bisturí deja la primera letra en cursiva propia
+    (`In*R* *eason, Experiment*`). Ambos se cazan de una: extrae el texto del PDF y busca
+    `\S\*\S`; si hay alguno, el markdown tiene énfasis mal colocado.
   - **UNA NOTA SIN LLAMADA NO SE IMPRIME.** pandoc solo saca una nota si existe la LLAMADA
     `[^etiqueta]` en el cuerpo; la definición huérfana se descarta **EN SILENCIO**. Es
     demoledor en libros cuyo aparato se reconstruyó contando marcadores en un escaneo, donde
