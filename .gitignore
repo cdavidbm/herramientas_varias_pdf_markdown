@@ -13,3 +13,4 @@ __pycache__/
 # Índices FTS5 generados junto a los libros (no versionar)
 .forja_index.db
 *.forja_index.db
+_work/
