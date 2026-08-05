@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import base64
 import re
+from collections import Counter
 from pathlib import Path
 
 DEFAULT_KEEP = ("[COMMENT]", "[QUOTE", "[END OF QUOTE]", "[TEXT]", "[NATURES")
@@ -81,6 +82,39 @@ def clean(text, outdir, window=60, keep_markers=DEFAULT_KEEP):
 
     def is_marker(h):
         return any(m in h for m in keep_markers)
+
+    # 2b) FOLIO DUPLICADO + titulillo pegado al salto de página. Algunas maquetas
+    # (Library of Arabic Literature y otras ediciones bilingües de páginas
+    # enfrentadas) dejan el número de página DOS veces en la misma línea —«5 5»,
+    # uno por cada página del pliego— y justo debajo el titulillo de la página
+    # siguiente. Ninguno de los dos es contenido, pero el titulillo NO se repite
+    # como encabezado markdown, así que el filtro de abajo no lo ve.
+    # Guarda: el titulillo solo se borra si de verdad SE REPITE en el documento
+    # (>=3 veces); si no, podría ser texto legítimo que sigue a una cifra.
+    folio = re.compile(r"^\s*(\d+)\s+\1\s*$")
+    veces = Counter(l.strip() for l in lines if l.strip())
+    limpias, n_folio, n_titulillo = [], 0, 0
+    k = 0
+    while k < len(lines):
+        if folio.match(lines[k]):
+            n_folio += 1
+            k += 1
+            while k < len(lines) and not lines[k].strip():
+                k += 1
+            cand = lines[k].strip() if k < len(lines) else ""
+            # Un titulillo se REPITE (la prosa no repite un renglón entero), es
+            # corto y no cierra frase. Las tres cosas juntas; con la repetición
+            # sola bastaría casi siempre, pero la primera línea de una página
+            # puede ser prosa y no conviene arriesgarla.
+            if (cand and veces[cand] >= 2 and len(cand) < 80
+                    and not cand.endswith((".", "!", "?", ":", ";", "\u201d"))
+                    and not is_heading(cand)):
+                n_titulillo += 1
+                k += 1
+            continue
+        limpias.append(lines[k])
+        k += 1
+    lines = limpias
 
     # 3) running headers
     body = "\n".join(lines)

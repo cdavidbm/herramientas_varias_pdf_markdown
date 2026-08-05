@@ -114,7 +114,13 @@ def _spans(chars, body: float | None = None, ratio: float = SMALL):
     for c in chars:
         fn = (c.fontname or "")
         low = fn.lower()
-        st = ("b" if "bold" in low else "") + ("i" if ("italic" in low or "oblique" in low) else "")
+        # OJO: hay fundiciones que abrevian el estilo en el nombre de la fuente
+        # («AdobeTextNYUP-It», «Minion-Ita»). Buscar solo «italic»/«oblique»
+        # las da por redondas y la cursiva se pierde EN SILENCIO —206 tramos
+        # en el Tilimsānī de NYU Press—. Mismo criterio que pdfxml_to_markdown.
+        ital = ("italic" in low or "oblique" in low
+                or re.search(r"-it\b|-ita|italics", low) is not None)
+        st = ("b" if "bold" in low else "") + ("i" if ital else "")
         sm = bool(body) and c.size <= body * ratio
         ch = c.get_text()
         if out and out[-1][0] == st and out[-1][1] == sm:
@@ -295,6 +301,10 @@ def find_gutter(rows, X0: float, X1: float, force: bool = False) -> float | None
 
 
 FOOT = -2              # columna ficticia: fila de nota al pie
+MARGIN = -3            # columna ficticia: número de párrafo al MARGEN
+# Hueco mínimo, en puntos, que separa el número al margen del final del
+# renglón. Un espacio entre palabras anda por 3-5pt; aquí se midieron 18-23.
+MARGIN_GAP = 12.0
 
 
 def _msize(cs) -> float:
@@ -330,10 +340,12 @@ def merge_raised(foot, tsz: float):
 
 
 def iter_lines(pdf: Path, first: int | None, last: int | None, columns: str = "auto",
-               body: float | None = None, force_range: tuple | None = None):
+               body: float | None = None, force_range: tuple | None = None,
+               margin_numbers: bool = False):
     """(página, columna, y0, x0, texto, cuerpo) por línea.
 
-    columna: 0 = izquierda, 1 = derecha, -1 = ancho completo, -2 = nota al pie.
+    columna: 0 = izquierda, 1 = derecha, -1 = ancho completo, -2 = nota al pie,
+    -3 = número de párrafo al margen.
     En páginas a 2 columnas se emite la izquierda ENTERA y luego la derecha, para
     que el reflujo no las funda línea a línea (que es justo lo que hace Calibre).
 
@@ -368,6 +380,40 @@ def iter_lines(pdf: Path, first: int | None, last: int | None, columns: str = "a
                 chars += [c for c in line if isinstance(c, LTChar)]
         if not chars:
             continue
+        # Números de párrafo AL MARGEN (Library of Arabic Literature y demás
+        # ediciones críticas que numeran los párrafos fuera de la caja). Hay que
+        # sacarlos ANTES de agrupar filas: comparten renglón con la última línea
+        # del párrafo, así que `cluster_rows` los mete DENTRO de la prosa y el
+        # número acaba impreso a media frase —llegando a partir una palabra por
+        # el guion de corte—. Dos señales independientes, porque la posición sola
+        # no basta (el número solapa en x con la última palabra del renglón):
+        # estar en la banda del margen Y ser del tipo «N.M».
+        margen: list = []
+        if margin_numbers:
+            quitar: set = set()
+            for _y, cs in cluster_rows(chars):
+                vis = sorted((c for c in cs if c.get_text().strip()),
+                             key=lambda c: c.x0)
+                if len(vis) < 2:
+                    continue
+                # El número vive FUERA de la caja: lo delata el hueco que lo separa
+                # del final del renglón, mucho mayor que un espacio entre palabras.
+                corte = None
+                for k in range(len(vis) - 1, 0, -1):
+                    if vis[k].x0 - vis[k - 1].x1 >= MARGIN_GAP:
+                        corte = k
+                        break
+                if corte is None:
+                    continue
+                cola = vis[corte:]
+                txt = "".join(c.get_text() for c in cola).strip()
+                if re.fullmatch(r"\d+\.\d+", txt):
+                    margen.append((round(min(c.y0 for c in cola), 1), txt))
+                    quitar |= {id(c) for c in cola}
+            if quitar:
+                chars = [c for c in chars if id(c) not in quitar]
+            if not chars:
+                continue
         rows = cluster_rows(chars)
 
         def emit(cs, col, bd=None, ratio=SMALL):
@@ -420,10 +466,18 @@ def iter_lines(pdf: Path, first: int | None, last: int | None, columns: str = "a
         g = (find_gutter(rows, X0, X1, forced)
              if (columns == "auto" or forced) else None)
         if g is None:
+            margen.sort(key=lambda m: -m[0])
+            mi = 0
             for _y, cs in rows:
+                while mi < len(margen) and margen[mi][0] >= _y - 1:
+                    yield (pno, MARGIN, margen[mi][0], 0.0, margen[mi][1], 0.0)
+                    mi += 1
                 r = emit(cs, -1, body)          # página normal: TODO es ancho completo
                 if r:
                     yield r
+            while mi < len(margen):
+                yield (pno, MARGIN, margen[mi][0], 0.0, margen[mi][1], 0.0)
+                mi += 1
             yield from emit_foot()
             continue
 
@@ -447,10 +501,18 @@ def iter_lines(pdf: Path, first: int | None, last: int | None, columns: str = "a
                     yield r
             band.clear()
 
+        margen.sort(key=lambda m: -m[0])          # de arriba abajo, como la página
+        mi = 0
         for y, cs in rows:
             vis = [c for c in cs if c.get_text().strip()]
             if not vis:
                 continue
+            # El número de margen marca dónde ARRANCA su párrafo: se emite justo
+            # antes de la primera fila que queda a su altura o por debajo.
+            while mi < len(margen) and margen[mi][0] >= y - 1:
+                yield from flush_band()
+                yield (pno, MARGIN, margen[mi][0], 0.0, margen[mi][1], 0.0)
+                mi += 1
             # ¿la fila tiene un hueco JUSTO en el canal? Si no lo tiene, lo cruza de
             # lado a lado (rótulo, título): NO se puede partir sin cortar una palabra.
             split = any(b.x0 - a.x1 >= MIN_GUTTER and a.x1 <= g <= b.x0
@@ -468,6 +530,9 @@ def iter_lines(pdf: Path, first: int | None, last: int | None, columns: str = "a
                 if r:
                     yield r                      # …y va en su sitio, no al final
         yield from flush_band()
+        while mi < len(margen):
+            yield (pno, MARGIN, margen[mi][0], 0.0, margen[mi][1], 0.0)
+            mi += 1
         yield from emit_foot()
 
 
@@ -500,6 +565,12 @@ def main() -> int:
                          "paralelo): se salta la detección automática, que no llega "
                          "cuando el canal se mueve de página a página o el bloque "
                          "ocupa pocas filas. Ej: --force-columns 96-133")
+    ap.add_argument("--margin-numbers", action="store_true",
+                    help="números de párrafo compuestos AL MARGEN (ediciones "
+                         "críticas tipo Library of Arabic Literature). Sin esto "
+                         "comparten renglón con la prosa y salen impresos a media "
+                         "frase, llegando a partir una palabra; con esto se "
+                         "extraen y encabezan su propio párrafo")
     ap.add_argument("--indent-paragraphs", action="store_true",
                     help="parte párrafos también por la SANGRÍA de primera línea "
                          "(maquetas sin renglón en blanco entre párrafos). La sangría "
@@ -521,6 +592,7 @@ def main() -> int:
     paras: list[str] = []
     cur: list[str] = []
     prev_y = prev_page = prev_col = None
+    pend_marca = ""
     leads: list[float] = []
 
     fr = None
@@ -530,7 +602,8 @@ def main() -> int:
             sys.exit("error: --force-columns quiere un rango A-B (ej. 96-133)")
         fr = (int(m.group(1)), int(m.group(2)))
         print(f"columnas FORZADAS en las páginas {fr[0]}-{fr[1]}")
-    rows = list(iter_lines(a.pdf, a.first, a.last, a.columns, body, fr))
+    rows = list(iter_lines(a.pdf, a.first, a.last, a.columns, body, fr,
+                           a.margin_numbers))
     # interlineado típico = mediana de los saltos dentro de una misma página+columna
     for i in range(1, len(rows)):
         if rows[i][0] == rows[i - 1][0] and rows[i][1] == rows[i - 1][1]:
@@ -574,6 +647,15 @@ def main() -> int:
                 newp = True
             elif (prev_y - y) > lead * a.gap:
                 newp = True                       # salto grande: párrafo nuevo
+        if col == MARGIN:
+            # El número de margen SIEMPRE abre párrafo: es lo que marca en la
+            # maqueta. Se guarda y encabeza el párrafo siguiente.
+            if cur:
+                paras.append(" ".join(cur))
+                cur = []
+            pend_marca = f"**{txt}**"
+            prev_y, prev_page = y, pno
+            continue
         if a.indent_paragraphs and prev_y is not None and _i in sangrada:
             newp = True                           # primera línea sangrada
         if newp and cur:
@@ -583,6 +665,9 @@ def main() -> int:
             paras.append(f"<!-- col {col + 1} pág {pno} -->")   # pno ya es 1-based
         if col == 1 and col != prev_col:
             ncol += 1
+        if pend_marca and not cur:
+            txt = f"{pend_marca} {txt}"
+            pend_marca = ""
         cur = [dehyph(" ".join(cur), txt)] if cur else [txt]
         prev_y, prev_page, prev_col = y, pno, col
     if cur:
