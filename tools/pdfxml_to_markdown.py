@@ -107,6 +107,9 @@ def parse_pages(xml: str) -> list[dict]:
                 top=int(t.get("top") or 0), left=int(t.get("left") or 0),
                 w=int(t.get("width") or 0), h=int(t.get("height") or 0),
                 size=size, fam=fam, txt="".join(t.itertext()),
+                # Un `<a>` dentro del token: en los PDF hechos con Calibre desde
+                # un EPUB, la llamada de nota es un ENLACE al aparato del final.
+                link=("a" in tags),
                 bold=("b" in tags) or "bold" in low or "semibold" in low,
                 ital=("i" in tags) or "italic" in low or re.search(r"-it|ita", low) is not None,
             ))
@@ -136,7 +139,12 @@ def clean_text(s: str) -> str:
     # «°» es la ligadura Th mal mapeada: solo al abrir palabra y ante minúscula,
     # para no tocar los grados (27°, 15° 30').
     s = re.sub(r"(?<![0-9])°(?=[a-z])", "Th", s)
-    return s
+    # Un ESPACIO nunca precede legítimamente a una marca combinante: si aparece,
+    # es que el punto suscrito se emitió como glifo aparte y el hueco entre
+    # cajas metió un espacio en medio («rah ̣-MAAN» por «raḥ-MAAN»). Medido:
+    # 191 casos en la guía de pronunciación de «Physicians of the Heart».
+    s = re.sub(r"[ \t]+(?=[̀-ͯ])", "", s)
+    return unicodedata.normalize("NFC", s)
 
 
 def apply_dot_under(txt: str) -> str:
@@ -223,11 +231,20 @@ def render_line(line: list[dict], body: float, counter: dict,
                   and t["top"] + t["h"] <= base - body * 0.20)
         # Un volado sin ToUnicode se extrae como cadena vacía o como PUA; un
         # espacio (`\xa0`) NO es un volado aunque venga en cuerpo menor.
-        if raised and (txt == "" or _is_pua(txt)):
+        # Hay DOS poblaciones de llamada y la diferencia decide la etiqueta.
+        # El volado sin `ToUnicode` no se puede leer y hay que CONTARLO; pero un
+        # PDF hecho con Calibre desde un EPUB emite el número ENTERO y legible
+        # dentro de un `<a href>` en cuerpo menor, y ahí contar es peor que leer:
+        # si el original no ancló alguna nota, el conteo se desfasa desde ese
+        # hueco y todas las etiquetas siguientes apuntan a OTRA nota. Medido en
+        # «Physicians of the Heart»: 309 llamadas legibles, numeradas 1..311 con
+        # la 32 y la 66 ausentes del cuerpo — contando salían 2 corridas.
+        legible = txt.strip() if (raised and t.get("link") and txt.strip().isdigit()) else ""
+        if raised and (txt == "" or _is_pua(txt) or legible):
             # Glifo volado sin ToUnicode = una CIFRA de una llamada. Los glifos
             # contiguos son la misma llamada (una nota de dos dígitos son dos).
-            digits = clean_text(txt) if _is_pua(txt) else ""
-            if prev_raised_right is not None and t["left"] - prev_raised_right <= max(4, t["w"]):
+            digits = legible or (clean_text(txt) if _is_pua(txt) else "")
+            if not legible and prev_raised_right is not None and t["left"] - prev_raised_right <= max(4, t["w"]):
                 if digits.isdigit() and counter["read"]:
                     counter["read"][-1] += digits      # 2ª cifra de la misma llamada
                 prev_raised_right = t["left"] + t["w"]
@@ -240,7 +257,7 @@ def render_line(line: list[dict], body: float, counter: dict,
             # cifra suelta puede no llegar a mapearse. Lo leído se guarda para
             # COTEJARLO — dos señales independientes sobre el mismo dato.
             counter["read"].append(digits)
-            out.append(f"[^{counter['n']}]")
+            out.append(f"[^{legible or counter['n']}]")
             prev_raised_right = t["left"] + t["w"]
             continue
         prev_raised_right = None
@@ -321,10 +338,20 @@ def page_markdown(page: dict, body: float, counter: dict, keep_heads: bool,
     return out
 
 
-def assemble(all_lines: list[tuple[str, list[dict]]], body: float) -> str:
-    """Cose las líneas en párrafos por la SANGRÍA (relativa al margen)."""
+def assemble(all_lines: list[tuple[str, list[dict]]], body: float,
+             keep_lines: bool = False) -> str:
+    """Cose las líneas en párrafos por la SANGRÍA (relativa al margen).
+
+    Con `keep_lines`, NO cose: cada renglón del original queda como su propio
+    bloque. Es lo que piden las secciones de LISTA —índice analítico, listas de
+    nombres, bibliografía—, donde cada entrada ocupa un renglón y no lleva
+    sangría que la distinga: cosiéndolas sale un párrafo corrido de cientos de
+    entradas donde el libro tiene una lista, y al leer ya no se separan.
+    """
     if not all_lines:
         return ""
+    if keep_lines:
+        return polish("\n\n".join(t for t, _ in all_lines if t.strip()) + "\n")
     margins = [ln[0]["left"] for _, ln in all_lines]
     margin = sorted(margins)[len(margins) // 2]
     paras: list[list[str]] = []
@@ -354,7 +381,43 @@ def assemble(all_lines: list[tuple[str, list[dict]]], body: float) -> str:
             else:
                 paras[-1][-1] = prev + " " + txt
     chunks = [" ".join(p).strip() for p in paras if p and " ".join(p).strip()]
-    return "\n\n".join(chunks) + "\n"
+    return polish("\n\n".join(chunks) + "\n")
+
+
+# Una capitular es UNA letra suelta en su propio bloque, y el párrafo continúa
+# en minúscula justo debajo: hay que reunirlas o el capítulo abre por «ecause».
+_DROPCAP_RE = re.compile(r"(?m)^\**([A-ZÁÉÍÓÚÑ])\**\n\n(?=[a-záéíóúñ])")
+# La capitular no siempre queda en bloque aparte: si el conversor la cosió al
+# párrafo, sobrevive como una letra suelta entre asteriscos («*E* ach vowel»).
+_DROPCAP_INLINE_RE = re.compile(r"(?m)^\*([A-ZÁÉÍÓÚÑ])\*[ \t]+(?=[a-záéíóúñ])")
+
+
+def polish(md: str) -> str:
+    """Tres artefactos de maqueta que el markdown crudo arrastra siempre."""
+    # 1. Capitular separada del cuerpo de su párrafo.
+    md = _DROPCAP_RE.sub(r"\1", md)
+    md = _DROPCAP_INLINE_RE.sub(r"\1", md)
+    # 2. Cursiva partida por el conversor en dos tramos contiguos
+    #    (`*siraat-ul* *mustaqeem*`): la maqueta la corta al tabular la línea.
+    #    Solo DENTRO de un renglón —`\s` incluiría el salto y encadenaría dos
+    #    párrafos enteros en una cursiva— y nunca sobre `**`, que son dos
+    #    asteriscos adyacentes y la fusión los colapsaría.
+    #    Si el corte cayó en un GUION la palabra es una sola (`*Al-* *hamdu*` =
+    #    «Al-hamdu»): ahí no va espacio, o se inventa uno que el libro no tiene.
+    def _une(m: "re.Match[str]") -> str:
+        a, b = m.group(1), m.group(2)
+        return f"*{a}{'' if a.endswith('-') else ' '}{b}*"
+
+    for _ in range(4):
+        nuevo = re.sub(r"(?<!\*)\*([^*\n]+)\*[ \t]+\*([^*\n]+)\*(?!\*)", _une, md)
+        if nuevo == md:
+            break
+        md = nuevo
+    # 3. Encabezado ÍNTEGRO en cursiva: el título ya se distingue por ser
+    #    encabezado, y dejar las marcas imprime asteriscos o lo estiliza dos
+    #    veces. Solo se quita si envuelve el título ENTERO.
+    md = re.sub(r"(?m)^(#{1,6} )\*([^*\n]+)\*$", r"\1\2", md)
+    return md
 
 
 def tabulate(md: str) -> str:
@@ -431,6 +494,21 @@ def main() -> int:
     ap.add_argument("--tables", action="store_true",
                     help="reconstruir como TABLA las filas con salto de columna "
                          "(si no, se aplanan a texto corrido)")
+    ap.add_argument("--keep-lines", action="store_true",
+                    help="no coser renglones en párrafos: cada línea del "
+                         "original queda como bloque propio. Para secciones de "
+                         "LISTA (índice analítico, listas de nombres, "
+                         "bibliografía), donde no hay sangría que distinga una "
+                         "entrada de la siguiente y coserlas da un párrafo "
+                         "corrido de cientos de entradas")
+    ap.add_argument("--cell-gap", type=float, default=0.06, metavar="F",
+                    help="hueco mínimo entre celdas, en proporción del ancho de "
+                         "página (def: 0.06). Es el umbral que decide si dos "
+                         "tokens son columnas distintas o la misma: una columna "
+                         "estrecha —un número de orden— queda por debajo y se "
+                         "funde con la vecina EN SILENCIO, así que si la primera "
+                         "columna se pega a la segunda, bájalo (medido: 0.05 "
+                         "separa un hueco de 52 pt en página de 918)")
     ap.add_argument("--charmap", metavar="A=B,C=D",
                     help="glifos mal mapeados que hay que sustituir, verificados "
                          "contra la imagen (p. ej. «¾=Z» cuando las versalitas "
@@ -455,9 +533,9 @@ def main() -> int:
     counter = {"n": args.first_note - 1, "read": []}
     all_lines: list[tuple[str, list[dict]]] = []
     for p in pages:
-        cg = p["width"] * 0.06 if args.tables else 1e9
+        cg = p["width"] * args.cell_gap if args.tables else 1e9
         all_lines += page_markdown(p, body, counter, args.keep_running_heads, cg)
-    md = assemble(all_lines, body)
+    md = assemble(all_lines, body, args.keep_lines)
     md = tabulate(md) if args.tables else md.replace(CELL, " ")
 
     notes = counter["n"] - args.first_note + 1
@@ -467,10 +545,23 @@ def main() -> int:
     # discrepancia significa que se coló un falso volado o que falta uno.
     read = counter["read"]
     if any(read):
-        bad = [(i + args.first_note, r) for i, r in enumerate(read)
-               if r and int(r) != i + args.first_note]
-        print(f"cotejo llamadas: {sum(1 for r in read if r)}/{len(read)} legibles; "
-              + ("sin desfases" if not bad else f"DESFASES {bad[:8]}"), file=sys.stderr)
+        nums = [int(r) for r in read if r]
+        if len(nums) == len(read):
+            # TODAS legibles: la etiqueta emitida es el número LEÍDO, así que
+            # compararlo con el contador solo mediría los huecos del original.
+            # Lo que sí es un defecto aquí es que la serie retroceda o repita.
+            malas = [(a, b) for a, b in zip(nums, nums[1:]) if b <= a]
+            huecos = sorted(set(range(nums[0], nums[-1] + 1)) - set(nums))
+            print(f"cotejo llamadas: {len(nums)}/{len(nums)} legibles, "
+                  f"etiquetadas por el número IMPRESO ({nums[0]}–{nums[-1]}); "
+                  + ("serie ascendente" if not malas else f"FUERA DE ORDEN {malas[:6]}")
+                  + (f"; sin llamada en el cuerpo: {huecos}" if huecos else ""),
+                  file=sys.stderr)
+        else:
+            bad = [(i + args.first_note, r) for i, r in enumerate(read)
+                   if r and int(r) != i + args.first_note]
+            print(f"cotejo llamadas: {sum(1 for r in read if r)}/{len(read)} legibles; "
+                  + ("sin desfases" if not bad else f"DESFASES {bad[:8]}"), file=sys.stderr)
 
     if args.notes_pages:
         a, _, b = args.notes_pages.partition("-")

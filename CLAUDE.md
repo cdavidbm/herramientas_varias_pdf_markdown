@@ -763,6 +763,30 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
 > apilado quedan aproximadas; y cada fuente de versalitas tiene SU propio mapeo corrupto,
 > así que un `--charmap` global de una sola letra puede estropear otra fuente: mapea
 > cadenas enteras (`Å±ÆÁÂ=TABLE`) y verifica contra la imagen.
+>
+> **PDF HECHO CON CALIBRE DESDE UN EPUB: la llamada de nota se LEE, no se cuenta.** Es el
+> mismo bisturí, pero la señal es otra y confundirlas sale caro. Aquí el volado no es un
+> glifo mudo: es el número ENTERO y legible dentro de un `<a href>` que apunta al aparato
+> del final, en cuerpo menor y en azul (`size 17` sobre 23, `#0000ee`). `pdftotext` lo tira
+> igual —el aparato entero desaparece sin que nada avise—, pero **contar es peor que leer**:
+> si el original deja algún número sin anclar, el conteo se desfasa desde ese hueco y todas
+> las etiquetas siguientes apuntan a OTRA nota. Medido en *Physicians of the Heart* (530 pp):
+> 310 llamadas legibles sobre la serie 1..311, con la **32** ausente del cuerpo. El
+> discriminante para no tomar un exponente por llamada es el ENLACE, no solo el tamaño.
+> **Y el control gratis es la contigüidad:** convertido capítulo a capítulo, los rangos deben
+> encajar sin solapes ni saltos (1-2, 3, 4-19, 20-39…); si encajan, el aparato está entero.
+> **Cuatro artefactos más de esta maqueta, todos invisibles en el markdown:** la CAPITULAR
+> queda suelta (`*B*` y luego «ecause…», a veces en bloque aparte y a veces en la misma
+> línea); la CURSIVA sale partida en dos tramos (`*siraat-ul* *mustaqeem*`) y al fusionarla
+> no va espacio si el corte cayó en un guion (`*Al-* *hamdu*` = «Al-hamdu»); el ENCABEZADO
+> viene íntegro en cursiva; y el punto suscrito se emite como glifo aparte, con lo que el
+> hueco entre cajas mete un espacio ANTES de la marca combinante (`rah ̣-MAAN` por
+> `raḥ-MAAN`, 191 casos) — y un espacio nunca precede legítimamente a una combinante.
+> **Dos banderas nuevas para las secciones que no son prosa:** `--cell-gap` (el umbral de
+> columna era fijo en 0,06 del ancho y fundía en silencio una columna estrecha con su
+> vecina: un hueco real de 52 pt en página de 918 pide 0,05) y `--keep-lines`, para el
+> índice analítico y demás LISTAS, donde cada entrada ocupa un renglón sin sangría que la
+> distinga y el cosido por párrafos las deja en un párrafo corrido de cientos de entradas.
 
 `detect_chapters.py` lista páginas candidatas (no escribe el plan); con eso
 **redactas el `plan.json`** y corres el conversor con `--dry-run` primero.
