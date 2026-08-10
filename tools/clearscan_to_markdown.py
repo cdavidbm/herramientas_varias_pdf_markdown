@@ -34,7 +34,12 @@ import re
 import statistics
 import subprocess
 import sys
+from pathlib import Path
 import unicodedata
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from forja.pdfxml import ejecuta, fontspecs  # noqa: E402
+
 
 # ---------------------------------------------------------------- inclinación de fuentes
 
@@ -106,19 +111,13 @@ Span = collections.namedtuple("Span", "top left width height size cursiva texto"
 
 
 def paginas_xml(pdf_path, ini=None, fin=None):
-    """[(nº_página, [Span…])]. Los `fontspec` de pdftohtml son GLOBALES y se declaran
-    donde aparecen por primera vez: un mapa por página pierde los ids heredados de
-    páginas anteriores (medido: el 40 % del texto se quedaba sin estilo)."""
-    cmd = ["pdftohtml", "-xml", "-stdout", "-i"]
-    if ini:
-        cmd += ["-f", str(ini)]
-    if fin:
-        cmd += ["-l", str(fin)]
-    cmd.append(str(pdf_path))
-    xml = subprocess.run(cmd, capture_output=True).stdout.decode("utf-8", "replace")
-    spec = {m[0]: (m[1], m[2]) for m in
-            re.findall(r'<fontspec id="(\d+)"[^>]*size="(\d+)"[^>]*family="([^"]*)"', xml)}
-    return xml, spec
+    """(xml, {id: (tamaño, familia)}).
+
+    El acumulado GLOBAL de los `fontspec` —y por qué un mapa por página pierde el
+    40 % del estilo— vive ahora en `forja.pdfxml`, con su test.
+    """
+    xml = ejecuta(pdf_path, ini, fin, sin_imagenes=True)
+    return xml, fontspecs(xml)
 
 
 def _desescapa(s):
@@ -156,7 +155,7 @@ def spans_de_pagina(pg_xml, spec, umbral):
         txt = _desescapa(cont)
         if not txt.strip():
             continue
-        size, fam = spec.get(fid, ("0", ""))
+        size, fam = spec.get(fid, (0.0, ""))
         base = fam.split("-")[0]
         spans.append(Span(int(top), int(left), int(w), int(h), int(size),
                           umbral.get(base, False), txt))

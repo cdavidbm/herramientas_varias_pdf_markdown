@@ -62,6 +62,17 @@ import unicodedata
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from forja.pdfxml import ejecuta, tokens  # noqa: E402
+
+# `run_pdftohtml` y `parse_pages` vivían aquí y, casi iguales, en
+# clearscan_to_markdown. Las dos trampas que ambos documentaban —los fontspec son
+# GLOBALES, y la cursiva puede venir abreviada en el nombre de la familia— están
+# ahora en forja.pdfxml con su test.
+run_pdftohtml = ejecuta
+parse_pages = tokens
+
+
 DOT_BELOW = "̣"
 
 LIGATURES = {
@@ -75,48 +86,6 @@ RAISED = 0.75
 
 # Marca interna de salto de COLUMNA dentro de una línea (filas de tabla).
 CELL = "\x00"
-
-
-def run_pdftohtml(pdf: Path, first: int | None, last: int | None) -> str:
-    cmd = ["pdftohtml", "-xml", "-stdout"]
-    if first:
-        cmd += ["-f", str(first)]
-    if last:
-        cmd += ["-l", str(last)]
-    cmd.append(str(pdf))
-    r = subprocess.run(cmd, capture_output=True)
-    if r.returncode != 0:
-        raise SystemExit(f"pdftohtml falló: {r.stderr.decode('utf-8', 'replace')[:400]}")
-    return r.stdout.decode("utf-8", "replace")
-
-
-def parse_pages(xml: str) -> list[dict]:
-    """[{num, width, height, toks:[{top,left,w,h,size,fam,txt,bold,ital}]}]"""
-    root = ET.fromstring(xml)
-    specs: dict[str, tuple[float, str]] = {}   # acumulativo — ver trampa arriba
-    pages = []
-    for pg in root.iter("page"):
-        for fs in pg.iter("fontspec"):
-            specs[fs.get("id")] = (float(fs.get("size") or 0), fs.get("family") or "")
-        toks = []
-        for t in pg.iter("text"):
-            size, fam = specs.get(t.get("font") or "", (0.0, ""))
-            tags = {c.tag for c in t.iter() if c is not t}
-            low = fam.lower()
-            toks.append(dict(
-                top=int(t.get("top") or 0), left=int(t.get("left") or 0),
-                w=int(t.get("width") or 0), h=int(t.get("height") or 0),
-                size=size, fam=fam, txt="".join(t.itertext()),
-                # Un `<a>` dentro del token: en los PDF hechos con Calibre desde
-                # un EPUB, la llamada de nota es un ENLACE al aparato del final.
-                link=("a" in tags),
-                bold=("b" in tags) or "bold" in low or "semibold" in low,
-                ital=("i" in tags) or "italic" in low or re.search(r"-it|ita", low) is not None,
-            ))
-        pages.append(dict(num=int(pg.get("number") or 0), toks=toks,
-                          width=float(pg.get("width") or 0),
-                          height=float(pg.get("height") or 0)))
-    return pages
 
 
 def body_size(pages: list[dict]) -> float:
@@ -278,7 +247,6 @@ def render_line(line: list[dict], body: float, counter: dict,
     s = re.sub(r"\*(\s+)\*", r"\1", s)          # cursivas contiguas partidas
     s = re.sub(r"[ \t]+", " ", s)
     return fix_emphasis(s.strip())
-
 
 
 def fix_emphasis(s: str) -> str:
