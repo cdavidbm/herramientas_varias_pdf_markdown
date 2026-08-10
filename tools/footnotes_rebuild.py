@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 footnotes_rebuild.py — Rebuild Markdown footnotes `[^N]` from OCR output where
 superscript reference numbers were split into spaced digits and glued to the
 preceding word (e.g. "phlegm.1 1 4" for footnote 114) and the definitions sit
@@ -33,6 +33,19 @@ Usage:
   python3 footnotes_rebuild.py 03_Chapter.md               # report only
   python3 footnotes_rebuild.py 03_Chapter.md --apply
   for f in 0[2-7]_*.md; do python3 footnotes_rebuild.py "$f" --apply; done
+
+Los DOS estilos de OCR que reconoce
+-----------------------------------
+* **pegado**: el marcador viene partido en dígitos sueltos (`1 3 8` → `[^138]`) y la
+  definición al pie abre con punto (`114. …`).
+* **suelto**: el marcador va con espacios (` N `) y la definición es `N Texto`, SIN
+  punto, a veces partida en dos renglones. Aquí la numeración es CONTINUA en todo el
+  libro, no reinicia por capítulo (libros de AstroArt/Döser).
+
+No lo apliques a índices ni bibliografía: ahí las cifras son páginas, no notas.
+
+Para REHACER un archivo que ya se convirtió, primero se revierte con dos regex
+(`^\[\^N\]:` → `N `, y `\s*\[\^N\]` → ` N`) y luego se vuelve a aplicar.
 """
 from __future__ import annotations
 

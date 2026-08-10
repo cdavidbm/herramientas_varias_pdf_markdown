@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pdfxml_to_markdown.py — bisturí para PDF digitales cuya capa de texto está
+r"""pdfxml_to_markdown.py — bisturí para PDF digitales cuya capa de texto está
 INCOMPLETA aunque el PDF sea nativo: se apoya en `pdftohtml -xml` (poppler) y
 reconstruye lo que la extracción normal pierde EN SILENCIO.
 
@@ -49,6 +49,15 @@ Uso
 ---
     python3 pdfxml_to_markdown.py libro.pdf --first 14 --last 49 --out intro.md
     python3 pdfxml_to_markdown.py libro.pdf --first 14 --last 49 --first-note 1
+
+Dos banderas para las secciones que NO son prosa
+------------------------------------------------
+* `--cell-gap`: el umbral que separa columnas era fijo en 0,06 del ancho de página y
+  **fundía en silencio una columna estrecha con su vecina**. Un hueco real de 52 pt en
+  una página de 918 pide 0,05. Sin esto, un apéndice de cuatro columnas sale con dos.
+* `--keep-lines`: para índices analíticos y demás LISTAS, donde cada entrada ocupa un
+  renglón sin sangría que la distinga. El cosido por párrafos las deja como un párrafo
+  corrido de cientos de entradas.
 """
 
 from __future__ import annotations

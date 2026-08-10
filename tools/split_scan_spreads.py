@@ -35,6 +35,44 @@ Uso:
 Salida: `paginas/pdfNNNL.png`, `pdfNNNR.png` (izquierda/derecha de la hoja NNN),
 `pdfNNNsingle.png` para cubiertas y hojas de una sola página, y un `manifest.tsv`.
 Requiere poppler (`pdfimages`, `pdfinfo`), numpy y Pillow.
+
+Cómo verificar el corte, y las trampas medidas
+-----------------------------------------------
+**Nunca ajustes el corte a la caja de texto.** Se come el arranque de cada línea de la
+página derecha («I decided to extend…» → «d to extend…»), y en el markdown final eso es
+INVISIBLE. Cortar dentro de la franja negra del lomo no puede tocar texto; que asomen
+unas letras de la página vecina es inofensivo.
+
+Verifica siempre con `check_scan_margins.py ./paginas` **y mirando los anchos anómalos**
+frente a la mediana: una página mucho más estrecha que las demás es un corte que se
+comió texto.
+
+Tres trampas más, todas medidas:
+
+* Promediar la tinta sobre TODA la altura trunca la caja de las páginas con pocas líneas
+  (la última de un capítulo, las portadillas).
+* El recorte de bordes negros debe alternar filas y columnas **recalculando**: una banda
+  negra horizontal infla el perfil de todas las columnas.
+* El **folio impreso** da el mapeo página↔imagen y hay que validarlo. En Travaglia salía
+  `libro = 2·N − 6 / 2·N − 5`, pero el desfase cambia con el front matter de cada libro.
+
+Cuadernillo de anillas escaneado ABIERTO (spread girado 90° en la imagen)
+--------------------------------------------------------------------------
+Aquí `qpdf` y `split_pdf_spreads` no sirven: el MediaBox es vertical, `Page rot` es 0 y
+la rotación está en el contenido de la imagen. El OSD de tesseract da baja confianza.
+
+Se resuelve por imagen: extraer, girar (prueba los cuatro ángulos y OCR-ea para ver cuál
+da texto real) y partir en mitades, descartando las vacías por densidad de tinta. Orden
+de lectura: izquierda antes que derecha por hoja.
+
+**Y si es para transcribir por visión, no partas por la mitad ni por el valle de una
+banda fija en torno al centro:** el escaneo lleva un margen de mesa que DESCENTRA el
+spread, el corte cae dentro del texto y la página izquierda pierde el final de cada
+línea —invisible después en el markdown—. Localiza las **dos cajas de texto** por el
+perfil de tinta suavizado y corta en mitad del hueco que las separa; recorta cada mitad
+a su caja de tinta, no por «bandas oscuras», porque con fondo CLARO ese recorte actúa
+distinto en cada hoja y descuadra el partido. Medido en *On the Stellar Rays*
+(Zoller/Hand): 44 hojas → 88 páginas en 12 s usando `pdfimages` en vez de `pdftoppm`.
 """
 import subprocess, sys, os, glob
 import numpy as np

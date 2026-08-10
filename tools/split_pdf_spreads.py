@@ -21,6 +21,23 @@ Usage:
   python3 split_pdf_spreads.py input.pdf out.pdf --order rl     # right-to-left (manga/arabic)
   python3 split_pdf_spreads.py input.pdf out.pdf --split-all    # force-split every page
   python3 split_pdf_spreads.py input.pdf --dry-run              # report plan, no output
+
+OJO A LA ROTACIÓN: el 2-up puede no detectarse
+-----------------------------------------------
+La detección mira el ratio ancho/alto del MediaBox, y si `pdfinfo` dice
+`Page rot: 90` o `270`, ese ratio es el de la página SIN rotar: el 2-up pasa
+desapercibido. Hornea la rotación antes:
+
+    qpdf --flatten-rotation x.pdf x_flat.pdf
+
+Y hay un caso en que esta herramienta NO sirve: el cuadernillo de anillas escaneado
+abierto, donde el spread está girado 90° DENTRO de la imagen y `Page rot` es 0. Ahí el
+MediaBox es vertical y la rotación vive en el contenido, así que ni `qpdf` ni este
+script la ven. Se resuelve por imagen — ver `split_scan_spreads.py`.
+
+Si el 2-up lo vas a TRANSCRIBIR POR VISIÓN en vez de OCR-earlo, tampoco uses esta
+herramienta: corta por la mitad geométrica, y para transcribir hace falta cortar por el
+lomo. Usa `split_scan_spreads.py`.
 """
 from __future__ import annotations
 

@@ -38,6 +38,27 @@ Usage:
   python3 epub_to_markdown.py plan.json
   python3 epub_to_markdown.py plan.json --dry-run
   python3 epub_to_markdown.py plan.json --only "1 The Opening"
+
+LA CURSIVA DE UN EPUB DE CALIBRE/KINDLE SE PIERDE ENTERA Y EN SILENCIO
+-----------------------------------------------------------------------
+Estos EPUB **casi nunca usan `<i>` ni `<em>`**: el énfasis va en una CLASE
+(`<span class="italic">`, o una opaca `<span class="calibre12">` cuya regla es
+`font-style: italic`). Un conversor que solo mire etiquetas saca el texto entero
+—ratio 0.99, balance de notas cuadrado— con CERO cursivas, y en una edición
+académica la cursiva ES información: títulos de obra, transliteraciones, tecnicismos.
+
+La señal está en el CSS del propio libro, así que `styles_from_css()` lo lee y deriva
+qué clases son cursiva o negrita. Es general, no una lista de nombres por libro.
+Compruébalo en un segundo:
+
+    unzip -p x.epub '*.css' | grep -c font-style     # frente a
+    grep -cE '<i>|<em>' *.html
+
+Medido en *Astral High Magic* (Warnock): 94 `<span class="italic">` y **0** `<i>`;
+con el arreglo, 157 cursivas recuperadas.
+
+Dos trampas: las marcas van FUERA del espacio (`*De Imaginibus *ahora` no lo renderiza
+pandoc), y un selector DESCENDIENTE (`.a .b`) no debe aportar clases o sobre-aplica.
 """
 from __future__ import annotations
 

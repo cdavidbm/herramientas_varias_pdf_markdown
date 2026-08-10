@@ -25,6 +25,12 @@ Usage:
   python3 docling_incremental.py book.pdf --out ./markdown
   python3 docling_incremental.py book.pdf --out ./markdown --batch 20 --no-ocr
   python3 docling_incremental.py book.pdf --out ./markdown   # re-run = resume
+
+Banderas que ahorran mucho tiempo
+---------------------------------
+* `--no-ocr` si el PDF YA trae capa de texto (ABBYY o nativo digital): acelera
+  muchísimo, porque se salta el reconocimiento entero.
+* `--image-export-mode placeholder` evita incrustar las imágenes en el markdown.
 """
 from __future__ import annotations
 

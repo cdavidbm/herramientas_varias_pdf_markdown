@@ -29,6 +29,31 @@ este material). `ascii_only=True` sigue disponible para quien lo quiera.
 Y normaliza a **NFC**, que arregla un pisotón real y ya sufrido: «Öner Döser»
 guardado en DESCOMPUESTO (`O` + U+0308) hace fallar a `pdfinfo`/`pdftotext`
 aunque `ls` lo muestre perfecto. Todo slug sale precompuesto.
+
+NOMBRES DE ARCHIVO EN UNICODE DESCOMPUESTO (NFD)
+------------------------------------------------
+«Öner Döser» puede estar en disco como `O` + U+0308 en vez de `Ö`. Entonces
+`pdfinfo` y `pdftotext` FALLAN aunque `ls` lo muestre perfecto, y **copiar la ruta
+que imprime `ls` tampoco sirve**, porque copia la forma descompuesta. Resuélvelo
+siempre por glob:
+
+    F=$(ls *Financial*.pdf | head -1)
+
+Afecta también al `.md` que genera `docling_incremental.py`. Por eso `slugify`
+normaliza a NFC: todo slug que salga de aquí va precompuesto.
+
+MODO RAW FRENTE A -LAYOUT AL EXTRAER
+------------------------------------
+`pdftext(..., layout=True)` conserva las columnas y es lo normal, pero en escaneos MUY
+degradados —bordes curvos de cuadernillo, bleed, columnas mal detectadas— `-layout`
+DISPERSA el cuerpo en fragmentos de margen derecho («each», «es», «oth-», «ers») y unir
+línea a línea de arriba abajo **descoloca el orden de lectura**: versos y frases salen
+entremezclados.
+
+Ahí hay que usar `raw=True`, que respeta el orden de lectura interno del OCR. Medido en
+Persian Nativities IV: con `-layout` el cuerpo salía remezclado y parte del texto
+principal disfrazado de nota; en raw quedó limpio en el grueso de las páginas. Con raw,
+el titulillo y el folio quedan como líneas 1-2, fáciles de quitar.
 """
 from __future__ import annotations
 

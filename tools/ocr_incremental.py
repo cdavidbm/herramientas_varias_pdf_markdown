@@ -42,6 +42,17 @@ Usage:
   python3 ocr_incremental.py book.pdf --engine tesseract --tess-pdf --sidecar-out book.txt
 
 Requires: `ocrmypdf`, `qpdf`, `pdfinfo` (poppler) on PATH.
+
+Cuando ocrmypdf deja la capa de texto EN BLANCO
+-----------------------------------------------
+Pasa con escaneos partidos o recodificados cuya estructura de objetos atasca a
+Ghostscript, aunque poppler los renderice sin problema: `ocrmypdf` termina sin error
+y el PDF resultante da un `pdftotext` VACÍO. La salida es esquivar Ghostscript:
+
+    ocr_incremental.py x.pdf --engine tesseract --tess-pdf --out x_ocr.pdf
+
+renderiza con poppler y deja que tesseract ponga la capa de texto. Añade
+`--sidecar-out x.txt` si además quieres el texto plano.
 """
 from __future__ import annotations
 

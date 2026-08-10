@@ -40,6 +40,25 @@ Límite honesto: separa LAYOUT, no arregla el reconocimiento de caracteres. Una
 página con OCR malo en el borde sigue saliendo con garble; el PDF buscable manda.
 Los títulos de capítulo y la estructura (prosa vs verso) los pone el converter del
 libro; esta herramienta da el cuerpo limpio y las notas aparte.
+
+Cuándo hace falta esto y no basta el texto plano
+-------------------------------------------------
+Cuando el OCR **INTERCALA las notas al pie con el cuerpo** (la nota cae a media frase)
+o **pierde los párrafos** de la prosa. El texto plano no puede arreglarlo porque el
+problema es de GEOMETRÍA: hay que capturar la caja de cada palabra y separar por
+posición y tamaño.
+
+    ocr_incremental.py x.pdf --engine tesseract --psm 6 --tsv-out x.tsv
+    ocr_geometry.py x.tsv --pages A-B
+
+La separación del pie se hace por el **HUECO vertical** que lo precede, que es señal
+robusta aunque la fuente de la nota no sea claramente menor; y los párrafos se
+reconstruyen por la sangría, tomando la mediana de los márgenes para no despistarse con
+los marcadores volados («§ ¥») que cuelgan a la izquierda. `--join` para texto en verso.
+
+Medido en Theophilus of Edessa: quitó el intercalado nota↔cuerpo y cosió la prosa.
+**Límite honesto:** separa el LAYOUT; no arregla el garble de reconocimiento en los
+bordes de página.
 """
 from __future__ import annotations
 import argparse, re, statistics, sys
