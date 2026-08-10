@@ -78,13 +78,25 @@ from pathlib import Path
 
 from forja_common import slugify, require_tool
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from forja.paginas import (  # noqa: E402
+    es_numero_pagina, es_titulillo, une_parrafo, une_renglones,
+)
+
+# Estas cuatro estaban duplicadas en pdf_book_to_markdown y pdf_chapters_to_markdown,
+# y DOS habían divergido en un solo carácter: `search`/`match` en el titulillo y el
+# `.strip()` del folio. Cada archivo acertaba en una y fallaba en la otra. Ahora hay
+# una sola version, en forja.paginas, con su test.
+is_running_head = es_titulillo
+is_page_number = es_numero_pagina
+_join_lines = une_renglones
+join_paragraph_text = une_parrafo
+
+
 
 _PAGE_NUM = re.compile(r'^[\s•·\.]*(\d{1,3}|[ivxIVX]{1,5})[\s•·\.]*$')
 _CHAPTER_HEADING = re.compile(r'^[IVX]+$')
 _FN_LINE = re.compile(r'^(\d{1,3})\s+(\S.*)$')
-
-
-
 
 
 def extract_pages(pdf: Path) -> list[str]:
@@ -96,17 +108,6 @@ def extract_pages(pdf: Path) -> list[str]:
     if pages and not pages[-1].strip():
         pages.pop()
     return pages
-
-
-def is_running_head(line: str, patterns: list[re.Pattern[str]]) -> bool:
-    s = line.strip()
-    if not s:
-        return False
-    return any(p.match(s) for p in patterns)
-
-
-def is_page_number(line: str) -> bool:
-    return bool(_PAGE_NUM.match(line))
 
 
 def split_page(page: str, head_patterns: list[re.Pattern[str]]) -> tuple[list[str], dict[int, str]]:
@@ -186,30 +187,6 @@ def split_page(page: str, head_patterns: list[re.Pattern[str]]) -> tuple[list[st
         paragraphs.append(_join_lines(current))
 
     return paragraphs, notes
-
-
-def _join_lines(lines: list[str]) -> str:
-    if not lines:
-        return ''
-    out = lines[0]
-    for nxt in lines[1:]:
-        if out.endswith('­'):
-            out = out[:-1] + nxt.lstrip()
-            continue
-        if out.endswith('-') and nxt[:1].isalpha() and nxt[:1].islower():
-            out = out[:-1] + nxt.lstrip()
-            continue
-        out = out + ' ' + nxt
-    out = re.sub(r'­\s+', '', out)
-    return out
-
-
-def join_paragraph_text(text: str) -> str:
-    text = re.sub(r'(\w)­\n(\w)', r'\1\2', text)
-    text = re.sub(r'(\w)-\n(\w)', r'\1\2', text)
-    text = re.sub(r'\s*\n\s*', ' ', text)
-    text = re.sub(r'[ \t]{2,}', ' ', text)
-    return text.strip()
 
 
 def render_section(
