@@ -71,8 +71,18 @@ import re
 import subprocess
 import sys
 
-DEF = re.compile(r"^\[\^(\d+)\]:", re.M)
-REF = re.compile(r"\[\^(\d+)\](?!:)")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from forja.aparato import DEFINICION as DEF  # noqa: E402
+
+# La versión local de REF era `\[\^(\d+)\](?!:)`, es decir «no seguido de dos
+# puntos» — justo el atajo que el manual prohíbe desde hace tiempo, porque hay
+# llamadas legítimas ante un dos puntos («…la realidad[^23]:»). Aquí ese error
+# INFLABA el número de huérfanas y hacía que `--interpolar` insertara notas donde
+# no faltaban. Se usa la primitiva del módulo, que ancla la definición a que ABRA
+# RENGLÓN, y tiene su test.
+def _refs(txt):
+    from forja.aparato import llamadas
+    return {int(x) for x in llamadas(txt) if x.isdigit()}
 CTX = 55
 
 
@@ -159,7 +169,7 @@ def estructurar(txt: str, pn: dict[int, str]) -> tuple[str, int, int]:
 def anclar(txt: str, pdf: pathlib.Path) -> tuple[str, int]:
     """Sitúa cada llamada huérfana por el contexto que la precede en el PDF."""
     defs = {int(m.group(1)) for m in DEF.finditer(txt)}
-    refs = {int(m.group(1)) for m in REF.finditer(txt)}
+    refs = _refs(txt)
     huer = defs - refs
     if not huer:
         return txt, 0
@@ -203,7 +213,7 @@ def anclar(txt: str, pdf: pathlib.Path) -> tuple[str, int]:
 def interpolar(txt: str) -> tuple[str, int]:
     """Último recurso: coloca la nota entre sus vecinas ya ancladas (aproximado)."""
     defs = {int(m.group(1)) for m in DEF.finditer(txt)}
-    refs = {int(m.group(1)): m.start() for m in REF.finditer(txt)}
+    refs = {n: txt.index(f'[^{n}]') for n in _refs(txt)}
     huer = sorted(defs - set(refs))
     if not huer:
         return txt, 0
@@ -226,7 +236,7 @@ def interpolar(txt: str) -> tuple[str, int]:
 
 def balance(txt: str) -> tuple[int, int, int, int]:
     dl = [int(m.group(1)) for m in DEF.finditer(txt)]
-    r = {int(m.group(1)) for m in REF.finditer(txt)}
+    r = _refs(txt)
     d = set(dl)
     return len(d), len(r), len(d - r), len(dl) - len(d)
 

@@ -190,3 +190,65 @@ class Auditoria(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CadenaSeparaAparato(unittest.TestCase):
+    """`separar_por_cadena`: el bloque de notas cuando la sangría no sirve."""
+
+    def test_la_proximidad_es_parte_de_la_señal(self):
+        """Una llamada suelta cerca del cuerpo NO debe abrir el aparato.
+
+        Sin exigir contigüidad, un «132» que el OCR dejó flotando bajo un título
+        empareja con la nota «133» del pie cuarenta líneas más abajo y el bloque
+        arranca donde no es: se llevaría media página de prosa al aparato.
+        """
+        lineas = (["132"] + ["prosa del cuerpo."] * 30 +
+                  ["133 La nota de verdad.", "134 Y la siguiente."])
+        cuerpo, apar = ap.separar_por_cadena(lineas)
+        self.assertEqual(len(apar), 2)
+        self.assertIn("prosa del cuerpo.", cuerpo)
+
+    def test_un_numero_no_consecutivo_es_continuacion(self):
+        """«128 below» dentro de una nota no abre nota nueva ni rompe la cadena.
+
+        Es el mismo principio que la guarda 2, en la otra punta del proceso: si
+        cualquier cifra abriera nota, una remisión interna o el folio del pie
+        partiría la nota en dos y correría toda la numeración.
+        """
+        lineas = ["12 Primera nota.", "128 below, dice el texto.", "13 Segunda nota."]
+        notas = ap.notas_por_cadena(lineas)
+        self.assertEqual(sorted(notas), [12, 13])
+        self.assertIn("128 below", notas[12])
+
+    def test_el_cursor_no_ancla_hacia_atras(self):
+        """`anclar_por_cursor`: cada llamada se busca tras la anterior.
+
+        Sin cursor, la nota 2 se ancla sobre el «2» de una cifra de prosa que
+        está páginas antes, y la nota acaba en otra frase sin que al leer se note.
+        """
+        txt = "En 2 lugares dijo algo,1 y luego lo repitió,2 según consta."
+        out = ap.anclar_por_cursor(txt, [1, 2])
+        self.assertIn("algo,[^1]", out)
+        self.assertIn("repitió,[^2]", out)
+        self.assertTrue(out.startswith("En 2 lugares"))   # la cifra de prosa, intacta
+
+
+class Reparto(unittest.TestCase):
+    """`repartir`: cada definición al final de la sección que la invoca."""
+
+    def test_cada_definicion_va_con_su_capitulo(self):
+        md = ("## Uno\n\ntexto[^1]\n\n## Dos\n\ntexto[^2]\n\n"
+              "## Notes\n\n[^1]: una\n\n[^2]: otra\n")
+        out, st = ap.repartir(md, level=2)
+        self.assertEqual(st["moved"], 2)
+        uno = out.index("## Uno")
+        dos = out.index("## Dos")
+        self.assertLess(uno, out.index("[^1]: una"))
+        self.assertLess(out.index("[^1]: una"), dos)      # la 1 se queda en «Uno»
+
+    def test_una_definicion_sin_llamada_no_se_borra(self):
+        """Perderla es peor que dejarla descolocada: se conserva y se reporta."""
+        md = "## Uno\n\ntexto[^1]\n\n## Notes\n\n[^1]: una\n\n[^9]: huérfana\n"
+        out, st = ap.repartir(md, level=2)
+        self.assertEqual(st["orphan_defs"], ["9"])
+        self.assertIn("[^9]: huérfana", out)

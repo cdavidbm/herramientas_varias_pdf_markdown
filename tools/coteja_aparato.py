@@ -24,10 +24,15 @@ import argparse
 import difflib
 import re
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
-DEF_MD = re.compile(r"^\[\^([\d-]+)\]:\s*(.*)$", re.M)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from forja.aparato import definiciones  # noqa: E402
+# Antes tenía su propia DEF_MD. La primitiva del módulo ancla la definición a
+# que ABRA RENGLÓN y acepta etiquetas con guion (`[^grupo-numero]`), que es lo
+# que usan los libros cuya numeración se repite por subgrupo.
 # en el pie impreso la nota abre con su número en cuerpo normal a principio de renglón
 DEF_PIE = re.compile(r"^\s*(\d{1,3})\s+([A-Z(\[*«\"'].{12,})$")
 
@@ -69,7 +74,7 @@ def main() -> None:
         for l in ocr_pie(a.pdf, p, a.franja):
             if m := DEF_PIE.match(l):
                 impreso.append((int(m.group(1)), m.group(2).strip(), p))
-    md = [(n, t) for n, t in DEF_MD.findall(a.md.read_text(encoding="utf-8"))]
+    md = list(definiciones(a.md.read_text(encoding="utf-8")).items())
 
     print(f"pie impreso: {len(impreso)} definiciones · markdown: {len(md)}\n")
     print(f"{'impreso':>8} {'markdown':>9}  {'pág':>4}  arranque del texto")

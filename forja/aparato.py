@@ -188,6 +188,232 @@ def anclar(texto: str, tope: int, *, etiqueta: str = "", salto: int = 6,
     return texto, sorted(puestas)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Estrategia «cadena»: separar cuerpo y aparato cuando la sangría no sirve
+# ─────────────────────────────────────────────────────────────────────────────
+# Marcador en la MISMA línea; admite el número PEGADO a una mayúscula («25P
+# gives»), porque el OCR se come el espacio.
+FN_MISMA_LINEA = re.compile(r"^ {0,6}(\d{1,3})(?:\s+|(?=[A-Z]))(\S.*)$")
+# Marcador SOLO en su renglón, con el texto debajo (estilo Flowers/Dykes).
+FN_SOLO_NUMERO = re.compile(r"^\s*(\d{1,3})\s*$")
+NUM_PAGINA = re.compile(r"^\s*\d{1,4}\s*$")
+
+
+def _fn_re(numero_solo: bool):
+    return FN_SOLO_NUMERO if numero_solo else FN_MISMA_LINEA
+
+
+def separar_por_cadena(lineas, numero_solo=False, max_hueco=15):
+    """(cuerpo, aparato) de una página cuando la ÚNICA señal fiable es que los
+    números de nota corren consecutivos.
+
+    La detección habitual —«las continuaciones van sangradas»— falla cuando se
+    recortó una columna (el recorte reinicia el origen X) o el OCR aplastó la
+    sangría. Aquí el aparato es el primer arranque cuyos números forman cadena de
+    ≥2 **y están CONTIGUOS**: sin la proximidad, una llamada volada que el OCR
+    dejó suelta cerca del cuerpo abre el bloque cuarenta líneas antes de donde
+    empieza de verdad.
+    """
+    fn = _fn_re(numero_solo)
+    marcas = [(i, int(fn.match(l).group(1))) for i, l in enumerate(lineas) if fn.match(l)]
+    for si, (i0, n0) in enumerate(marcas):
+        ult_i, ult_n, cuenta = i0, n0, 1
+        for i, n in marcas[si + 1:]:
+            if n == ult_n + 1:
+                if i - ult_i <= max_hueco:
+                    ult_i, ult_n, cuenta = i, n, cuenta + 1
+                else:
+                    break
+            # un número no consecutivo es continuación: ni suma ni rompe
+        if cuenta >= 2:
+            return lineas[:i0], lineas[i0:]
+    for i, ln in enumerate(lineas):
+        if fn.match(ln) and i >= len(lineas) * 2 // 3:
+            return lineas[:i], lineas[i:]
+    return lineas, []
+
+
+def notas_por_cadena(lineas_fn, numero_solo=False, corte=None) -> dict[int, str]:
+    """Texto de cada nota. Solo abre nota nueva si el número es «anterior+1».
+
+    Cualquier otra línea —incluida una que empiece por una cifra NO consecutiva:
+    una remisión «128 below», un «3.3 above», el folio del pie— se acumula como
+    continuación. Sin esa regla, una referencia de página parte la nota en dos y
+    desde ahí toda la numeración se corre.
+    """
+    fn = _fn_re(numero_solo)
+    notas, act = {}, None
+    for ln in lineas_fn:
+        if corte and corte.search(ln):
+            break
+        m = fn.match(ln)
+        if m and (act is None or int(m.group(1)) == act + 1):
+            act = int(m.group(1))
+            notas[act] = "" if numero_solo else m.group(2).strip()
+        elif act is not None and ln.strip() and not NUM_PAGINA.match(ln):
+            notas[act] = (notas[act] + " " + ln.strip()).strip()
+    return {n: t for n, t in notas.items() if t}
+
+
+def anclar_por_cursor(texto: str, numeros) -> str:
+    """Ancla llamadas aplastadas («voice,9») con un cursor que solo avanza.
+
+    Las llamadas salen en el mismo orden que las notas, así que cada número se
+    busca A PARTIR de donde se ancló el anterior. Sin el cursor se ancla sobre la
+    primera cifra que coincida —casi siempre una de la prosa, páginas antes—, y
+    ese anclaje falso mueve la nota a otra frase sin que al leer se note.
+    """
+    cursor = 0
+    for n in sorted(numeros):
+        pegado = re.compile(rf"(?<=[A-Za-z\)\.\,\;\'’]){n}(?![0-9])")
+        suelto = re.compile(rf"(?<=[A-Za-z\)\.\,\;\'’]) {n}(?![0-9])")
+        m = pegado.search(texto, cursor) or suelto.search(texto, cursor)
+        if m:
+            texto = texto[:m.start()] + f"[^{n}]" + texto[m.end():]
+            cursor = m.start() + len(f"[^{n}]")
+    return texto
+
+
+def procesar_pagina(texto_pagina: str, numero_solo=False, corte=None) -> str:
+    """Separa cuerpo/aparato de UNA página, ancla y emite markdown con `[^N]`."""
+    lineas = texto_pagina.split("\n")
+    cuerpo_l, fn_l = separar_por_cadena(lineas, numero_solo)
+    notas = notas_por_cadena(fn_l, numero_solo, corte)
+    cuerpo = "\n".join(cuerpo_l).strip()
+    if notas:
+        cuerpo = anclar_por_cursor(cuerpo, notas.keys())
+        cuerpo += "\n\n" + "\n".join(f"[^{n}]: {notas[n]}" for n in sorted(notas))
+    return cuerpo
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reparto: cada definición al final de la sección donde está su llamada
+# ─────────────────────────────────────────────────────────────────────────────
+# Va ANTES de trocear por capítulos. Si el aparato vive junto al final del
+# archivo, el troceo se lleva TODAS las definiciones al último trozo y los
+# capítulos anteriores quedan con las llamadas huérfanas — que pandoc descarta
+# en silencio. El balance del archivo sin trocear no lo ve.
+DEFINICION_LINEA = re.compile(r"^\[\^([^\]]+)\]:")
+REFERENCIA = re.compile(r"\[\^([^\]]+)\]")
+ENCABEZADO = re.compile(r"^(#{1,6})\s+(.*)$")
+VALLA = re.compile(r"^\s*(```|~~~)")
+
+
+def _marca_vallas(lines: list[str]) -> list[bool]:
+    """Por línea, si está dentro de un bloque de código cercado."""
+    inside = False
+    out: list[bool] = []
+    for ln in lines:
+        if VALLA.match(ln):
+            out.append(True)
+            inside = not inside
+            continue
+        out.append(inside)
+    return out
+
+
+def repartir(text: str, level: int) -> tuple[str, dict]:
+    lines = text.split("\n")
+    fenced = _marca_vallas(lines)
+
+    # 1. Localizar las definiciones (fuera de código).
+    def_idx: dict[str, int] = {}
+    def_lines: set[int] = set()
+    for i, ln in enumerate(lines):
+        if fenced[i]:
+            continue
+        m = DEFINICION_LINEA.match(ln)
+        if m and m.group(1) not in def_idx:
+            def_idx[m.group(1)] = i
+            def_lines.add(i)
+
+    stats = {"defs": len(def_idx), "moved": 0, "orphan_defs": [], "unresolved_refs": []}
+    if not def_idx:
+        return text, stats
+
+    # 2. Trocear el cuerpo en secciones del nivel pedido.
+    #    bounds[k] = (inicio, fin_exclusivo) de la sección k; la 0 es el preámbulo.
+    starts = [0]
+    for i, ln in enumerate(lines):
+        if fenced[i] or i in def_lines:
+            continue
+        m = ENCABEZADO.match(ln)
+        if m and len(m.group(1)) == level:
+            starts.append(i)
+    starts = sorted(set(starts))
+    bounds = [(s, starts[k + 1] if k + 1 < len(starts) else len(lines))
+              for k, s in enumerate(starts)]
+
+    # 3. Sección de la PRIMERA llamada de cada etiqueta.
+    target: dict[str, int] = {}
+    for k, (s, e) in enumerate(bounds):
+        for i in range(s, e):
+            if fenced[i] or i in def_lines:
+                continue
+            for label in REFERENCIA.findall(lines[i]):
+                if label in def_idx and label not in target:
+                    target[label] = k
+
+    for label in def_idx:
+        if label not in target:
+            stats["orphan_defs"].append(label)
+
+    # Llamadas sin definición (solo informativo).
+    seen_refs: set[str] = set()
+    for i, ln in enumerate(lines):
+        if fenced[i] or i in def_lines:
+            continue
+        seen_refs.update(REFERENCIA.findall(ln))
+    stats["unresolved_refs"] = sorted(seen_refs - set(def_idx))
+
+    # 4. Reconstruir: las definiciones reubicadas salen de su sitio y se
+    #    reinyectan al final de su sección (en orden de etiqueta original).
+    moved = {lab for lab in def_idx if lab in target}
+    stats["moved"] = len(moved)
+
+    per_section: dict[int, list[str]] = {}
+    for lab, k in target.items():
+        per_section.setdefault(k, []).append(lab)
+    for k in per_section:
+        per_section[k].sort(key=lambda lab: def_idx[lab])
+
+    # El encabezado que precede al bloque de notas se borra si se queda sin
+    # ninguna definición debajo.
+    first_def = min(def_idx.values())
+    heading_to_drop = None
+    if not stats["orphan_defs"]:
+        for i in range(first_def - 1, -1, -1):
+            if lines[i].strip() == "":
+                continue
+            if ENCABEZADO.match(lines[i]) and not fenced[i]:
+                heading_to_drop = i
+            break
+
+    out: list[str] = []
+    for k, (s, e) in enumerate(bounds):
+        body: list[str] = []
+        for i in range(s, e):
+            if i == heading_to_drop:
+                continue
+            if i in def_lines:
+                lab = DEFINICION_LINEA.match(lines[i]).group(1)  # type: ignore[union-attr]
+                if lab in moved:
+                    continue  # se reinyecta en su sección
+            body.append(lines[i])
+        while body and body[-1].strip() == "":
+            body.pop()
+        if per_section.get(k):
+            if body:
+                body.append("")
+            body.extend(lines[def_idx[lab]] for lab in per_section[k])
+        out.extend(body)
+        out.append("")
+
+    while out and out[-1].strip() == "":
+        out.pop()
+    return "\n".join(out) + "\n", stats
+
+
 def auditar(md: str) -> list[str]:
     """Problemas del aparato de UN archivo, en los dos sentidos (guarda 5)."""
     defs, refs = definiciones(md), llamadas(md)
