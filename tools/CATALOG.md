@@ -70,7 +70,7 @@
 
 ## Librería compartida
 - `catalog.py` — genera el CATÁLOGO ÚNICO de todas las tools de La Forja.
-- `forja_common.py` — Lo que TODOS los conversores de La Forja hacían por su cuenta.
+- `forja_common.py` — COMPATIBILIDAD. El código vive ahora en `forja.comun`.
 
 ## Otros
 - `agy_consolidate.py` — Cose las transcripciones POR PÁGINA de agy/Gemini (o de

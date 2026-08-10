@@ -1085,7 +1085,7 @@ class CoseParrafos(unittest.TestCase):
 
     def test_cose_frase_partida(self):
         md = "Idel subdividió el abanico. En numerosas\n\nocasiones ha argumentado que sí.\n"
-        out, n = cose_parrafos.cose(md)
+        out, n, _detalle, _dudosos = cose_parrafos.cose(md)
         self.assertEqual(n, 1)
         self.assertIn("En numerosas ocasiones ha argumentado", out)
 
@@ -1093,15 +1093,28 @@ class CoseParrafos(unittest.TestCase):
         md = "Idel subdividió el abanico.\n\nen numerosas ocasiones lo dijo.\n"
         self.assertEqual(cose_parrafos.cose(md)[1], 0)
 
-    def test_no_cose_si_abre_en_mayuscula(self):
+    def test_cose_tras_palabra_funcion_aunque_siga_mayuscula(self):
+        """La MAYÚSCULA del siguiente párrafo no prueba que el anterior cerrara.
+
+        La primera versión exigía que la continuación abriera en minúscula, y eso
+        dejaba fuera un caso medido en Ficino: «…para ambos pensadores, aunque» ␤␤
+        «Ficino, para defender…». Una palabra función abierta —conjunción,
+        preposición, artículo, relativo— no puede ser la última de un párrafo pase
+        lo que pase detrás, así que manda ella y no la caja de la letra siguiente.
+        """
         md = "Idel subdividió el abanico y\n\nScholem no estuvo de acuerdo.\n"
+        self.assertEqual(cose_parrafos.cose(md)[1], 1)
+
+    def test_no_cose_si_cierra_frase_y_sigue_mayuscula(self):
+        """El contrapunto del anterior: con puntuación terminal no se toca nada."""
+        md = "Idel subdividió el abanico.\n\nScholem no estuvo de acuerdo.\n"
         self.assertEqual(cose_parrafos.cose(md)[1], 0)
 
     def test_nunca_cose_alrededor_de_una_cita(self):
         # La frase entra en la cita y sale de ella: es la estructura del ORIGINAL.
         md = ("la extensión del lenguaje es\n\n> lógicamente superior al habla,\n\n"
               "y con sus virtudes. La escritura descansa.\n")
-        out, n = cose_parrafos.cose(md)
+        out, n, _detalle, _dudosos = cose_parrafos.cose(md)
         self.assertEqual(n, 0)
         self.assertIn("\n\n> lógicamente", out)
 
