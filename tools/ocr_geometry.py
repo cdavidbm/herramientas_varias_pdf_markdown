@@ -68,6 +68,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from forja_common import load_dict  # noqa: E402
 
 RH_TOP = re.compile(r"^\s*(\d{1,3}\s+[A-Z]|[A-Z][A-Z ]{6,}.*\d{1,3}\s*$|[ivxlIVXL]{1,5}\s*$)")
+# Folio SUELTO al pie: solo cifras (árabes o romanas), con la ornamentación habitual.
+FOLIO = re.compile(r"[\s·•\-]*(?:\d{1,4}|[ivxlcIVXLC]{1,7})[\s·•\-]*")
 LEAD_MARK = re.compile(r"^\s*[|§¥®°†‡◊]+\s*")            # filete/marcador volado al inicio
 NOTE_MARK = re.compile(r"^\s*(['\"*®°◊†‡~]|\d{1,3}[ .)])")
 
@@ -112,6 +114,17 @@ def split_page(tsv_text: str, rel_indent: bool = False):
     # titulillo va JUSTAMENTE en cursiva o versalita, así que es el caso normal.
     if RH_TOP.match(lines[0][3].replace("*", "").lstrip()) and lines[0][0] < lines[-1][0] * 0.12:
         rh = lines[0][3]; lines = lines[1:]
+    # EL FOLIO SE QUITA ANTES DE BUSCAR EL HUECO, o gana él y el aparato entero se
+    # queda en el cuerpo. El número de página va SOLO al pie, con blanco por arriba
+    # y por abajo, así que es el mayor hueco vertical de la mitad inferior —siempre,
+    # y por mucho—. La herramienta entonces clasifica como «notas» únicamente el
+    # folio, deja las notas reales en la prosa y **sale sin error**: emite un
+    # `## Notes` con un número dentro, que al leer parece plausible.
+    # Medido en Greenbaum, *The Daimon in Hellenistic Astrology*: en la p. 76, con
+    # OCHO notas al pie, devolvía 43 líneas de cuerpo y 1 de notas, que era «76».
+    if len(lines) >= 3 and FOLIO.fullmatch(lines[-1][3].replace("*", "").strip()) \
+            and lines[-1][0] > lines[0][0] + (lines[-1][0] - lines[0][0]) * 0.90:
+        lines = lines[:-1]
     if len(lines) < 3:
         return rh, [(False, l[3]) for l in lines], []
     ytop, ybot = lines[0][0], lines[-1][0]

@@ -80,3 +80,53 @@ class TestOcrGeometry(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FolioAntesDelHueco(unittest.TestCase):
+    """El folio hay que quitarlo ANTES de buscar el hueco cuerpo/notas."""
+
+    def _pagina(self, con_folio: bool):
+        ls, b = [], 0
+        for k in range(20):                       # cuerpo
+            b += 1
+            ls.append(line(b, 100 + k * 40, 150 if k == 0 else 100, 34,
+                           "cuerpo de la pagina con bastantes palabras aqui"))
+        for k in range(8):                        # aparato, tras un hueco grande
+            b += 1
+            ls.append(line(b, 1000 + k * 26, 100, 22,
+                           "%d Una nota al pie con su referencia, p. 12." % (k + 1)))
+        if con_folio:                             # folio SOLO, muy abajo
+            b += 1
+            ls.append(line(b, 1400, 600, 30, "76"))
+        return page(*ls)
+
+    def test_el_folio_no_debe_ganar_el_hueco(self):
+        """Sin la guarda, el aparato entero se queda en el cuerpo — EN SILENCIO.
+
+        El folio va solo al pie, con blanco arriba y abajo, así que es el mayor
+        hueco vertical de la mitad inferior siempre y por mucho. La herramienta
+        clasificaba como «notas» solo el folio, dejaba las notas reales en la
+        prosa y salía sin error, emitiendo un `## Notes` con un número dentro.
+
+        Medido en Greenbaum, *The Daimon in Hellenistic Astrology*: la p. 76, con
+        OCHO notas al pie, daba 43 líneas de cuerpo y 1 de notas, que era «76».
+        Con la guarda: 23 de cuerpo y 20 de notas.
+        """
+        _rh, _cuerpo, notas = og.split_page(self._pagina(con_folio=True))
+        self.assertGreaterEqual(len(notas), 5,
+                                "el aparato se ha quedado en el cuerpo: ganó el folio")
+        self.assertFalse(any(n.strip() == "76" for n in notas),
+                         "el folio no debe acabar entre las notas")
+
+    def test_sin_folio_se_comporta_igual(self):
+        """La guarda no puede cambiar el resultado de una página sin folio."""
+        _rh, _cuerpo, notas = og.split_page(self._pagina(con_folio=False))
+        self.assertGreaterEqual(len(notas), 5)
+
+    def test_una_cifra_del_cuerpo_no_se_confunde_con_el_folio(self):
+        """Solo cuenta la ÚLTIMA línea, y solo si está pegada al pie."""
+        ls = [line(1, 100, 150, 34, "una frase del cuerpo que menciona el ano 76"),
+              line(2, 140, 100, 34, "y sigue con mas prosa normal aqui"),
+              line(3, 180, 100, 34, "y todavia mas texto para dar cuerpo")]
+        _rh, cuerpo, _notas = og.split_page(page(*ls))
+        self.assertEqual(len(cuerpo), 3, "no debe recortar nada")
