@@ -246,35 +246,21 @@ ancla (con varias estrategias), reparte y audita, y sus guardas tienen test en
 defectos que el balance de notas, el ratio de palabras y la lectura del markdown NO ven.
 Cada una es trabajo pendiente del núcleo, no relleno.
 
-- **SUBTÍTULOS DE SECCIÓN PEGADOS AL PÁRRAFO.** Si el libro marca sus apartados con una
-  línea en CURSIVA (no con cuerpo mayor), el bisturí no los ve como encabezado y quedan
-  fundidos al párrafo que abren: `*Planetary Characters* The construction of…`. En el
-  markdown pasa desapercibido, y al maquetar el libro entero se queda **sin estructura
-  interna** y el índice solo lista capítulos. Medido en Lehrich: **86 por idioma**.
-  Se promueven a `##`, pero **verifícalo contra el PDF antes**: un subtítulo real aparece
-  como LÍNEA SUELTA en `pdftotext` (86/86 confirmados, 0 falsos positivos), mientras que
-  un párrafo que empieza por un título de obra en cursiva NO. Dos avisos: el patrón se
-  escapa cuando el párrafo arranca con OTRA cursiva (`*Character and Hieroglyph* *DOP*
-  does not…`), y una regla de «bloque entero en cursiva» **promueve las LEYENDAS DE
-  FIGURA a encabezado** —5 por idioma— si no las excluyes.
-
-- **LAS LLAMADAS DE NOTA SE COMEN CIFRAS** cuando el escaneo tiene el margen recortado.
-  Es el defecto MÁS CARO de detectar de todos los de esta sección, porque **el balance de
-  notas cuadra perfectamente** y aun así el texto ha perdido un dato. Pasa cuando el
-  colocador de llamadas busca «el siguiente número N» por el cuerpo: si el volado real
-  está fuera de la imagen, ancla sobre la PRIMERA cifra que encuentra —un grado, un punto
-  de dignidad, un número de capítulo—. Medido en *The Search of the Heart* (50 casos):
-  `7.5°`→`7.[^95]°`, `Decano 1`→`Decano [^19]`, `*Skilled* I.5.2`→`*Skilled* I.[^50].2`,
-  `2 1/2`→`[^3]/2`, `Libros I-V`→`Libros [^1]-V`.
-  **Cómo detectarlo:** busca `[^N]` en HUECO NUMÉRICO — pegado a `°`/`′`, dentro de una
-  numeración con puntos (`I.[^50].2`), o entre dos cifras de una serie.
-  **Cómo repararlo:** casi siempre por LÓGICA, sin abrir el PDF —una serie descendente
-  5-4-3-2-1, unos doceavos que van de 2,5° en 2,5°, la numeración de capítulos del propio
-  libro— y solo el resto contra la imagen. Al restaurar la cifra la llamada DESAPARECE
-  (estaba mal puesta): esa definición pasa a «sin anclar», que es lo honesto.
-  **El mismo patrón vale en el ORIGINAL y en la TRADUCCIÓN**: el contexto numérico
-  sobrevive intacto, así que el reparador se aplica igual a `en/` y a `es/`.
-
+- **SUBTÍTULOS DE SECCIÓN PEGADOS AL PÁRRAFO** cuando el libro marca sus apartados con una
+  línea en cursiva y no con cuerpo mayor. El libro entero acaba sin estructura interna y el
+  índice solo lista capítulos. Medido en Lehrich (86 por idioma) y en al-Tilimsānī (12).
+  Ya es código: `detecta_defectos.py` los localiza excluyendo las leyendas de figura y los
+  párrafos que arrancan con otra cursiva. **Antes de promoverlos a `##`, verifícalo contra
+  el PDF:** un subtítulo real aparece como LÍNEA SUELTA en `pdftotext`; así salieron 86/86
+  en Lehrich y 11/11 en al-Tilimsānī, con cero falsos positivos.
+- **LAS LLAMADAS DE NOTA SE COMEN CIFRAS** cuando el escaneo tiene el margen recortado, y
+  **el balance de notas cuadra igual**. Ya es código: `detecta_defectos.py ./markdown` lo
+  señala (`forja.aparato.llamadas_en_hueco_numerico`, con los cinco patrones medidos en
+  *The Search of the Heart* y su test). **Repararlo sigue siendo tuyo, y casi nunca hace
+  falta el PDF:** una serie descendente, unos doceavos que van de 2,5° en 2,5° o la propia
+  numeración de capítulos dicen qué cifra falta. Al restaurarla la llamada DESAPARECE
+  —estaba mal puesta— y su definición pasa a «sin anclar», que es lo honesto. Vale igual
+  en el original y en la traducción: el contexto numérico sobrevive.
 - **ESCANEO GRANDE: EXTRAE LA IMAGEN, NO RASTERICES.** Si el PDF es un escaneo con UNA
   imagen embebida por página (compruébalo: `pdfimages -list x.pdf | tail -n+3 | awk
   '{c[$1]++} END{for(p in c) if(c[p]!=1) print p}'`), `pdftoppm -r 300` es un despilfarro:
@@ -360,42 +346,28 @@ Cada una es trabajo pendiente del núcleo, no relleno.
   Comprueba SIEMPRE que el primer marcador de línea del original sea el primero de la sección.
 
 - **UN ENCABEZADO EN EL SITIO EQUIVOCADO ESCONDE UNA LAGUNA DE TRADUCCIÓN, y el ratio
-  GLOBAL no la ve.** Si el título va centrado en dos renglones y el bisturí promueve solo el
-  SEGUNDO, la primera mitad queda de párrafo suelto al final del capítulo anterior —y el
-  encabezado puede acabar **mil palabras más abajo de donde empieza el capítulo**. Entonces
-  el traductor cierra el capítulo donde dice el encabezado y **el tramo intermedio no se
-  traduce nunca**. Medido en Ficino, *De vita* III: cinco títulos partidos (caps. 3, 12, 15,
-  22 y 25) y el del 12 desplazado, con **1.484 palabras perdidas** —el capítulo entero sobre
-  el bezoar, la peonía y la triaca—. Ratio global 0,98; **ratio de ESE capítulo 0,62**.
-  **Por eso el control de completitud de una traducción se mide POR CAPÍTULO, no por
-  archivo**; y un título que empieza en MINÚSCULA es la señal barata de que está partido.
-
+  GLOBAL no la ve.** Si el bisturí promueve solo el SEGUNDO renglón de un título centrado,
+  el encabezado puede acabar mil palabras más abajo de donde empieza el capítulo, y el
+  traductor cierra ahí: **el tramo intermedio no se traduce nunca**. Medido en Ficino,
+  *De vita* III: 1.484 palabras perdidas con ratio global 0,98 y **ratio de ESE capítulo
+  0,62**. Ya es código: `detecta_defectos.py ./en --es ./es` mide **por capítulo**, que es
+  la única forma de verlo, y marca los títulos que empiezan en minúscula.
 - **UNA NOTA QUE FALTA CON SU LLAMADA NO ROMPE NINGÚN BALANCE: cuéntalas contra la FUENTE.**
-  El control anterior compara llamadas con definiciones DENTRO del markdown, así que no ve
-  las notas que se perdieron ENTERAS —definición y volado a la vez— cuando el partidor por
-  cadena falló: el aparato queda internamente coherente y el ratio de palabras del cuerpo ni
-  se entera, porque lo perdido es el pie, no la prosa. Medido en Ficino, Libro I: el markdown
-  tenía **53 notas donde el impreso lleva 90**, y las 37 ausentes —1.700 palabras de
-  comentario— habían pasado la auditoría entera, la traducción y el PDF. **Lo que sí lo ve
-  es contar por sección contra el texto crudo del comentario**: si la sección 1.23 numera
-  hasta la 6 y el markdown tiene una, faltan cinco. La numeración SUPERVIVIENTE lo delata
-  gratis: un capítulo cuyas notas van `1, 2, 3, 8` tiene un agujero, no una numeración rara.
-  **Para reanclarlas no hace falta adivinar:** el volado perdido casi siempre sigue en el
-  cuerpo como basura de OCR pegada a la palabra (`Politics*`, `also,.5`, `Quintilian6`,
-  `scholars7`, `clear.'`, `it..3`, `i)14`), y cada residuo cae exactamente donde iba la
-  llamada. **La señal barata de que hay que mirar** es una definición TRUNCADA que acaba en
-  «…p.» o «…n.»: el partidor cortó en el número de una referencia de página (`p. 10.`) y
-  ese mismo fallo se llevó por delante las notas siguientes. Ojo también con la fusión en
-  sentido contrario: la última nota de una sección puede haberse tragado la primera de la
-  siguiente (aquí `1.6-7` contenía entera la `1.7-1`).
-
-- **ENCABEZADOS PARTIDOS EN DOS RENGLONES**: si un título va centrado en dos líneas, el
-  bisturí promueve solo la primera y deja la segunda como párrafo suelto que empieza en
-  minúscula. Se cose al título (sin coma si es continuación genitiva, «…del significador»
-  + «del consultante»; con coma si es cláusula nueva). Si la continuación YA está en el
-  encabezado porque se recompuso antes contra el índice impreso, se BORRA el huérfano en
-  vez de duplicarlo.
-
+  El aparato queda internamente coherente y el ratio del cuerpo ni se entera, porque lo
+  perdido es el pie, no la prosa. Medido en Ficino, Libro I: **53 notas donde el impreso
+  lleva 90**, y las 37 ausentes habían pasado la auditoría, la traducción y el PDF.
+  La señal barata SÍ es código —`detecta_defectos.py` marca las definiciones truncadas en
+  «…p.», que es donde el partidor cortó—, pero **el recuento contra la fuente no**: hay que
+  contar por sección en el texto crudo del comentario. Si la sección 1.23 numera hasta la 6
+  y el markdown tiene una, faltan cinco. Para reanclarlas no hace falta adivinar: el volado
+  perdido casi siempre sigue en el cuerpo como basura de OCR pegada a la palabra
+  (`Politics*`, `also,.5`, `Quintilian6`, `clear.'`, `i)14`). Y ojo con la fusión inversa:
+  la última nota de una sección puede haberse tragado entera la primera de la siguiente.
+- **ENCABEZADOS PARTIDOS EN DOS RENGLONES**: el bisturí promueve una mitad y deja la otra
+  como párrafo suelto en minúscula. Los localiza `detecta_defectos.py`. Al coserlos, la
+  coma la decides tú: sin coma si es continuación genitiva («…del significador» + «del
+  consultante»), con coma si es cláusula nueva. Y si la continuación YA está en el
+  encabezado porque se recompuso contra el índice impreso, el huérfano se BORRA.
 - **El ÍNDICE IMPRESO es el mejor contraste para los encabezados destrozados** (no solo
   para renumerar): conserva los títulos reales, así que con él se hace una lista curada
   de correcciones y, sobre todo, se descubre **qué capítulos FALTAN** en el markdown

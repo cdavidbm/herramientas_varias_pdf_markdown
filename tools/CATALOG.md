@@ -87,6 +87,7 @@
 - `cose_parrafos.py` — une los párrafos que un bisturí PARTIÓ en el salto de página.
 - `coteja_aparato.py` — contrasta el aparato de notas de un .md contra el PIE IMPRESO del PDF.
 - `crop_figure.py` — Recorta una FIGURA (carta astral, diagrama, rueda zodiacal…)
+- `detecta_defectos.py` — busca los defectos que NINGÚN control obvio ve.
 - `embed_figures_from_captions.py` — Añade las FIGURAS (cartas, diagramas) a un libro ya
 - `footnote_chain.py` — separa el APARATO del CUERPO por la CADENA de números.
 - `footnotes_from_pdf.py` — Reconstruye el APARATO DE NOTAS leyendo el del PDF original.

@@ -414,6 +414,66 @@ def repartir(text: str, level: int) -> tuple[str, dict]:
     return "\n".join(out) + "\n", stats
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Dos defectos que el balance NO ve
+# ─────────────────────────────────────────────────────────────────────────────
+# Una llamada plantada donde iba una CIFRA. Pasa cuando el colocador busca «el
+# siguiente número N» por el cuerpo y el volado real estaba fuera de la imagen
+# (margen recortado): ancla sobre la primera cifra que encuentra —un grado, un
+# punto de dignidad, un número de capítulo— y **el balance cuadra igual**, pero
+# el texto ha perdido un dato. Medido en *The Search of the Heart*: 50 casos.
+_HUECOS = [
+    (re.compile(r"\d[.,]\[\^[^\]]+\][°′']"), "grado partido, tipo 7.[^95]°"),
+    (re.compile(r"\[\^[^\]]+\][°′']"), "pegada a un símbolo de grado"),
+    (re.compile(r"[IVXLC]+\.\[\^[^\]]+\]\.\d"), "dentro de una numeración, tipo I.[^50].2"),
+    (re.compile(r"\[\^[^\]]+\]/\d"), "numerador de una fracción, tipo [^3]/2"),
+    (re.compile(r"\[\^[^\]]+\]-[IVXLC\d]"), "extremo de un rango, tipo Libros [^1]-V"),
+    (re.compile(r"\d\s*[-–]\s*\[\^[^\]]+\]"), "extremo de un rango, por el otro lado"),
+]
+
+
+def llamadas_en_hueco_numerico(md: str) -> list[tuple[str, str, str]]:
+    """(etiqueta, motivo, contexto) de las llamadas que ocupan el sitio de una cifra.
+
+    Es el defecto más caro de detectar del repertorio, porque **no rompe nada**:
+    el balance refs↔defs cuadra, el ratio no se mueve y el markdown se lee sin
+    sobresaltos. Solo se ve mirando el HUECO donde cayó la llamada.
+
+    Repararlo casi nunca exige el PDF: una serie descendente, unos doceavos que
+    van de 2,5° en 2,5° o la propia numeración de capítulos del libro dicen qué
+    cifra falta. Al restaurarla, la llamada DESAPARECE —estaba mal puesta— y su
+    definición pasa a «sin anclar», que es lo honesto.
+
+    Sirve igual en el original y en la traducción: el contexto numérico sobrevive.
+    """
+    out = []
+    for rx, motivo in _HUECOS:
+        for m in rx.finditer(md):
+            etq = re.search(r"\[\^([^\]]+)\]", m.group(0))
+            ctx = md[max(0, m.start() - 28):m.end() + 18].replace("\n", " ")
+            out.append((etq.group(1) if etq else "?", motivo, ctx))
+    return out
+
+
+# Una definición cortada en el número de una referencia de página.
+_TRUNCADA = re.compile(r"\b(?:p{1,2}|n|nn|vol|cap|fol)\.\s*$", re.I)
+
+
+def definiciones_truncadas(md: str) -> list[str]:
+    """Etiquetas cuya definición acaba en «…p.» o «…n.»: el partidor cortó ahí.
+
+    Señal barata de que faltan notas ENTERAS —definición y volado a la vez—, que
+    es el caso que ningún balance ve: el aparato queda internamente coherente y
+    el ratio del cuerpo ni se entera, porque lo perdido es el pie, no la prosa.
+    Medido en Ficino, Libro I: 53 notas donde el impreso lleva 90, y las 37
+    ausentes habían pasado la auditoría, la traducción y el PDF.
+
+    El corte se produce porque el partidor tomó por número de nota el de una
+    referencia (`p. 10.`), y ese mismo fallo se lleva por delante las siguientes.
+    """
+    return [etq for etq, txt in definiciones(md).items() if _TRUNCADA.search(txt)]
+
+
 def auditar(md: str) -> list[str]:
     """Problemas del aparato de UN archivo, en los dos sentidos (guarda 5)."""
     defs, refs = definiciones(md), llamadas(md)

@@ -252,3 +252,50 @@ class Reparto(unittest.TestCase):
         out, st = ap.repartir(md, level=2)
         self.assertEqual(st["orphan_defs"], ["9"])
         self.assertIn("[^9]: huérfana", out)
+
+
+class LlamadasEnHuecoNumerico(unittest.TestCase):
+    """El defecto más caro: el balance cuadra y aun así falta un dato."""
+
+    def test_los_cinco_casos_medidos(self):
+        """*The Search of the Heart*, 50 casos, margen recortado.
+
+        El colocador buscaba «el siguiente número N» por el cuerpo; con el volado
+        real fuera de la imagen, ancló sobre la primera cifra que encontró.
+        """
+        for txt, etq in [("a 7.[^95]° del ascendente", "95"),
+                         ("*Skilled* I.[^50].2 dice", "50"),
+                         ("son [^3]/2 partes", "3"),
+                         ("los Libros [^1]-V tratan", "1"),
+                         ("gira [^12]° cada hora", "12")]:
+            got = ap.llamadas_en_hueco_numerico(txt)
+            self.assertTrue(got, f"no detectado: {txt}")
+            self.assertEqual(got[0][0], etq)
+
+    def test_una_llamada_normal_no_se_denuncia(self):
+        txt = "una frase que acaba con su nota.[^17] Y sigue el párrafo.\n"
+        self.assertEqual(ap.llamadas_en_hueco_numerico(txt), [])
+
+    def test_una_llamada_tras_cita_tampoco(self):
+        txt = 'dijo «lo que dijo».[^8] Luego continuó.\n'
+        self.assertEqual(ap.llamadas_en_hueco_numerico(txt), [])
+
+
+class DefinicionesTruncadas(unittest.TestCase):
+    """La señal barata de que faltan notas ENTERAS."""
+
+    def test_detecta_el_corte_en_una_referencia_de_pagina(self):
+        """Medido en Ficino: 53 notas donde el impreso lleva 90.
+
+        El partidor tomó por número de nota el de `p. 10.` y cortó ahí; ese mismo
+        fallo se llevó por delante las 37 siguientes, que pasaron la auditoría, la
+        traducción y el PDF sin que nada se quejara.
+        """
+        md = ("cuerpo[^1] y más[^2]\n\n"
+              "[^1]: Véase Kristeller, *Studies*, p.\n\n"
+              "[^2]: Una nota entera y bien terminada.\n")
+        self.assertEqual(ap.definiciones_truncadas(md), ["1"])
+
+    def test_una_definicion_normal_no_se_denuncia(self):
+        md = "x[^1]\n\n[^1]: Q Fātiḥah 1:1.\n"
+        self.assertEqual(ap.definiciones_truncadas(md), [])
