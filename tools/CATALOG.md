@@ -79,7 +79,10 @@
 - `agy_translate.py` — Traduce un markdown de capítulo/Book a otro idioma con agy/Gemini,
 - `aparato_volados_aplanados.py` — enlaza un aparato cuyos VOLADOS están APLANADOS.
 - `auditar_biblioteca.py` — pasa por TODOS los libros ya convertidos y dice cuáles
+- `book_explore.py` — Busca términos dentro de un PDF o EPUB y devuelve los pasajes
+- `check_citations.py` — Verifica la consistencia de claves de cita en markdown.
 - `check_scan_margins.py` — Control de calidad del partido de un escaneo 2-up: avisa
+- `check_translation.py` — Chequeos MECÁNICOS de una traducción markdown vs su original.
 - `citas_en_bloque.py` — convierte en `>` los párrafos que son una CITA ENTERA, y
 - `cose_parrafos.py` — une los párrafos que un bisturí PARTIÓ en el salto de página.
 - `coteja_aparato.py` — contrasta el aparato de notas de un .md contra el PIE IMPRESO del PDF.
@@ -95,6 +98,7 @@
 - `normaliza_autores.py` — arregla el nombre de la AUTORIDAD al final de cada encabezado.
 - `ocr_geometry.py` — separa CUERPO / NOTAS AL PIE / running-head y reconstruye
 - `pdf_restore_digits.py` — Restaura las CIFRAS que la extracción borró en silencio
+- `proofread.py` — Chequeos MECÁNICOS de tipografía y forma sobre markdown.
 - `quita_titulillos_fundidos.py` — borra los titulillos de página que el OCR PEGÓ al cuerpo.
 - `reflow_columns.py` — Recompone la prosa que un bisturí partió al mal-leer una maqueta
 - `rescata_capitulos.py` — devuelve al CUERPO los capítulos que acabaron dentro del aparato.

@@ -1,8 +1,3 @@
----
-name: explorar-libro
-description: Explora un PDF o EPUB en una ruta y encuentra qué hay sobre un tema, sin leer el libro entero. Localiza los pasajes relevantes con su página/capítulo y los sintetiza con citas. Activa con "/explorar-libro" o intención como "mira tal libro en tal ruta y busca qué hay sobre X", "escanea este pdf/epub sobre tal tema", "qué dice este libro acerca de…".
----
-
 # Explorar Libro — búsqueda temática localizada en PDF/EPUB
 
 Para la petición recurrente *"mira tal libro en tal ruta y dime qué hay
@@ -21,7 +16,7 @@ herramienta **localiza** los pasajes y tú **lees solo esos** y sintetizas.
   serie) → usa el **índice FTS5** `tools/book_index.py`. Es lo mejor para ahorrar
   tokens: indexa una vez y consulta al instante, con ranking bm25.
 - **Un solo PDF o EPUB** (aún sin convertir) → usa `book_explore.py`
-  (`~/.claude/skills/explorar-libro/book_explore.py`), que extrae y localiza por
+  (`~/.claude/$T/book_explore.py`), que extrae y localiza por
   página (PDF) o capítulo (EPUB).
 
 En ambos: **tú (criterio)** expandes el tema en términos, eliges los pasajes
@@ -47,7 +42,7 @@ python3 $T/book_index.py query "RUTA/markdown" "reed flute, nay, longing" --top 
    sinónimos y variantes (latín, griego) del campo.
 2. **Corre la herramienta:**
    ```bash
-   python3 ~/.claude/skills/explorar-libro/book_explore.py "RUTA/libro.pdf" \
+   python3 ~/.claude/$T/book_explore.py "RUTA/libro.pdf" \
        --terms "saturno, melancolía, bilis negra, Krónos" --context 2
    ```
    Opciones: `--regex PATRÓN`; `--context N`; `--max N`.
@@ -59,7 +54,7 @@ python3 $T/book_index.py query "RUTA/markdown" "reed flute, nay, longing" --top 
 ## Casos y límites
 
 - **PDF escaneado sin texto:** la herramienta avisa y sugiere
-  `ocrmypdf in.pdf out.pdf` (→ skill [[forja]]); córrelo y reintenta.
+  `ocrmypdf in.pdf out.pdf` (→ skill `referencias/conversion.md`); córrelo y reintenta.
 - **Cobertura:** es búsqueda por términos, no semántica. Si el primer barrido da
   poco, **amplía los términos** (otra ronda) antes de concluir que "no hay nada".
   Di qué términos probaste.
@@ -67,4 +62,4 @@ python3 $T/book_index.py query "RUTA/markdown" "reed flute, nay, longing" --top 
   términos), la opción más potente es subirlo a **NotebookLM** ([[notebooklm-setup]])
   y preguntar; ofrécelo si el usuario quiere ir más allá de la exploración local.
 - Si tras explorar el usuario quiere el libro completo en markdown, encadena con
-  la skill [[forja]].
+  la skill `referencias/conversion.md`.

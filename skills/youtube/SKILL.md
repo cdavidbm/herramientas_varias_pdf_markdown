@@ -6,8 +6,8 @@ description: Trabaja con YouTube usando yt-dlp — descarga video, audio y subt�
 # YouTube → material de estudio (suite La Forja)
 
 Extrae el contenido de un video de YouTube y lo entrega como **markdown limpio
-de calidad editorial**, listo para estudiar, indexar ([[explorar-libro]]),
-traducir ([[traducir-md]]) o subir a NotebookLM ([[notebooklm]]). La fuente
+de calidad editorial**, listo para estudiar, indexar (`/forja`),
+traducir (`/forja`) o subir a NotebookLM ([[notebooklm]]). La fuente
 preferida son los **subtítulos** —incluidos los **auto-generados** de YouTube—
 porque dan el texto íntegro sin transcribir audio.
 
@@ -150,9 +150,9 @@ de términos entre tramos. Nunca "resumas para que quepa".
 
 Guarda `NN_slug.md` (o el nombre que encaje en la carpeta del usuario). Según lo
 que quiera:
-- **Traducir** → [[traducir-md]] (preserva encabezados y notas, glosario).
-- **Corregir estilo** → [[revisar-prosa]].
-- **Estudiar/indexar** con otros materiales → [[explorar-libro]].
+- **Traducir** → `/forja` (preserva encabezados y notas, glosario).
+- **Corregir estilo** → `/forja`.
+- **Estudiar/indexar** con otros materiales → `/forja`.
 - **NotebookLM** → el `.md` va directo como fuente ([[notebooklm]]).
 
 ---
@@ -211,7 +211,7 @@ Distingue dos casos (sondea con `--list` o `yt_media.py --info`):
 - **Idioma de los auto-subtítulos:** YouTube ofrece la pista original y muchas
   "traducciones" automáticas. Para máxima fidelidad prefiere la pista **original**
   del hablante (el script elige `-orig` cuando no pides idioma) y, si hace falta
-  en otro idioma, traduce después con [[traducir-md]] en vez de fiarte de la
+  en otro idioma, traduce después con `/forja` en vez de fiarte de la
   traducción automática de YouTube.
 - **Calidad de auto-subs:** el reconocimiento de voz falla en nombres propios,
   tecnicismos y homófonos. Por eso el paso 3 lo hace el agente, no un script.

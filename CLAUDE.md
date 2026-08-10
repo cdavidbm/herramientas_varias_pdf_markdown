@@ -58,7 +58,7 @@ chars=$(pdftotext -f 1 -l 5 x.pdf - 2>/dev/null | wc -c); echo "chars/5pp=$chars
 ```
 
 - **Encrypted: yes** → `qpdf --decrypt x.pdf x_dec.pdf` → re-diagnostica.
-- **chars/5pp < ~500** → escaneo sin texto → `ocrmypdf --skip-text`, o la skill `/ocr`.
+- **chars/5pp < ~500** → escaneo sin texto → `ocrmypdf --skip-text`, o la fase de OCR de `/forja`.
   Para escaneos largos o si hay que pausar, `ocr_incremental.py` (lotes con checkpoint).
 - **Capa de texto MALA** (OCR corrupto: griego perdido, cursivas rotas) pero escaneo
   nítido → re-OCR en modo `redo`, que sustituye la capa conservando la imagen.
@@ -436,7 +436,8 @@ se mida. No des una conversión por buena hasta verificar:
   que es una pregunta que ninguna auditoría por libro contesta.
 - `limpiar_academico.py ./markdown` — corrupción OUP/Distiller (ligaduras y diacríticos que
   parecen erratas pero son texto roto).
-- Skills: **`/qa-conversion`** antes de traducir, **`/qa-traduccion`** después.
+- La skill `/forja` cubre ambas puertas: verificar la conversión ANTES de traducir
+  (`referencias/qa-conversion.md`) y la traducción después (`referencias/qa-traduccion.md`).
 
 **Leer el ratio es criterio humano, y estas tres lecturas hay que saberlas:**
 
@@ -568,11 +569,16 @@ un PDF entero como sección.
 > `start`/`end` sigue funcionando en esos dos por retrocompatibilidad.
 
 ## Salida / siguiente paso
+- **Ayudantes de las fases finales**, que hasta ahora vivían escondidos dentro de una skill
+  y no figuraban en el inventario: `book_explore.py` (localiza los pasajes de un tema en un
+  PDF/EPUB sin leerlo entero), `check_citations.py` (claves `[@x]` huérfanas o sin definir),
+  `check_translation.py` (estructura preservada en una traducción) y `proofread.py`
+  (erratas y consistencia de una pasada de corrección).
 - **Explorar/buscar un libro ya convertido** (antes de traducir o para orientarte):
   `book_map.py ./markdown` da el **mapa estructural** (capítulos, tamaños, encabezados)
   y `book_index.py ./markdown` monta un **índice full-text LOCAL** para buscar términos
   sin releer todo. Útiles para diagnosticar troceos raros o localizar un pasaje.
-- Markdown → NotebookLM (fuente) o traducción con la skill **`/traducir-md`**
+- Markdown → NotebookLM (fuente) o traducción con `/forja` (`referencias/traducir.md`)
   (preserva `[^N]`, encabezados, glosario).
 - **Libro completo a PDF bonito → `md_to_pdf.py`, NO `pandoc`.** Es la herramienta
   con la que se maquetaron Valens, Doroteo y Hephaistio:
@@ -696,7 +702,7 @@ un PDF entero como sección.
 > con el mínimo de tokens tuyos** — orquestas subagentes, no traduces tú a mano.
 
 1. **Diagnostica y convierte** (§ de arriba): a markdown por capítulo, en `en/` (o el idioma
-   fuente). Si hay notas dañadas, **reconstruye el aparato ANTES de traducir** (§3c / `/reconstruir-notas`).
+   fuente). Si hay notas dañadas, **reconstruye el aparato ANTES de traducir** (§3c y `referencias/aparato-notas.md`).
 2. **Fija la terminología UNA vez:** crea `glosario.md` en la carpeta del libro (hereda del
    tomo/obra hermana si existe). Todas las decisiones (términos técnicos, transliteraciones a
    conservar en cursiva, nombres propios) viven ahí; los subagentes lo leen y NO lo editan
@@ -910,7 +916,7 @@ bastan, transcribe leyendo la IMAGEN con un modelo de visión:
 - `agy_consolidate.py ./paginas --out cap.md` — cose esas transcripciones por página en
   un capítulo coherente.
 - `agy_translate.py cap.md --out cap-es.md --glosario g.md` — el MOTOR de traducción con
-  agy/Gemini troceando + QA estructural (lo que usan `/traducir-md` y el paradigma de
+  agy/Gemini troceando + QA estructural (lo que usa `/forja` al traducir y el paradigma de
   libro entero); `chunk_defs()` evita truncar el bloque de notas. **Solo para archivos
   CORTOS** (< ~4.000 palabras): verifica al final, no por trozo.
 - `agy_retranslate_chunks.py cap.md --out cap-es.md --glosario g.md --prompt P.txt` — el
@@ -919,7 +925,7 @@ bastan, transcribe leyendo la IMAGEN con un modelo de visión:
   DEFECTO en archivos largos** (política firme del usuario, §5a-bis): ahí es donde agy
   resume en vez de traducir, y `agy_translate` solo se entera cuando ya no hay reparación
   barata.
-Ayudantes de OCR (los usa la skill `/ocr`): `ocr_preprocess.py` (deskew/contraste/
+Ayudantes de OCR (los usa `/forja` en su fase de OCR): `ocr_preprocess.py` (deskew/contraste/
 binarización antes de tesseract) y `ocr_corruption.py` (detecta texto reconocido corrupto
 para corregirlo con criterio). Detalle fino de todos: `tools/CATALOG.md` y `tools/README.md`.
 

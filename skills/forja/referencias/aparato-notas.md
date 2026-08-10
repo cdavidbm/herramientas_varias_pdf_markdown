@@ -1,8 +1,3 @@
----
-name: reconstruir-notas
-description: Reconstruye el aparato de NOTAS AL PIE de un libro escaneado cuyo OCR corrompió los marcadores (y a menudo el griego), y cuyo bisturí perdió o entremezcló el texto de las notas. Un agente por capítulo lee el markdown + el PDF (verdad del pie de página) y rehace las [^N] enlazadas, recupera notas perdidas y normaliza el griego. Activa con "/reconstruir-notas" o intención como "reconstruye las notas de este libro", "las notas al pie quedaron rotas/perdidas", "arregla el aparato de notas".
----
-
 # Reconstruir aparato de notas (suite La Forja)
 
 Para libros **escaneados y muy cargados de notas al pie** donde el OCR (ABBYY,
@@ -26,7 +21,7 @@ entremezcló** el texto de las notas con el cuerpo. Probado en Hadot, Elliott, D
    VERDAD de las notas. Las notas al pie se leen con `pdftotext -layout "cap.pdf" -`
    (aparecen al fondo de cada página).
 3. Haz primero la limpieza estructural (running-heads, guion de corte, bloque de
-   título redundante) — ver [[forja]] §3c. Las notas se reconstruyen sobre el cuerpo
+   título redundante) — ver `referencias/conversion.md` §3c. Las notas se reconstruyen sobre el cuerpo
    ya limpio.
 
 ## Procedimiento
@@ -86,4 +81,4 @@ degradado quedan tramos `[ilegible]`: pertenecen al **re-OCR selectivo del grieg
 (otra herramienta), no a esta. Esta skill garantiza aparato **completo, numerado y
 en su mayoría enlazado**; la fidelidad carácter-a-carácter del griego es otra pasada.
 
-Relacionado: [[forja]], [[qa-conversion]], [[ocr]].
+Relacionado: `referencias/conversion.md`, `referencias/qa-conversion.md`, `referencias/ocr.md`.

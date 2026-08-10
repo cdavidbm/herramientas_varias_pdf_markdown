@@ -1,8 +1,3 @@
----
-name: traducir-md
-description: Traduce markdown de libros (capítulo por capítulo) preservando notas al pie [^N], encabezados, tablas y formato, con glosario de términos consistente. Activa con "/traducir-md" o intención como "tradúceme este capítulo al español", "traduce esta carpeta de markdown al inglés".
----
-
 # Traducir Markdown (suite La Forja)
 
 Traduce documentos markdown producidos por la suite **La Forja** (un `.md` por

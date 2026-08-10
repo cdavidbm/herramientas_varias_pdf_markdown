@@ -1,13 +1,8 @@
----
-name: qa-traduccion
-description: Control de calidad de una traducción markdown contra su original. Verifica que la estructura se preservó (notas [^N], encabezados, enlaces, nada sin traducir) y revisa consistencia terminológica y de registro. Activa con "/qa-traduccion" o intención como "revisa esta traducción", "verifica que el capítulo traducido quedó bien", "controla la calidad de la traducción".
----
-
 # QA de Traducción (suite La Forja)
 
 Verifica una traducción markdown contra su original, en dos capas: **mecánica**
 (estructura preservada, la hace un script) y **de criterio** (consistencia,
-registro, fidelidad, la haces tú). Complementa a [[traducir-md]]: tradúcelo,
+registro, fidelidad, la haces tú). Complementa a `referencias/traducir.md`: tradúcelo,
 luego pásale esta QA antes de la revisión humana final.
 
 ## Cuándo se activa
@@ -26,7 +21,7 @@ luego pásale esta QA antes de la revisión humana final.
 Ejecuta el script incluido por cada par de archivos:
 
 ```bash
-python3 ~/.claude/skills/qa-traduccion/check_translation.py \
+python3 ~/.claude/$T/check_translation.py \
     original.md traducido.md --glosario glosario.md
 ```
 

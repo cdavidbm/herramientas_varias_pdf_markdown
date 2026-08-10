@@ -57,7 +57,7 @@ El "cerebro" de esa decisión ya está listo en dos sitios:
 
 Y para el paso siguiente del flujo:
 
-- **Skill `/traducir-md`** — traduce el markdown por capítulo preservando las
+- **Skill `/forja`** (fase de traducción) — traduce el markdown por capítulo preservando las
   notas `[^N]`, los encabezados y el formato, con glosario de términos para
   mantener consistencia en todo el libro.
 - **Skill `/youtube`** — convierte un video de YouTube en markdown de estudio a

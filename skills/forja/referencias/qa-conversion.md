@@ -1,12 +1,7 @@
----
-name: qa-conversion
-description: Control de calidad de una conversión PDF→markdown ANTES de traducir o publicar. Verifica que NO se perdió texto (alinea contra pdftotext -layout) y detecta corrupciones típicas de PDF académicos (ligaduras fi→W, diacríticos rotos, portadillas, running-heads). Activa con "/qa-conversion" o intención como "verifica que la conversión quedó completa", "revisa que no se perdió texto del PDF", "controla la calidad del markdown convertido".
----
-
 # QA de Conversión (suite La Forja)
 
 Verifica que un markdown recién convertido **refleja íntegra y fielmente su PDF**.
-Es la puerta de calidad ENTRE convertir ([[forja]]) y traducir ([[traducir-md]]):
+Es la puerta de calidad ENTRE convertir (`referencias/conversion.md`) y traducir (`referencias/traducir.md`):
 traducir desde una fuente incompleta propaga el defecto a todo el idioma destino.
 
 ## Por qué existe (lección aprendida)

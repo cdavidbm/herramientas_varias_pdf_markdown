@@ -1,8 +1,3 @@
----
-name: forja-flujo
-description: Orquestación AUTOMÁTICA de VARIOS pasos del flujo de libros: encadena las skills necesarias (convertir → notas → traducir → QA → prosa → citas → PDF) sin que el usuario invoque nada. Úsala SOLO cuando la petición abarca más de un paso ("procesa este libro", "prepáralo para estudio", "traduce y revisa esta carpeta", "de este PDF sácame un PDF español"). Si solo hay que CONVERTIR un documento a markdown y nada más, usa `/forja` directamente, no esta.
----
-
 # La Forja — Orquestación automática del flujo
 
 El usuario **no invoca skills**: describe un resultado y **tú detectas qué pasos
@@ -23,13 +18,13 @@ tokens (leer solo lo necesario).
 
 | Lo que pide el usuario (intención) | Cadena automática |
 |---|---|
-| "convierte/pasa este libro/carpeta a markdown" | [[forja]] (auto-diagnóstico) → `book_map.py` para confirmar el resultado |
-| "haz OCR / este escaneo salió mal / arregla este OCR corrupto" | [[ocr]] (preprocesado + modelos best multilingües + RapidOCR; detecta corrupción) → [[forja]] |
-| "mira este libro/carpeta y dime qué hay sobre X" | [[explorar-libro]]: carpeta → `book_index.py`; archivo → `book_explore.py` → leo solo lo top y sintetizo con citas |
-| "traduce este libro/capítulo/carpeta" | (si es PDF/EPUB) [[forja]] → [[traducir-md]] → [[qa-traduccion]] → (a criterio) [[revisar-prosa]] |
-| "revisa/corrige este texto" | [[revisar-prosa]] (script `proofread.py` + criterio) |
-| "verifica esta traducción" | [[qa-traduccion]] (`check_translation.py` + criterio) |
-| "gestiona/añade la bibliografía" | [[citas]] (`check_citations.py` + `pandoc --citeproc`) |
+| "convierte/pasa este libro/carpeta a markdown" | `referencias/conversion.md` (auto-diagnóstico) → `book_map.py` para confirmar el resultado |
+| "haz OCR / este escaneo salió mal / arregla este OCR corrupto" | `referencias/ocr.md` (preprocesado + modelos best multilingües + RapidOCR; detecta corrupción) → `referencias/conversion.md` |
+| "mira este libro/carpeta y dime qué hay sobre X" | `referencias/explorar.md`: carpeta → `book_index.py`; archivo → `book_explore.py` → leo solo lo top y sintetizo con citas |
+| "traduce este libro/capítulo/carpeta" | (si es PDF/EPUB) `referencias/conversion.md` → `referencias/traducir.md` → `referencias/qa-traduccion.md` → (a criterio) `referencias/revisar-prosa.md` |
+| "revisa/corrige este texto" | `referencias/revisar-prosa.md` (script `proofread.py` + criterio) |
+| "verifica esta traducción" | `referencias/qa-traduccion.md` (`check_translation.py` + criterio) |
+| "gestiona/añade la bibliografía" | `referencias/citas.md` (`check_citations.py` + `pandoc --citeproc`) |
 | "arma/compila el libro final" | `pandoc` de los `.md` → EPUB/DOCX/PDF (cierre del ciclo) |
 
 ## Reglas de orquestación
@@ -48,7 +43,7 @@ tokens (leer solo lo necesario).
    trozo al vuelo); los cortos, con `agy_translate.py`. agy resume en vez de traducir
    cuando la entrada crece, y puede **saltarse prosa dejando el aparato de notas
    cuadrado** — el balance `[^N]` da el visto bueno y solo el ratio lo delata. Detalle en
-   [[traducir-md]] y [[qa-traduccion]].
+   `referencias/traducir.md` y `referencias/qa-traduccion.md`.
 7. **Nunca des una traducción por buena sin verificarla, y reporta los LIMPIOS además de
    los fallos** (contar solo fallos falsea la impresión del motor).
 

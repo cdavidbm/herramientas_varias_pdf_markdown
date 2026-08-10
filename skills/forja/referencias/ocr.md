@@ -1,8 +1,3 @@
----
-name: ocr
-description: OCR de máxima calidad para libros escaneados de mala calidad y para arreglar OCRs corruptos. Auto-diagnostica el escaneo, preprocesa la imagen (deskew, contraste, binarización), usa modelos tessdata_best multilingües (latín, griego, árabe, persa…) y, si hace falta, el motor RapidOCR; detecta texto corrupto para corregirlo con criterio. Activa con "/ocr" o intención como "haz OCR de este escaneo", "este PDF escaneado salió mal", "arregla este OCR corrupto", "el texto quedó ilegible".
----
-
 # OCR de alta calidad (suite La Forja)
 
 Para libros **escaneados de mala calidad** y **OCRs corruptos**. Va mucho más
@@ -92,9 +87,9 @@ Compara su salida con la de tesseract y quédate con la mejor (criterio).
 
 ## Integración
 
-Es el motor de OCR de [[forja]] (cuando un PDF no tiene capa de texto). Tras
+Es el motor de OCR de `referencias/conversion.md` (cuando un PDF no tiene capa de texto). Tras
 obtener texto limpio, sigue el flujo normal: convertir a markdown por capítulo →
-[[traducir-md]] / estudio. Ver [[forja-flujo]] para el encadenado automático.
+`referencias/traducir.md` / estudio. Ver `referencias/flujo.md` para el encadenado automático.
 
 ## Límite honesto
 

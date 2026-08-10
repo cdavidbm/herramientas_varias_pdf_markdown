@@ -1,8 +1,3 @@
----
-name: citas
-description: Gestiona citas y bibliografía académica en markdown con pandoc --citeproc. Inserta citas [@clave], mantiene un archivo .bib, genera la bibliografía formateada en el estilo elegido (Chicago, MLA, APA…) y verifica claves huérfanas o sin definir. Activa con "/citas" o intención como "añade la bibliografía", "formatea las citas", "gestiona las referencias de este documento".
----
-
 # Citas y Bibliografía — pandoc citeproc
 
 Flujo de **citas académicas** sobre markdown: citas con clave `[@autor2020]`, una
@@ -55,7 +50,7 @@ o al final por defecto.
 **Verificar consistencia (script incluido):**
 
 ```bash
-python3 ~/.claude/skills/citas/check_citations.py referencias.bib capitulo.md [mas.md ...]
+python3 ~/.claude/$T/check_citations.py referencias.bib capitulo.md [mas.md ...]
 ```
 Cruza las claves `[@clave]` del texto contra el `.bib` (o CSL-JSON) y reporta:
 - 🔴 **Claves citadas sin entrada** en el `.bib` (sale con código 1).

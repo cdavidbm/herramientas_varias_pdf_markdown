@@ -1,14 +1,9 @@
----
-name: revisar-prosa
-description: Pasada de corrector editorial sobre un manuscrito markdown (textos propios o traducciones). Revisa consistencia de terminología y nombres propios, registro uniforme, repeticiones, gramática y erratas, sin alterar el sentido ni la voz del autor. Activa con "/revisar-prosa" o intención como "corrige el estilo de este capítulo", "revisa este texto como editor", "dale una pasada de copyedición".
----
-
 # Revisar Prosa — corrector editorial
 
 Hace de **copyeditor** sobre markdown académico/ensayístico (astrología,
 alquimia, filosofía): pule consistencia, gramática y erratas **respetando la voz
 del autor y sin cambiar el sentido**. Sirve para tus textos propios y para
-traducciones ya pasadas por [[qa-traduccion]].
+traducciones ya pasadas por `referencias/qa-traduccion.md`.
 
 ## Cuándo se activa
 
@@ -45,7 +40,7 @@ Antes de la lectura crítica, corre el script incluido — atrapa lo tipográfic
 forma exhaustiva (no se le escapa ninguno) y te deja libre para el criterio:
 
 ```bash
-python3 ~/.claude/skills/revisar-prosa/proofread.py capitulo.md [mas.md ...]
+python3 ~/.claude/$T/proofread.py capitulo.md [mas.md ...]
 ```
 
 Reporta `archivo:línea` para: dobles espacios, espacio final, espacio antes de

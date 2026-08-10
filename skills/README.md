@@ -1,35 +1,47 @@
 # Skills de La Forja (para Claude Code)
 
-Skills que operan esta suite y el flujo de libros (convertir, traducir, revisar,
-explorar). Se instalan en `~/.claude/skills/` (scope *user* = disponibles en
-cualquier carpeta). Claude las **activa solas** al detectar la intención, o se
-invocan con `/<nombre>`.
+Se instalan en `~/.claude/skills/` (scope *user* = disponibles en cualquier carpeta)
+y Claude las **activa solas** al detectar la intención.
 
 ## Instalación en un equipo nuevo
 
 ```bash
-bash install-skills.sh      # copia skills/* -> ~/.claude/skills/
+bash install-skills.sh      # copia skills/* -> ~/.claude/skills/ y PODA lo retirado
 ```
 Reabre Claude Code y estarán disponibles. **Pero** las skills usan herramientas
 externas que este repo NO contiene; instálalas (abajo).
 
+El instalador lleva **manifiesto** (`.forja-skills` en el destino): registra qué
+instaló, de modo que al retirar una skill del repo también desaparece del equipo.
+Antes solo copiaba, y una skill retirada se quedaba instalada para siempre,
+desfasada y compitiendo por la misma intención. La poda **solo toca lo que vino de
+este repo**: las skills ajenas no se rozan aunque estén en la misma carpeta.
+
 ## Las skills
 
-| Skill | Para qué | Script mecánico |
-|---|---|---|
-| `/forja` | Convierte PDF/EPUB/RTF/Office a markdown por capítulo; **auto-diagnostica** qué herramienta usar | usa los scripts de `tools/` |
-| `/traducir-md` | Traduce markdown por capítulo preservando `[^N]`, encabezados y glosario | — |
-| `/qa-traduccion` | Verifica que la traducción preservó la estructura | `check_translation.py` |
-| `/revisar-prosa` | Corrector editorial (consistencia, tipografía) | `proofread.py` |
-| `/citas` | Bibliografía y citas con `pandoc --citeproc` | `check_citations.py` |
-| `/explorar-libro` | "Mira tal libro y busca qué hay sobre X": localiza pasajes con su página/capítulo (o índice FTS5 en carpetas) | `book_explore.py`, `tools/book_index.py` |
-| `/forja-flujo` | **Orquestación automática**: detecta la intención y encadena las skills solo (sin invocar nada) | — |
-| `/ocr` | OCR de máxima calidad para escaneos malos y OCRs corruptos: preprocesado, modelos best multilingües, RapidOCR, detección de corrupción | `tools/ocr_*.py` |
-| `/qa-conversion` | Verifica que la conversión PDF→md NO perdió texto, **antes** de traducir | `tools/check_completeness.py` |
-| `/reconstruir-notas` | Rehace el aparato de notas `[^N]` de un escaneo cuyo OCR rompió los marcadores | `tools/footnotes_rebuild.py` |
-| `/youtube` | Video de YouTube → markdown de estudio (subs manuales/auto, o ASR local si no hay) | `tools/yt_*.py` |
+| Skill | Para qué |
+|---|---|
+| `forja` | **Todo el trabajo con libros y documentos**: convertir, OCR, aparato de notas, traducir, verificar, prosa, citas, explorar y maquetar |
+| `youtube` | Vídeo de YouTube → markdown de estudio (subs manuales o automáticos, o ASR local si no hay) |
 
-Patrón: **lo mecánico → script determinista**; **lo de criterio → la skill**.
+## Por qué son dos y no once
+
+Hasta ahora había **diez skills de La Forja**, una por fase. Sobre el papel era
+ordenado; en la práctica el usuario **nunca elige skill** —describe un resultado y el
+agente decide—, así que los diez nombres no le servían a nadie: eran diez descripciones
+compitiendo por la misma intención, y su único efecto era que el agente tuviera que
+acertar cuál cargar. El fallo que importa no es elegir mal, es no cargar ninguna e
+improvisar un script suelto teniendo la herramienta hecha.
+
+`forja` es ahora un **enrutador delgado**: identifica la fase y lee solo el archivo de
+`referencias/` que necesita. Así el criterio detallado sigue disponible, pero no se carga
+entero para arreglar una cita. Y el orden del flujo —reconstruir el aparato ANTES de
+traducir, verificar ANTES de traducir— queda en un solo sitio en vez de repetido en
+cada skill.
+
+`youtube` sigue aparte porque su intención no se confunde con nada y está en producción.
+
+Patrón, que no cambia: **lo mecánico → script determinista**; **lo de criterio → la skill**.
 
 ## Herramientas de ahorro de tokens (en `tools/`, sin instalar nada)
 
@@ -40,7 +52,7 @@ Patrón: **lo mecánico → script determinista**; **lo de criterio → la skill
 - **`book_map.py`** — mapa estructural (archivos, títulos, palabras, notas) para
   orientarse sin leer el contenido.
 
-## OCR de alta calidad (skill `/ocr`)
+## OCR de alta calidad (fase de OCR de `/forja`)
 
 Ejecuta una vez por equipo:
 ```bash
@@ -85,8 +97,8 @@ playwright, `notebooklm skill install`, `notebooklm login`.
 ## Comprobación
 
 ```bash
-for s in forja forja-flujo traducir-md qa-conversion qa-traduccion revisar-prosa \
-         citas explorar-libro ocr reconstruir-notas youtube; do
+for s in forja youtube; do
   test -f ~/.claude/skills/$s/SKILL.md && echo "✅ $s" || echo "❌ $s"
 done
+ls ~/.claude/skills/forja/referencias/ | wc -l    # 10 archivos de referencia
 ```
