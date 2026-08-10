@@ -9,7 +9,7 @@
 
 ## Conversores (bisturíes)
 - `clearscan_to_markdown.py` — PDF de **Acrobat ClearScan** -> markdown CON CURSIVAS.
-- `djvu_to_markdown.py` ⚠ — bisturí para libros en **DjVu** con capa de texto.
+- `djvu_to_markdown.py` — bisturí para libros en **DjVu** con capa de texto.
 - `epub_illustrated_to_markdown.py` — convert an image-heavy EPUB (music theory,
 - `epub_to_markdown.py` — Convert a complex EPUB into one self-contained markdown
 - `latex_to_markdown.py` — Convierte un libro en LaTeX a markdown de estudio (para
@@ -78,7 +78,7 @@
 - `agy_transcribe.py` — Orquesta la TRANSCRIPCIÓN VISUAL de un rango de páginas de un
 - `agy_translate.py` — Traduce un markdown de capítulo/Book a otro idioma con agy/Gemini,
 - `aparato_volados_aplanados.py` — enlaza un aparato cuyos VOLADOS están APLANADOS.
-- `auditar_biblioteca.py` ⚠ — pasa por TODOS los libros ya convertidos y dice cuáles
+- `auditar_biblioteca.py` — pasa por TODOS los libros ya convertidos y dice cuáles
 - `check_scan_margins.py` — Control de calidad del partido de un escaneo 2-up: avisa
 - `citas_en_bloque.py` — convierte en `>` los párrafos que son una CITA ENTERA, y
 - `cose_parrafos.py` — une los párrafos que un bisturí PARTIÓ en el salto de página.
@@ -88,7 +88,7 @@
 - `footnote_chain.py` — separa el APARATO del CUERPO por la CADENA de números.
 - `footnotes_from_pdf.py` — Reconstruye el APARATO DE NOTAS leyendo el del PDF original.
 - `footnotes_redistribute.py` — reparte las definiciones `[^N]:` a su sección.
-- `glifos_janus_a_unicode.py` ⚠ — restituye los glifos astrológicos de un PDF compuesto
+- `glifos_janus_a_unicode.py` — restituye los glifos astrológicos de un PDF compuesto
 - `hebreo_sp_a_unicode.py` — devuelve a Unicode el hebreo de un PDF que lo compone
 - `imprime_sin_anclar.py` — evita que el PDF se coma las notas que no tienen llamada.
 - `limpia_dudas.py` — resuelve las marcas `[?: …]` que el traductor dejó como deuda declarada.

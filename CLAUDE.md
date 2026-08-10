@@ -27,114 +27,69 @@ diagnosticas el documento y eliges la herramienta correcta tú mismo**.
 
 ## Algoritmo de diagnóstico
 
-Define `T=tools` (o ruta absoluta `/mnt/c/ideas/_La_Forja/tools`).
+Define `T=tools` (o la ruta absoluta del repo).
+
+> **El núcleo está en `forja/`, no en `tools/`.** `forja.comun` (primitivas: slugify,
+> pdftext, plan.json, diccionario), `forja.aparato` (el aparato de notas de principio a
+> fin), `forja.paginas` (folio, titulillo, unión de renglones) y `forja.pdfxml` (la puerta
+> a `pdftohtml -xml`). Las herramientas de `tools/` son CLI encima. Cada guarda medida
+> vive ahí con su test en `tests/`, así que **actúa sola**: no depende de que alguien
+> recuerde haber leído este archivo. `tools/forja_common.py` sigue existiendo solo como
+> reexportación, porque 21 scripts lo importan.
+>
+> **Dónde está cada cosa.** Este archivo tiene ya solo tres clases de contenido: el
+> **procedimiento de decisión** (qué usar y en qué orden), un **índice de herramientas**
+> que remite a su docstring, y las **lecciones que todavía no son código** — esas van
+> completas, porque son lo único que sabemos de defectos que ningún control automático ve.
+> Lo que ya vive en `forja/` con su test no se repite aquí: se nombra y punto.
+> El inventario de esta limpieza está en `_INVENTARIO_CLAUDE_MD.md`.
 
 ### 1. Enrutar por formato
-- `.epub` → §EPUB.  `.rtf` → `python3 $T/rtf_to_markdown.py x.rtf --dry-run` (deriva
-  las secciones del layout; `--emit-plan p.json` si hay que corregirlas a mano).
-- `.docx .pptx .xlsx .html .png .jpg` → `markitdown x` (NO es trabajo de los scripts).
-- `.pdf` → §PDF.
+
+- `.epub` → §EPUB.  `.rtf` → `rtf_to_markdown.py x.rtf --dry-run`.
+- `.docx .pptx .xlsx .html .png .jpg` → `markitdown x` (no es trabajo de los scripts).
+- `.pdf` → §2.  `.djvu` → `djvu_to_markdown.py`.  `.tex` → `latex_to_markdown.py`.
 
 ### 2. Diagnóstico PDF
+
 ```bash
 pdfinfo x.pdf
 chars=$(pdftotext -f 1 -l 5 x.pdf - 2>/dev/null | wc -c); echo "chars/5pp=$chars"
 ```
+
 - **Encrypted: yes** → `qpdf --decrypt x.pdf x_dec.pdf` → re-diagnostica.
-- **chars/5pp muy bajo (< ~500)** → escaneo sin texto → `ocrmypdf --skip-text x.pdf x_ocr.pdf`.
-  - **Capa de texto MALA** (OCR corrupto, p. ej. Internet Archive: griego perdido,
-    cursivas rotas) pero el escaneo es nítido → **re-OCR** con la skill `/ocr`. Para
-    escaneos largos o si hay que **pausar**, usa `python3 $T/ocr_incremental.py x.pdf
-    --lang eng` (lotes con checkpoint + resume + modelos best; `ocrmypdf` a secas no
-    es reanudable). Modo `redo` sustituye la capa mala conservando la imagen.
-  - **`ocrmypdf` deja la capa de texto EN BLANCO** (el PDF buscable resultante da
-    `pdftotext` vacío pese a correr sin error): pasa con escaneos partidos/recodificados
-    cuya estructura de objetos atasca a Ghostscript, aunque poppler renderice bien. Usa
-    `ocr_incremental.py x.pdf --engine tesseract --tess-pdf --out x_ocr.pdf` — renderiza
-    con poppler y deja que tesseract ponga la capa de texto (esquiva Ghostscript). Añade
-    `--sidecar-out x.txt` si quieres además el texto plano.
-- **Páginas apaisadas (ancho/alto > ~1.3)** → escaneo 2-up → `python3 $T/split_pdf_spreads.py x.pdf` (deja `x_1up.pdf`) ANTES de OCR/troceo.
-  - **Si el 2-up lo vas a TRANSCRIBIR POR VISIÓN** (no OCR-ear), no uses el de arriba —que
-    corta por la mitad geométrica— sino `python3 $T/split_scan_spreads.py x.pdf ./paginas`:
-    extrae la imagen embebida con `pdfimages` (mucho más rápido que rasterizar) y corta **por
-    el LOMO detectado**, no por el centro. **Nunca ajustes el corte a la caja de texto:** se
-    come el arranque de cada línea de la página derecha («I decided to extend…» → «d to
-    extend…») y en el markdown final eso es INVISIBLE. Cortar dentro de la franja negra del
-    lomo no puede tocar texto; que asomen unas letras de la vecina es inofensivo. Verifica
-    siempre con `check_scan_margins.py ./paginas` **y con los anchos anómalos** frente a la
-    mediana (una página mucho más estrecha = corte que se comió texto). Otras dos trampas
-    medidas: promediar la tinta sobre TODA la altura trunca la caja de las páginas con pocas
-    líneas (última de capítulo, portadillas), y el recorte de bordes negros debe alternar
-    filas/columnas **recalculando**, porque una banda negra horizontal infla el perfil de todas
-    las columnas. El **folio impreso** da el mapeo página↔imagen y hay que validarlo:
-    `libro = 2·N − 6 / 2·N − 5` en Travaglia, pero el offset cambia con el front matter.
-  - **OJO rotación:** si `pdfinfo` da `Page rot: 90/270`, el ratio ancho/alto que ve
-    `split_pdf_spreads` es el del MediaBox SIN rotar y no detecta el 2-up. Hornea la
-    rotación primero: `qpdf --flatten-rotation x.pdf x_flat.pdf`.
-  - **Cuadernillo de anillas escaneado ABIERTO (spread rotado 90° DENTRO de la
-    imagen, `Page rot: 0`):** aquí `qpdf`/`split_pdf_spreads` NO sirven (el MediaBox es
-    portrait y la rotación está en el contenido de la imagen, no en `/Rotate`; OSD de
-    tesseract da baja confianza). Resuélvelo por imagen: `pdftoppm -r 300` → PIL
-    `Image.rotate(-90, expand=True)` (prueba los 4 ángulos y OCR-ea para ver cuál da
-    inglés real) → parte en mitad izquierda/derecha (descarta las mitades en blanco por
-    densidad de tinta) → tesseract *best* por mitad (texto + `-c tessedit_create_pdf=1`)
-    → `pdfunite` para el buscable upright. Orden de lectura: izquierda antes que derecha
-    por hoja. Medido en «Project Hindsight Companion» (33 hojas → 65 páginas upright).
-    **Si lo vas a TRANSCRIBIR POR VISIÓN, no partas por la mitad ni por el valle de una
-    banda fija en torno al centro:** el escaneo lleva un margen de mesa que DESCENTRA el
-    spread y el corte cae dentro del texto, dejando la página izquierda sin el final de
-    cada línea (invisible después en el markdown). Localiza las **dos cajas de texto** por
-    el perfil de tinta suavizado y corta en mitad del hueco que las separa; y recorta cada
-    mitad a su caja de tinta, no por «bandas oscuras» (aquí el fondo es CLARO y ese recorte
-    actúa distinto en cada hoja, descuadrando el partido). Y `pdfimages` en vez de
-    `pdftoppm`: 44 hojas → 88 páginas en 12 s. Medido en *On the Stellar Rays* (Zoller/Hand).
-  - **Escaneo MUY degradado donde `pdftotext -layout` REMEZCLA la prosa:** en algunos
-    escaneos (bordes curvos de cuadernillo, bleed, columnas mal detectadas) el
-    `-layout` dispersa el cuerpo en fragmentos de margen derecho («each», «es», «oth-»,
-    «ers» → nativit**ies**, oth**ers**) y unir línea a línea top-to-bottom **descoloca
-    el orden de lectura** (versos y frases salen entremezclados). Extrae entonces con
-    **`pdftotext` en modo RAW (SIN `-layout`)**: respeta el orden de lectura interno del
-    OCR y sale limpio en el grueso de páginas. Medido en Persian Nativities IV: `-layout`
-    daba cuerpo remezclado + texto principal disfrazado de nota; raw lo arregló. Con raw,
-    el running-head + nº de página quedan como líneas 1-2 (fáciles de quitar) y las notas
-    al pie abren con marcador inequívoco (`' " * ®` o dígito+pista «cf./reads»); sepáralas
-    de forma CONSERVADORA (mejor nota inline que verso de cuerpo disfrazado de nota). Los
-    encabezados de capítulo y el TOC muy garbleados NO se recuperan del todo: su texto
-    sigue presente pero algún corte falta → límite honesto, el PDF buscable manda.
-  - **Escaneo con NOTAS AL PIE densas donde el OCR las INTERCALA con el cuerpo** (la
-    nota cae a media frase) y/o **pierde los párrafos** de la prosa: el texto plano no
-    basta porque el problema es de GEOMETRÍA. OCR-ea capturando la caja de cada palabra
-    y sepáralo por posición/tamaño: `ocr_incremental.py x.pdf --engine tesseract --psm 6
-    --tsv-out x.tsv` (+ `--sidecar-out`/`--tess-pdf` si quieres texto/PDF; resumible por
-    lote) y luego **`ocr_geometry.py x.tsv --pages A-B`** separa running-head / cuerpo /
-    **notas** (por el HUECO vertical antes del pie, señal robusta aunque la fuente de
-    nota no sea claramente menor) y reconstruye **párrafos** por la sangría (mediana de
-    márgenes, robusta a los marcadores volados «§ ¥» que cuelgan a la izquierda).
-    `--join` para texto en verso (un bloque, luego `verse_paragraphs`). Medido en
-    Theophilus of Edessa: quitó el intercalado nota↔cuerpo y cosió la prosa; los títulos
-    de capítulo y prosa-vs-verso los pone el converter del libro. Límite: separa LAYOUT,
-    no arregla el garble de reconocimiento en bordes de página.
+- **chars/5pp < ~500** → escaneo sin texto → `ocrmypdf --skip-text`, o la skill `/ocr`.
+  Para escaneos largos o si hay que pausar, `ocr_incremental.py` (lotes con checkpoint).
+- **Capa de texto MALA** (OCR corrupto: griego perdido, cursivas rotas) pero escaneo
+  nítido → re-OCR en modo `redo`, que sustituye la capa conservando la imagen.
+- **Escaneo largo, o equipo que se puede cerrar** → `docling_incremental.py` (lotes con
+  checkpoint y resume; `--no-ocr` si ya trae capa de texto). Y para el OCR geométrico,
+  cuando el problema es de LAYOUT y no de reconocimiento, `ocr_geometry.py`.
+- **Páginas apaisadas** (ancho/alto > ~1.3) → escaneo 2-up → `split_pdf_spreads.py` antes
+  de nada. Si vas a TRANSCRIBIR POR VISIÓN, `split_scan_spreads.py`, que corta por el
+  lomo y no por el centro.
+
+Las trampas de cada uno —rotación horneada, capa en blanco, cuadernillo girado 90°,
+verificación del corte— están en el docstring de su herramienta.
 
 ### 3. ¿Bisturí o Docling?
-Mira layout en una página de cuerpo:
+
+Mira el layout en una página de cuerpo:
+
 ```bash
 pdftotext -layout -f 20 -l 20 x.pdf - | sed -n '1,40p'
 pdfimages -list x.pdf | wc -l
 ```
-**Docling** (`docling convert x.pdf --to md --output ./markdown/`) si hay:
-multicolumna, tablas, fórmulas, muy ilustrado (imágenes ≫ páginas) o extracción
-rota. Si es **prosa limpia a una columna** → bisturí (§3b). Ante la duda: 1
-capítulo con bisturí, revisa el `.md`; si quedó sucio, repite con Docling.
 
-> **PDF digital donde la CURSIVA importa** (texto académico: términos técnicos,
-> transliteraciones, títulos de obra) → `pdf_rich_to_markdown.py`, NO Docling.
-> Docling y `pdftotext` recuperan **0 cursivas**; la señal está en las fuentes
-> embebidas (`pdffonts x.pdf | grep -i italic` lo confirma en un segundo). Además
-> separa el texto **paralelo a 2 columnas** (original / traducción), que leído
-> línea a línea sale en frases mestizas. Es el único bisturí que hace ambas cosas,
-> así que «multicolumna → Docling» NO aplica si son columnas paralelas o hay
-> cursiva significativa.
->
+**Docling** si hay multicolumna real, tablas, fórmulas, muy ilustrado o extracción rota.
+**Bisturí** si es prosa limpia a una columna (§3b elige cuál). Ante la duda: un capítulo
+con bisturí, mira el `.md`, y si quedó sucio repite con Docling.
+
+> **Dos excepciones a «multicolumna → Docling»:** si las columnas son PARALELAS
+> (original/traducción) o si la CURSIVA es significativa, va `pdf_rich_to_markdown.py`.
+> Docling y `pdftotext` recuperan **cero** cursivas, y `pdffonts x.pdf | grep -i italic`
+> lo confirma en un segundo. En un texto académico la cursiva es información, no adorno.
+
 > **Lo que hay que pulir DESPUÉS** (medido en Partridge, *Al-Kindi's Theory of the Magical
 > Arts*): el PDF corta la cursiva en cada salto de renglón (`*The Philosophical Works of
 > Al-*` `*Kindi*`), así que hay que fusionarla — pero la fusión **no puede cruzar el salto
@@ -145,11 +100,7 @@ capítulo con bisturí, revisa el `.md`; si quedó sucio, repite con Docling.
 > CONCATENADAS en una línea por página y sin los dos puntos; y las leyendas de figura
 > maquetadas AL LADO del texto se cuelan a media frase, a veces partidas en dos trozos.
 >
-> **NUNCA cuentes llamadas de nota con «no seguido de dos puntos»** (`\[\^(\d+)\](?!:)`):
-> hay llamadas legítimas delante de un dos puntos («…la verdadera naturaleza de la
-> realidad[^23]:»). Una definición es la que **ABRE RENGLÓN**. Este error aparece siempre
-> disfrazado de «nota huérfana» y hace perder tiempo.
->
+
 > **Y ojo con el aparato de DOS CAPAS** (notas del traductor + notas largas del editor, como
 > en Project Hindsight): si las notas del editor tienen VARIOS PÁRRAFOS, un separador que
 > cierre la definición en el primer renglón en blanco deja los párrafos siguientes sueltos en
@@ -158,98 +109,143 @@ capítulo con bisturí, revisa el `.md`; si quedó sucio, repite con Docling.
 > archivo. Además: **si un título de capítulo lleva llamada de nota**, y el título es el
 > delimitador del troceo, esa nota se queda sin definición.
 
-> **Escaneo largo o equipo que se puede cerrar:** usa
-> `python3 $T/docling_incremental.py x.pdf --out ./markdown` — procesa por lotes
-> de páginas con **checkpoint + resume + progreso** (no pierde el trabajo si se
-> corta). Si el PDF ya trae capa de texto (ABBYY/nativo digital), añade `--no-ocr`
-> (acelera mucho). `--image-export-mode placeholder` evita incrustar imágenes.
+### 3b. Elegir bisturí PDF
 
-### 3c. Limpieza post-conversión (OCR/Docling → estudio)
-Tras convertir, dejar el markdown listo para leer/traducir.
+| Situación | Script |
+|---|---|
+| **Cursiva significativa** o **2 columnas paralelas** | `pdf_rich_to_markdown.py` |
+| **Acrobat ClearScan** (`pdfinfo` dice «Paper Capture … ClearScan») | `clearscan_to_markdown.py` |
+| **Capa de texto INCOMPLETA**: se pierden llamadas, puntos suscritos o dígitos | `pdfxml_to_markdown.py` |
+| Carpeta de **un PDF por capítulo**, notas a pie | `pdf_chapters_to_markdown.py` |
+| **PDF digital limpio** con outline (Calibre) | `detect_chapters.py` → `pdf_sections_to_markdown.py` |
+| Escaneado **ya OCR-eado** con citas Harvard | `pdf_book_to_markdown.py` |
+| `pdftotext` no extrae nada pero hay sidecar `.txt` | `ocr_text_to_markdown.py` |
+| Solo **partir** el PDF en capítulos | `detect_chapters.py` → `split_pdf.py` |
 
-> **DOS PUERTAS ÚNICAS (empieza por aquí, no por los fixers sueltos):**
-> - **`forja_limpiar.py ./markdown [--apply]`** — orquestador: aplica EN ORDEN el
->   núcleo determinista (ordinales→romanos→ligaduras→diacríticos, todos con guarda,
->   así que componerlos es seguro) y termina con el informe de artefactos a revisar.
->   Toggles según el libro: `--verses` (un párrafo por verso), `--notas` (rehace
->   `[^N]`), `--openings` (portadillas OUP), `--docling`, `--spell`. Dry-run por
->   defecto. Es la receta de esta sección ENCAPSULADA; generaliza a `limpiar_academico.py`.
-> - **`fix_ocr.py <sub> FILE... [--apply]`** — correcciones OCR puntuales bajo un
->   comando: `ordinals·romans·ligatures·diacritics·spell·all`. Reúne los cinco
->   arregladores sueltos con una sola convención (dry-run, guardas intactas).
+Cada uno documenta en su docstring la patología que ataca y sus trampas medidas.
+
+**Sondas de tipografía** (no convierten; te dicen qué hay antes de elegir):
+`pdf_headings.py x.pdf` lista los tamaños de fuente y qué líneas serían encabezado;
+`pdf_blocks.py x.pdf` vuelca los bloques con su fuente, tamaño y posición. Úsalas cuando
+dudes de si un título es título o de dónde cae el corte de columna.
+
+Lo que sigue son las lecciones que **no** pertenecen a un solo bisturí.
+
+> **LA APERTURA DE CAPÍTULO NO LLEVA TITULILLO: esa es la señal.** Al fijar los límites
+> de troceo es fácil tomar por arranque una página INTERIOR cuyo titulillo diga
+> «152 CHAPTER FOUR» —el número es el de esa página, no el del comienzo—. La apertura
+> real trae el rótulo SOLO, sin cifra. Buscando `^(CHAPTER \w+|APPENDIX \w+|BIBLIOGRAPHY)$`
+> como primera línea salen todos los límites de una vez y verificados. Medido en Lehrich:
+> el cap. 4 empieza en la p. 161, no en la 166, y el error se delató por las
+
+> **definiciones 1-6 DUPLICADAS** en el capítulo anterior (el segundo juego era del
+> capítulo siguiente). Un aparato con la secuencia ROTA es la señal de que el límite
+> está mal, mucho antes que cualquier ratio.
+
+> **CIFRAS DEL CUERPO TOMADAS POR LLAMADAS DE NOTA.** `--footnotes` separa el pie por
+> CUERPO DE LETRA, así que cualquier cifra compuesta en otro tamaño se convierte en un
+> `[^N]` falso: las de un **cuadrado mágico**, las páginas de una **referencia
+> bibliográfica** («*Opera*, 2:1089-1101»). Medido en Lehrich: el cap. 3 —el de los
+> cuadrados mágicos— tiene 89 notas y salían llamadas hasta la **947**, y la bibliografía
+> daba 73 llamadas con CERO definiciones. **La regla que lo ataja es la CADENA
+> ASCENDENTE**: las llamadas van en orden y **nunca retroceden**, así que un número que
+> va hacia atrás —o que no tiene definición— es una cifra del cuerpo y se devuelve a
+> texto plano (era contenido; no se borra). **Pero la cadena sí puede SALTAR**: exigir
+> que avance de uno en uno rompe el capítulo entero al primer hueco —medido en Lehrich,
+> la nota 25 no tiene llamada en el original y esa regla estricta invalidó 120 llamadas
+> buenas en cascada—. Y en las secciones que NO tienen notas —bibliografía, apéndices—
+> sencillamente no uses `--footnotes`.
+
+> **Y el ORDEN de la receta importa:** bisturí → promover el título de capítulo →
+> `pdf_blocks` → quitar titulillos. Si se quitan los titulillos antes, el emparejamiento
+> contra el PDF falla; si no se promueve el título antes, el epígrafe se detecta como
+> cita y **se traga el encabezado del capítulo**.
+
+> **Cómo se resuelve:** `pdftohtml -xml` da posición + familia + tamaño por palabra en
+> 0,4 s (pdfminer tarda MINUTOS por página con fuentes Type 3). La familia dice qué lleva
+> punto suscrito; el volado se reconoce por la **LÍNEA BASE ALZADA** —no por el tamaño,
+> porque los dígitos elzevirianos también son bajos (260 glifos pequeños frente a 77
+> volados reales)— y se CUENTA, como en un escaneo. Los glifos PUA de los dígitos se
+> deducen comparando UNA tabla con su imagen y se pasan con `--charmap "U+F63A=2,…"`;
+> entonces la llamada además se puede LEER, lo que da un **cotejo de dos señales
+> independientes** (contada vs. impresa) que destapa cualquier desfase.
+
+> **Límite honesto:** las tablas SIMPLES salen bien (`--tables`), las de encabezado
+> apilado quedan aproximadas; y cada fuente de versalitas tiene SU propio mapeo corrupto,
+> así que un `--charmap` global de una sola letra puede estropear otra fuente: mapea
+> cadenas enteras (`Å±ÆÁÂ=TABLE`) y verifica contra la imagen.
 >
-> Los scripts de abajo son las PIEZAS que esas dos puertas componen; córrelos sueltos
-> solo para un caso muy concreto. La lógica y las guardas viven en ellos (y se testean
-> ahí); las primitivas compartidas (diccionario, subproceso, pdftotext) están en
-> `forja_common.py`.
 
-- `clean_markdown.py` — quita running-headers de página (sin borrar contenido
-  repetido legítimo), guion suave, saca imágenes base64 a archivo, normaliza espacios.
-- `fix_markup.py FILE... [--apply]` — artefactos de MARKUP de la maqueta (InDesign/Quark):
-  negrita partida por salto de línea (`**…** **…**`→`**… …**`), cursiva partida en
-  subtítulos, ordinales con `**` espurios (`2**º`→`2º`), `****` sueltos, y encabezados de
-  sección `§` dejados en negrita (`**§N: …**`→`## §N`; `§N.M`→`###`, convención Dykes; si
-  el libro no usa `§`, esa regla no dispara). Idempotente. (Medido en Sahl & Māshā'allāh.)
-- `reflow_columns.py FILE... [--apply]` — recompone la prosa cortada en fragmentos de
-  una línea con comentarios `<!-- col N pág M -->`, que deja un bisturí al mal-leer una
-  maqueta a DOS COLUMNAS paralelas (original|traducción, texto|variante). Cose los
-  fragmentos abiertos (el texto principal cierra frase y hace de barrera); preserva el
-  texto token a token. NO desentrelaza dos columnas de CONTENIDO distinto mezcladas línea
-  a línea (eso pide leer la fuente y reconstruir a mano: p. ej. la lista §5.0 de Sahl).
-- **FIGURAS de un libro ya convertido** cuyo markdown conserva las leyendas «**Figura N:
-  …**» pero no las imágenes: `embed_figures_from_captions.py FUENTE.pdf --md-dir es
-  --figures-dir figuras` recorta cada figura del PDF (localiza «Figure N», pide a agy la
-  bbox del dibujo) y la incrusta ANTES de su leyenda. `crop_figure.py x.pdf --page N
-  --bbox x0,y0,x1,y1` recorta una región suelta. **ATAJO sin agy:** si las figuras son
-  imágenes RASTER embebidas (una por página, `pdfimages -list` lo confirma), extráelas
-  PIXEL A PIXEL con `pdfimages -png -f N -l N x.pdf fig` — más limpio y sin gastar cuota;
-  invierte las que salgan en negativo (brillo bajo) y, si dos comparten página, asígnalas
-  por orden arriba→abajo. (Medido en Sahl: 56 figuras raster directas, 0 agy.)
-- `cose_parrafos.py ./es/*.md [--apply]` — **el bisturí abre párrafo nuevo en cada
-  CAMBIO DE PÁGINA**, así que un párrafo que cruza de página sale roto A MEDIA FRASE
-  («…subdividió el abanico. En numerosas ␤␤ ocasiones Idel ha argumentado…»). Se lee,
-  pero al maquetar salen dos párrafos con sangría donde el libro tiene uno. Medido en
-  Lehrich: **251**; en Agripa, 22. **La señal decisiva es que el párrafo anterior NO
-  CIERRA FRASE**, y hay que definir «cerrar» con cuidado: un `)` o un `»` sueltos NO
-  cierran nada, así que el cierre exige puntuación TERMINAL de verdad (`. ! ? … : ;`).
-  Exigir ADEMÁS que el siguiente abra en minúscula —la primera versión— deja fuera dos
-  casos frecuentes y medidos: `…las imágenes (el tipo A)` ␤␤ `en la magia celeste` (el
-  paréntesis fingía cierre) y `…para ambos pensadores, aunque` ␤␤ `Ficino, para
-  defender…` (continúa en MAYÚSCULA). Por eso se une también tras **coma** —ningún
-  párrafo termina en coma— y tras **palabra función abierta** (preposición, conjunción,
-  artículo, relativo), que no puede ser la última de un párrafo pase lo que pase detrás.
-  **Los ADVERBIOS de enlace NO van en esa lista** («además», «también», *also*): sí
-  cierran el renglón que ENTRA en una cita en bloque, y meterlos funde la entradilla con
-  la cita. Ese caso —coma + bloque largo en mayúscula— se reporta como `DUDOSO` y no se
-  une. Guardas: un **subtítulo en cursiva** o una **leyenda de figura** tampoco cierran
-  frase y son bloques completos; hay que excluirlos o son falsos positivos garantizados.
-  **Y nunca se cose alrededor de una CITA EN BLOQUE**: ahí la
-  frase del autor entra en la cita y sale de ella, y eso es la estructura del ORIGINAL.
-  La causa raíz ya está corregida en `pdf_rich_to_markdown.py --indent-paragraphs`, que
-  deja decidir a la SANGRÍA en vez de al salto de página; esta tool es para los libros
-  ya convertidos.
-- **HEBREO (o griego) COMPUESTO CON UNA FUENTE ASCII: se extrae como basura latina y
-  NADA lo delata.** Muchas monografías de los 90-2000 no usan Unicode: meten el hebreo
-  con una TrueType mapeada sobre ASCII (`SPTiberian`, `SuperHebrew`, `WP-GreekCentury`),
-  sin `ToUnicode`. Sale `(K)lmw)` donde el libro imprime `ומלאך`, y el ratio cuadra —los
-  caracteres están, uno por letra—, el balance de notas cuadra y el corrector lo toma por
-  una sigla. En un libro sobre cábala eso es el objeto del capítulo, no un adorno.
-  `hebreo_sp_a_unicode.py libro.pdf ./es/*.md [--apply]` lo restituye **sin adivinar**:
-  no detecta «lo que parece hebreo» —`why`, `myth` y `thy` se escriben solo con letras
-  del repertorio SP— sino que le PREGUNTA AL PDF qué cadenas van en esa fuente
-  (`pdftohtml -xml` da texto + `fontspec`) y sustituye solo esas. **Dos trampas medidas
-  en Lehrich:** (1) hay que **INVERTIR** la cadena entera, espacios incluidos, porque el
-  PDF guarda los glifos en orden VISUAL y el hebreo se lee al revés —así se arregla de
-  paso el orden de las PALABRAS: `hxwd hwhy K)lmw` → `ומלאך יהוה דוחה`—; (2) sin
-  **frontera de token** las cadenas de dos o tres letras casan DENTRO de palabras
-  corrientes (*t·hy·s*, *w·hy*) y salen **405 «restituciones» donde hay 54**, sembrando
-  el texto de hebreo a media palabra. La frontera no puede ser `\b` (aquí `)` y `(` son
-  letras): exige que no haya letra ni dígito pegados a los lados. Y sustituye **de más
-  largo a más corto**, o el trozo corto parte el largo por la mitad.
-  El **griego** de estas fuentes sale FRAGMENTADO (`pdftohtml` emite un carácter suelto y
-  el resto en la fuente normal), así que ahí no vale el mismo automatismo: localiza las
-  páginas con `pdffonts`/`fontspec`, **renderízalas y lee la palabra** (`[NVD:"6@<]` era
-  `φαρμακον`; `*,\<TF4H`, `δείνωσις`).
+> **PDF HECHO CON CALIBRE DESDE UN EPUB: la llamada de nota se LEE, no se cuenta.** Es el
+> mismo bisturí, pero la señal es otra y confundirlas sale caro. Aquí el volado no es un
+> glifo mudo: es el número ENTERO y legible dentro de un `<a href>` que apunta al aparato
+> del final, en cuerpo menor y en azul (`size 17` sobre 23, `#0000ee`). `pdftotext` lo tira
+> igual —el aparato entero desaparece sin que nada avise—, pero **contar es peor que leer**:
+> si el original deja algún número sin anclar, el conteo se desfasa desde ese hueco y todas
+> las etiquetas siguientes apuntan a OTRA nota. Medido en *Physicians of the Heart* (530 pp):
+> 310 llamadas legibles sobre la serie 1..311, con la **32** ausente del cuerpo. El
+> discriminante para no tomar un exponente por llamada es el ENLACE, no solo el tamaño.
+
+> **Cuatro artefactos más de esta maqueta, todos invisibles en el markdown:** la CAPITULAR
+> queda suelta (`*B*` y luego «ecause…», a veces en bloque aparte y a veces en la misma
+> línea); la CURSIVA sale partida en dos tramos (`*siraat-ul* *mustaqeem*`) y al fusionarla
+> no va espacio si el corte cayó en un guion (`*Al-* *hamdu*` = «Al-hamdu»); el ENCABEZADO
+> viene íntegro en cursiva; y el punto suscrito se emite como glifo aparte, con lo que el
+> hueco entre cajas mete un espacio ANTES de la marca combinante (`rah ̣-MAAN` por
+> `raḥ-MAAN`, 191 casos) — y un espacio nunca precede legítimamente a una combinante.
+
+### 3c. Limpieza post-conversión
+
+**Empieza por las dos puertas únicas, no por los fixers sueltos:**
+
+- `forja_limpiar.py ./markdown [--apply]` — orquestador: aplica en orden el núcleo
+  determinista y termina con el informe de artefactos. Toggles según el libro
+  (`--verses`, `--notas`, `--openings`, `--docling`, `--spell`). Dry-run por defecto.
+- `fix_ocr.py <sub> FILE... [--apply]` — correcciones OCR puntuales bajo un comando:
+  `ordinals·romans·ligatures·diacritics·spell·all`.
+
+**Índice de arregladores** (el porqué y las guardas, en su docstring):
+
+| herramienta | para qué |
+|---|---|
+| `clean_markdown.py` | titulillos de página, guion suave, imágenes base64, espacios |
+| `fix_markup.py` | artefactos de maqueta: negrita partida, `****`, `§` en negrita |
+| `reflow_columns.py` | prosa cortada en fragmentos por una maqueta a dos columnas |
+| `cose_parrafos.py` | párrafo partido a media frase por el salto de página |
+| `citas_en_bloque.py` | la cita entera que salió como prosa entrecomillada |
+| `verse_paragraphs.py` | texto versificado que quedó como un párrafo gigante |
+| `split_chapters.py` | trocear en capítulos (`--plan` o `--by-heading`) |
+| `chapter_bounds.py` | límites reales cuando no te puedes fiar de los encabezados |
+| `index_rebuild.py` | rehacer el índice analítico contra el PDF nuevo |
+| `embed_figures_from_captions.py` | recortar del PDF las figuras que solo dejaron leyenda |
+| `hebreo_sp_a_unicode.py` | hebreo compuesto con una fuente ASCII |
+| `glifos_janus_a_unicode.py` | glifos astrológicos de una fuente Janus con `ToUnicode` roto |
+| `astro_glyphs.py` | glifos astrológicos corruptos (marca, no corrige) |
+| `flag_ocr_artifacts.py` | DETECTOR de ruido camuflado, para corregir a mano |
+| `ocr_spellfix.py` | erratas de OCR usando el propio libro como modelo |
+| `normaliza_autores.py` | atribuciones de autoría destrozadas en compendios |
+| `limpia_dudas.py` | las marcas `[?: …]` del traductor, clasificadas |
+| `rescata_capitulos.py` | capítulos que viven dentro del aparato de notas |
+| `quita_titulillos_fundidos.py` | titulillos que el OCR pegó a la primera línea |
+| `pdf_restore_digits.py` | dígitos que el bisturí perdió (mídelo contra el PDF) |
+| `fix_ligatures.py` · `fix_diacritics.py` | corrupción OUP/Distiller (fi→W, acentos rotos) |
+| `fix_ordinals.py` · `fix_roman_numerals.py` | ordinales volados y numerales romanos del OCR |
+| `clean_openings.py` | portadillas y capitulares (estilo OUP) |
+| `docling_clean.py` | limpieza específica de la salida de Docling |
+| `crop_figure.py` · `check_scan_margins.py` | recortar una región del PDF · verificar el corte de un 2-up |
+
+**El aparato de notas es un módulo, no un puñado de scripts:** `forja.aparato` separa,
+ancla (con varias estrategias), reparte y audita, y sus guardas tienen test en
+`tests/test_aparato.py`. Las CLI son `footnote_chain.py`, `footnotes_rebuild.py`,
+`footnotes_from_pdf.py`, `footnotes_redistribute.py`, `coteja_aparato.py` y
+`aparato_volados_aplanados.py`.
+
+---
+
+**Lo que sigue son lecciones que TODAVÍA NO SON CÓDIGO.** Van completas a propósito: son
+defectos que el balance de notas, el ratio de palabras y la lectura del markdown NO ven.
+Cada una es trabajo pendiente del núcleo, no relleno.
+
 - **SUBTÍTULOS DE SECCIÓN PEGADOS AL PÁRRAFO.** Si el libro marca sus apartados con una
   línea en CURSIVA (no con cuerpo mayor), el bisturí no los ve como encabezado y quedan
   fundidos al párrafo que abren: `*Planetary Characters* The construction of…`. En el
@@ -261,130 +257,7 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   escapa cuando el párrafo arranca con OTRA cursiva (`*Character and Hieroglyph* *DOP*
   does not…`), y una regla de «bloque entero en cursiva» **promueve las LEYENDAS DE
   FIGURA a encabezado** —5 por idioma— si no las excluyes.
-- `citas_en_bloque.py ./markdown/*.md [--apply] [--comillas]` — los párrafos que son
-  una **CITA ENTERA** salen del converter como prosa normal entrecomillada, porque la
-  maqueta las marcaba con la SANGRÍA y esa señal no sobrevive. El markdown se lee, pero
-  una cita de cinco renglones queda **indistinguible de la voz del autor**, que es justo
-  lo que hay que ver de un vistazo. Las pasa a `>` y les quita las comillas que las
-  envuelven (el bloque ya lo dice; dejar las dos cosas es redundante), respetando las
-  interiores. Tres casos que un `sed` no cubre: **citas de VARIOS párrafos** (la comilla
-  de cierre está tres párrafos más abajo, y entre dos bloques `>` separados por un
-  renglón EN BLANCO pandoc ve DOS citas: el separador tiene que llevar su propio `>`);
-  **cita que cierra a media línea** con la frase de transición del autor pegada detrás
-  («…living Images."[^45] Agrippa goes on to note…»), que hay que PARTIR; y las
-  **llamadas de nota** (`imágenes [^1]` va sin espacio; un punto tras la llamada cuando
-  la frase ya cerró con `."` sobra). Medido en *Astral High Magic*: 23 citas, 3
-  continuaciones, 1 partida, 40 llamadas pegadas.
-  **Trampa cara:** un regex `^(#+ .*?)\s*:\s*$` en multilínea **se come el renglón en
-  blanco siguiente** y pega el encabezado al párrafo (`\s` incluye `\n`) — hay que anclar
-  con `[ \t]*`. No se ve leyendo el markdown por encima y lo estropea entero.
-- `split_chapters.py libro.md --plan plan.json` (o `--by-heading 2`) — trocea en
-  capítulos. Exige UNA de las dos banderas; el `.md` va siempre como posicional.
-- `verse_paragraphs.py libro/*.md [--apply]` — texto **VERSIFICADO** (Abū Maʿshar,
-  Valens, Doroteo…) que quedó como UN párrafo gigante por capítulo con los números
-  de verso inline → los pone **un párrafo por verso** con el nº en negrita. Señal de
-  verso = número 1..MAX SOLO seguido de MAYÚSCULA (descarta cantidades «30 signs» en
-  minúscula; permite el reset por capítulo). No toca `#`/tablas/código/notas; es
-  idempotente. Arregla de paso el caso «encabezado que se tragó el capítulo entero y
-  renderiza todo en negrita». Dry-run por defecto. (Medido en Persian Nativities IV:
-  líneas de 45.719 → ~2.600 chars.)
-- `footnotes_rebuild.py cap.md --apply` — reconstruye notas `[^N]` **por capítulo**.
-  Detecta 2 estilos de OCR: *pegado* (marcador partido `1 3 8`→`[^138]` + def. `114. …`)
-  y *suelto* (marcador ` N ` con espacio + def. `N Texto` sin punto, incluso partida en
-  dos líneas; numeración continua en todo el libro; libros AstroArt/Döser). NO en
-  índices/bibliografía. Para rehacer un archivo ya convertido: revierte con regex
-  (`^\[\^N\]:`→`N `, `\s*\[\^N\]`→` N`) y reaplica.
-- **Aparato pegado al cuerpo SIN sangría fiable** (recortaste una columna de un facing
-  árabe|inglés y el recorte reinició el margen, o el OCR aplastó la indentación): el
-  módulo **`footnote_chain.py`** separa cuerpo/notas por la señal robusta de que los
-  **números de nota son CONSECUTIVOS** (n, n+1, n+2…); un número no consecutivo —remisión
-  «128 below», «3.3 above», cifra de prosa— se trata como continuación, no como nota nueva,
-  y el nº de página del pie tampoco rompe la cadena. Ancla los volados aplastados por
-  cursor ascendente. Dos formatos: número+texto en la misma línea (por defecto) o
-  `--number-only` (volado solo en su renglón). Es LIBRERÍA (`from footnote_chain import
-  process_page`) — la importa el bisturí, que conoce la maqueta; el CLI procesa un bloque
-  suelto. (Medido en la Abbreviation de Abū Maʿshar, notas 1-112, y las Flowers, 1-308.)
-- **VOLADOS APLANADOS por un reprocesador (Nitro Pro y similares): parece imposible y casi
-  siempre se puede.** El dígito de la llamada queda con la MISMA línea base y casi el mismo
-  cuerpo que el texto (Δy = 0,00), así que la detección por geometría se cae — pero **el
-  dígito sigue en el texto**, pegado sin espacio al carácter anterior.
-  `aparato_volados_aplanados.py ./markdown --notas 50_Notes.md --cuerpo 07-49 [--apply]`.
-  **Cuatro guardas, todas medidas en al-Tilimsānī (LAL/NYU), donde un primer intento ancló 13
-  de 544 y dio el caso por imposible; con ellas salen 590 de 591:** (1) **enmascarar ANTES las
-  otras series de números** —aquí la numeración de párrafo al margen estilo LAL (`**131.3**`),
-  que se entrelaza con la de las notas y era la causa REAL de que la cadena se rompiera, no
-  «las muchas cifras de la prosa»—, con relleno de la MISMA longitud para no invalidar los
-  offsets; (2) **la cadena tiene que poder SALTAR huecos** (aquí se partía tras la 25, igual
-  que en Lehrich); (3) **el regex NO puede ser ASCII**, o la transliteración árabe deja fuera
-  la llamada (`al-Baghawī26`); (4) **el asterisco cuenta como carácter anterior**, o se pierden
-  las que siguen a un cierre de cursiva (`.”*397`).
-  **Y AUDITA EL APARATO ANTES DE ENLAZAR** (`--auditar`): el mismo libro traía el bloque
-  truncado sin que nada lo delatara —1..544 seguidas y sin huecos, mientras el PDF llegaba a la
-  591, con las 47 restantes glutinadas dentro de la «entrada 544», de 375 palabras frente a una
-  mediana de 5—. La señal es comparar el número más alto del aparato con el más alto del cuerpo.
-- **PDF DIGITAL cuyos dígitos se pierden al extraer** (cursos y manuales con fuentes
-  de símbolos: el párrafo se lee bien pero `Arc of Direction = RA °'"` ha quedado sin
-  cifras). **Ningún control de §3d lo ve**: ni el ratio, ni el balance de notas, ni el
-  corrector. Hay que medirlo contra el PDF:
-  `pdf_restore_digits.py cap.md --pdf cap.pdf [--apply]` — la línea dañada es EXACTAMENTE
-  el texto del PDF sin los dígitos, así que quitándoselos a ambos deben coincidir; solo
-  se toca lo verificado y único, y la reinserción va en paralelo para no tocar negritas,
-  cursivas ni `[^N]`. `pdftotext -layout` sí extrae esos dígitos: el fallo es del bisturí.
-  El mismo fallo se lleva los volados de nota, así que después:
-  `footnotes_from_pdf.py cap.md --pdf cap.pdf --apply [--interpolar]` — lee el aparato
-  REAL del PDF (el número va en la línea anterior a la definición y sube 1,2,3…, lo que
-  descarta los números de página), etiqueta los textos de nota sueltos, inserta los que
-  falten y sitúa cada llamada por su contexto. **Ojo al asimetría:** una definición sin
-  llamada NO se imprime (la nota se pierde), y un texto de nota sin etiquetar se imprime
-  como prosa a mitad de capítulo. Verifica al final `definiciones == llamadas` y 0
-  huérfanas. Medido en el Diploma Course de Zoller: 610 cifras y 624/624 notas.
-- `index_rebuild.py viejo_indice.md libro.pdf --out nuevo.md --report faltan.txt` —
-  el **índice analítico** del original no sirve tras traducir: sus números remiten a
-  OTRA edición, y el OCR de un índice a 2 columnas suele entrelazarlas, así que no se
-  puede ni renumerar (no sabes qué página es de qué entrada). Da igual: del viejo solo
-  se aprovecha QUÉ términos indexar; las páginas se buscan en el PDF nuevo. **No es un
-  grep**: un encabezado va invertido (`al-Rijāl, Ah ibn`), agrupa variantes (`África,
-  africanos`) o normaliza flexión (`Abasíes` vs. «abasí»), así que se prueban variantes
-  (buscar el encabezado tal cual falla en ~43%). Corre el `md_to_pdf` PRIMERO y pon el
-  índice AL FINAL: así añadirlo no mueve la paginación medida. Límite honesto: sale
-  **plano** (la jerarquía ya venía destruida) y es una concordancia curada, no el
-  índice del autor. Lo no encontrado se reporta, no se esconde.
-- `astro_glyphs.py --flag cap.md` — señala celdas de glifos astrológicos corruptas
-  por OCR (♄♃♂ y signos) para corregirlas a mano contra la imagen; `--reference` = chuleta.
-- `fix_ordinals.py ./markdown --apply` — ordinales volados que el OCR destroza en
-  **escaneos**: `4 lh`→`4th`, `ll' h`→`11th`, `I 1 '`→`1st`, `12 ,h`→`12th`. Deriva el
-  sufijo del NÚMERO (no adivina la corrupción), solo 1-31, y no toca horas/fechas/cifras.
-  Crítico en libros de **casas** astrológicas o siglos: cambia el sentido y ningún
-  corrector lo ve. (`docling_clean.py` ya cubre el caso LIMPIO `5 th`→`5th`.)
-- `fix_roman_numerals.py cap.md [--apply]` — el OCR confunde numerales romanos con
-  letras/dígitos y con el pronombre inglés «I»: `Volume IT`→`Volume II`, `Ch. IIL`→
-  `Ch. III`, `1V`→`IV`, y el clásico `In Volume IT T will`→`In Volume II I will`.
-  DOS reglas CON CONTEXTO: (1) numeral tras palabra-contador (Book/Volume/Chapter/
-  Part…); (2) pronombre «I» leído `T/l/|` seguido de verbo de 1ª persona — NO toca
-  las **siglas de manuscrito** («T reads», «P reads») porque exige verbo no-3ª-pers.
-  Conservador: omite los ambiguos `IIL9`/`IL6` (¿`III` o `II.9`?) y los números
-  arábigos («chapter 16»). Dry-run por defecto.
-- `ocr_spellfix.py libro/*.md [--apply] [--max-edits 2]` — corrección ortográfica
-  CONSERVADORA de erratas de OCR usando **el propio libro como modelo de frecuencia**
-  (así protege transliteraciones y términos de dominio: lo que sale muchas veces es
-  correcto y es buen destino de corrección — `Bosk`/`boks`→`Book`, `Centuty`→`Century`,
-  `tather`→`father`). Pasa TODOS los .md juntos (mejor corpus). Reglas de seguridad:
-  solo corrige a un destino MUY común, prioriza distancia 1 (edit-2 opcional y solo en
-  minúsculas), protege MAYÚSCULAS/no-ASCII/≤3 letras y exige más frecuencia si el
-  original va capitalizado (nombres propios). **Límite honesto:** ni así es perfecto
-  —puede errar en latín/árabe sin diacríticos y fragmentos de OCR—, así que va en
-  **dry-run por defecto: revisa la lista antes de `--apply`**. Para la corrección fina
-  de verdad, una pasada de agente que lee en contexto sigue siendo lo más fiable.
-- `flag_ocr_artifacts.py libro/*.md [--only tipo,tipo]` — **DETECTOR** (no corrige) de
-  ruido de OCR camuflado que es fácil pasar por alto, para que TÚ lo arregles a mano
-  contra la imagen. Marca: `garbage` (basura pura de tabla «010 OQ Fo…»), `glued`
-  (entrada de glosario pegada a otra o a basura), `split` (párrafo cortado por salto de
-  página sin unir), `dash` (guion espurio al inicio «- such a manner…»), `bracket`/
-  `stray` (corchete colgando, cola basura «… . ] Bt»), `pagenum` (nº de página
-  incrustado «29 more the sense…»). Estos defectos aparecen SOBRE TODO **debajo de las
-  tablas** (restos que sobrevivieron al troceo) y en glosarios (entradas que el filtro
-  de basura pegó o borró). Úsalo tras convertir un libro-diccionario para no dejar
-  cabos: corre el detector, revisa cada marca contra la imagen y corrige con criterio.
+
 - **LAS LLAMADAS DE NOTA SE COMEN CIFRAS** cuando el escaneo tiene el margen recortado.
   Es el defecto MÁS CARO de detectar de todos los de esta sección, porque **el balance de
   notas cuadra perfectamente** y aun así el texto ha perdido un dato. Pasa cuando el
@@ -401,6 +274,7 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   (estaba mal puesta): esa definición pasa a «sin anclar», que es lo honesto.
   **El mismo patrón vale en el ORIGINAL y en la TRADUCCIÓN**: el contexto numérico
   sobrevive intacto, así que el reparador se aplica igual a `en/` y a `es/`.
+
 - **ESCANEO GRANDE: EXTRAE LA IMAGEN, NO RASTERICES.** Si el PDF es un escaneo con UNA
   imagen embebida por página (compruébalo: `pdfimages -list x.pdf | tail -n+3 | awk
   '{c[$1]++} END{for(p in c) if(c[p]!=1) print p}'`), `pdftoppm -r 300` es un despilfarro:
@@ -417,6 +291,7 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   ahí dentro, y **genera solo el texto EN SILENCIO** — 736 `.txt` y 0 `.tsv`, y la
   conversión sale vacía. Por eso hay que usar los `-c tessedit_create_*`, que no dependen
   de dónde estén los modelos.
+
 - **CURSIVAS DE UN ESCANEO PURO: mide la INCLINACIÓN DEL TRAZO.** Cuando no hay capa de
   texto, el truco de ClearScan (medir las fuentes embebidas) no aplica, y tesseract no
   marca la cursiva: su hOCR solo emite `x_fsize`. La señal está en los píxeles: se cizalla
@@ -429,6 +304,7 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   ser EXACTAMENTE la que vio tesseract, o las coordenadas del TSV no encajan y la cursiva
   sale desplazada una palabra. Vectoriza el barrido con numpy (bincount por ángulo): de 6 a
   2,3 s/página.
+
 - **FIGURAS DENTRO DEL ESCANEO DE PÁGINA** (no como objetos aparte): se recortan por
   región. La leyenda («Figure 12: …») da el borde inferior; el superior se busca hacia
   arriba hasta la primera racha en blanco MÁS LARGA QUE EL INTERLINEADO de esa página
@@ -438,6 +314,7 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   blanco inicial** y llegar a la tinta antes de buscar el hueco de arriba (una carta pasó
   de 99 a 1.585 px al corregirlo). Al incrustar, NO ancles la leyenda en `^`: al recomponer
   párrafos muchas quedan dentro del texto (medido: 35 de 70 colocadas frente a 61).
+
 - **APARATO DE NOTAS DE UN ESCANEO: el número NO se lee, se CUENTA.** Los volados van
   diminutos y tesseract no los reconoce: los pega a la palabra anterior como basura
   (`money,!!`, `it.'3`, `of]'©`) y ninguna combinación de `--psm` lo arregla. Pero la
@@ -470,71 +347,7 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   numeración se repite, y una página sin marcador detectable pierde su pie ENTERO si el
   código hace `zip` con una lista vacía. Tres pérdidas distintas (20 %, 8/9 y 16 %) en un
   solo libro, ninguna con error y ninguna visible en el markdown.
-- **TITULILLOS QUE SOBREVIVEN FUNDIDOS AL CUERPO**: el bisturí quita el titulillo por
-  geometría, pero en las páginas donde el OCR lo pegó a la primera línea del texto ya no
-  hay geometría que valga y **sale impreso a media página, en versales, cortando la
-  frase**. En el markdown pasa desapercibido; **solo se ve RENDERIZANDO páginas del PDF**
-  —renderizar no es un lujo, es el único control que ve esta clase de defecto—. Se borran
-  por su TEXTO, y el anclaje NO puede ser el nombre del autor (el OCR lo escribe de tantas
-  formas como páginas: `HERMANN`, `HERMAJVN`, `HERMAI\l\'`…) sino la constante: que la
-  línea EMPIECE por las primeras letras en VERSALES (sin `re.I`: en la prosa el nombre va
-  en caja mixta) y lleve el TÍTULO de la obra detrás. **Guarda obligatoria:** muchos libros
-  tienen texto legítimo en versales dentro del cuerpo (rótulos de tabla, portadillas), así
-  que borrar «toda línea en mayúsculas» destruye contenido real.
-  **Automatizado en `quita_titulillos_fundidos.py`**, que exige las TRES constantes a la vez
-  —4+ versales, número de página al final, y ningún fragmento en minúscula en el prefijo— y
-  con `--encabezados` borra además los titulillos que el conversor llegó a PROMOVER a
-  encabezado («# §A: INTRODUCTORY MATTERS 57»), pero solo si puede probar que están
-  duplicados. Medido: 68 casos en *Nine Judges*. Ojo, **el discriminante es el nº de página,
-  no las versales**: «VIDA», «AMISTADES», «CARRERAS DE CABALLOS» eran rótulos legítimos.
-- **UN CAPÍTULO ENTERO PUEDE VIVIR DENTRO DEL APARATO, y ningún control lo nota.** En §7 de
-  *Nine Judges*, 26 «definiciones de nota» eran en realidad el texto de un capítulo con su
-  título y su autoridad —y **23 de esos capítulos no estaban en el cuerpo en absoluto**—.
-  Se habrían impreso como notas al pie al final de la sección. No lo ve NADA de lo habitual:
-  el balance de notas cuadra (son definiciones válidas), el recuento de encabezados cuadra
-  (nunca hubo encabezado que perder) y el ratio de palabras cuadra (el texto está, en el
-  sitio equivocado). **Solo se ve preguntándose DÓNDE está el texto, no SI está.**
-  `rescata_capitulos.py cap.md --apply` los devuelve al cuerpo: la definición que abre por
-  `§N.M: Título—Autoridad` arranca el bloque, y las etiquetas siguientes que empiezan en
-  MINÚSCULA son su continuación partida por el salto de página. Dos avisos medidos: al
-  reubicar, las llamadas de las etiquetas consumidas quedan **huérfanas** (hay que quitarlas)
-  y algún bloque trae una nota real empalmada dentro del TÍTULO, que hay que separar a mano.
-- **ATRIBUCIONES DE AUTORÍA DESTROZADAS** (compendios que asignan cada capítulo a una
-  autoridad tras una raya: «—Sahl», «—ʿUmar»): el OCR escribe nueve nombres de cincuenta
-  formas —«Sah», «SahF», «Sahb», «Jitjis», «al-Kindr», «aAristotle»— y al limpiar la basura
-  del final algunos quedan TRUNCADOS. Como el repertorio es CERRADO se normaliza sin adivinar:
-  `normaliza_autores.py ./es --idioma es --apply`. **Dos guardas que evitaron destrozos:** un
-  `[^N]` pegado al nombre es una LLAMADA legítima y hay que preservarla; y el guion de
-  «al-Rijāl» NO es separador de autoría —tomarlo por tal se comía el «I.5.1» de un título—.
-- **COTEJAR EL APARATO CONTRA EL PIE IMPRESO** cuando las notas se reconstruyeron contando
-  marcadores: `coteja_aparato.py cap.md --pdf libro.pdf --paginas 28-67` OCR-ea la franja
-  inferior de cada página, lee los números REALES (en el pie sí van en cuerpo normal, al
-  contrario que los volados) y compara por el ARRANQUE DEL TEXTO, no por el número, de modo
-  que el desfase aparece como patrón. Medido en la Introducción de *Nine Judges*: 5 notas
-  corridas +1, 4 corridas +2 y 2 desaparecidas. **La causa raíz era que el conversor PARTÍA
-  en dos las notas que cruzan un salto de página** y registraba cada mitad como nota nueva;
-  cada partición mete un número de más y desde ahí todo se corre. El balance refs↔defs
-  cuadraba y el markdown se leía sin sobresaltos.
-- **MARCAS DE DUDA DEL TRADUCTOR** (`[?: …]`, cuando se le prohíbe inventar ante un resto de
-  OCR): no todas son iguales y tratarlas igual es el error. `limpia_dudas.py ./es --apply`
-  las clasifica en tres: RUIDO (la cola de una llamada de nota que el escaneo se comió → se
-  borra), REFERENCIA cruzada donde la marca es lo ÚNICO que hay («Véase `[?: VIL6.]`» → se
-  repara normalizando el destrozo `I`↔`J [ L T H U 1`) y lo demás, que se LISTA para mirarlo
-  a mano. Medido: de 682 marcas, 469 eran ruido y 33 referencias reparables. **La señal que
-  distingue redundante de portante es si lo de DELANTE queda abierto** (palabra función o
-  paréntesis sin cerrar): «*Recti* [?: Reefi]» no perdió nada, «asoció a [?: …]» perdió
-  «Trismegisto». Y cuidado: una marca puede estar sustituyendo a un conector —`[?: *¢>*]`
-  era un `&`, y borrarlo dejaba «Éxito fracaso en la vida»—.
-- **EL CONVERSOR PUEDE COMERSE LA PRIMERA LÍNEA DE LA PÁGINA junto con el titulillo.** El
-  filtro de cabecera trabaja por posición, y en las páginas donde el hueco bajo el titulillo
-  es algo menor de lo normal se lleva por delante **la primera línea de texto**. Medido en la
-  introducción de Kaske & Clark: **14 páginas, 194 palabras**, siempre a mitad de frase y por
-  eso invisibles al leer («When Andreas Leenius "corrected"» ␤␤ «can best be seen in…»).
-  **El control es barato y hay que hacerlo siempre en un libro largo:** compara el recuento de
-  `djvutxt`/`pdftotext` CRUDO del rango de páginas con el del markdown; los titulillos explican
-  ~4 palabras por página y lo que sobre es pérdida real (aquí, 534 de déficit y solo 356
-  explicables). Para localizarlas, comprueba página a página si su **primera línea larga**
-  aparece en el markdown, y reinsértala empalmando con la última línea de la página anterior.
+
 - **EL APARATO CRÍTICO LATINO NUMERA LAS LÍNEAS: eso es un control de completitud GRATIS
   y exacto.** En una edición crítica bilingüe, la columna del original suele llevar el número
   de línea cada cinco renglones. Si el archivo convertido empieza con el marcador «30» en vez
@@ -545,6 +358,7 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   archivo entero está desplazado, el balance de notas cuadra (las llamadas perdidas se fueron
   con su texto) y el markdown se lee sin sobresaltos, solo que empieza por «Responde primero…».
   Comprueba SIEMPRE que el primer marcador de línea del original sea el primero de la sección.
+
 - **UN ENCABEZADO EN EL SITIO EQUIVOCADO ESCONDE UNA LAGUNA DE TRADUCCIÓN, y el ratio
   GLOBAL no la ve.** Si el título va centrado en dos renglones y el bisturí promueve solo el
   SEGUNDO, la primera mitad queda de párrafo suelto al final del capítulo anterior —y el
@@ -555,24 +369,7 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   el bezoar, la peonía y la triaca—. Ratio global 0,98; **ratio de ESE capítulo 0,62**.
   **Por eso el control de completitud de una traducción se mide POR CAPÍTULO, no por
   archivo**; y un título que empieza en MINÚSCULA es la señal barata de que está partido.
-- **SEPARAR LAS NOTAS DE UN COMENTARIO POR LA CADENA ASCENDENTE: cuatro trampas medidas.**
-  Cuando el aparato vive en un bloque aparte («3.16 / 1. … 2. …»), se trocea buscando el
-  número siguiente de la cadena, como en `footnote_chain.py`. Pero: (1) la guarda del número
-  tiene que excluir el **guion**, o «Enn 4.4.41.6-8» parte la nota 7 y le roba el cuerpo a la
-  8; (2) una nota puede **abrir con un dígito** («32. 4 *ad fin.*, ed. Frette»), así que
-  exigir mayúscula detrás corta la cadena a la mitad —hace falta un patrón de reserva
-  anclado a principio de renglón—; (3) el OCR escribe la nota 1 como **«l.»** (ele), y sin
-  normalizarlo la cadena engancha el «1» de un «10.» de más abajo y **se pierde el capítulo
-  entero**; (4) prueba SIEMPRE primero el patrón de principio de renglón. Un partidor sin
-  estas guardas junta notas cortas con la anterior y trocea las largas en cinco: en Ficino
-  daba claves fantasma («3.17-46», «3.16-41») que **parecían definiciones válidas**.
-- **UNA NOTA SIN LLAMADA NO SE IMPRIME, y el escaneo se come los volados.** Al auditar el
-  aparato no basta con «toda llamada tiene definición»: hay que comprobar **al revés**, que
-  toda definición tenga llamada. En Ficino, 67 de 274 no la tenían —el volado había quedado
-  como `Lion5`, `straw 1`, `Ptolemy29`, `crowned 9`, una comilla suelta o nada—, y el balance
-  «llamadas ⊆ definiciones» daba limpio. La cadena de cada capítulo debe ser **1..N completa
-  y en orden estricto**; un número repetido o fuera de orden es una llamada mal etiquetada
-  que apunta a otra nota.
+
 - **UNA NOTA QUE FALTA CON SU LLAMADA NO ROMPE NINGÚN BALANCE: cuéntalas contra la FUENTE.**
   El control anterior compara llamadas con definiciones DENTRO del markdown, así que no ve
   las notas que se perdieron ENTERAS —definición y volado a la vez— cuando el partidor por
@@ -591,23 +388,19 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   ese mismo fallo se llevó por delante las notas siguientes. Ojo también con la fusión en
   sentido contrario: la última nota de una sección puede haberse tragado la primera de la
   siguiente (aquí `1.6-7` contenía entera la `1.7-1`).
+
 - **ENCABEZADOS PARTIDOS EN DOS RENGLONES**: si un título va centrado en dos líneas, el
   bisturí promueve solo la primera y deja la segunda como párrafo suelto que empieza en
   minúscula. Se cose al título (sin coma si es continuación genitiva, «…del significador»
   + «del consultante»; con coma si es cláusula nueva). Si la continuación YA está en el
   encabezado porque se recompuso antes contra el índice impreso, se BORRA el huérfano en
   vez de duplicarlo.
+
 - **El ÍNDICE IMPRESO es el mejor contraste para los encabezados destrozados** (no solo
   para renumerar): conserva los títulos reales, así que con él se hace una lista curada
   de correcciones y, sobre todo, se descubre **qué capítulos FALTAN** en el markdown
   porque su título se quedó tragado dentro del cuerpo (10 de ellos en *Search*).
-- `chapter_bounds.py libro.pdf clean.md --sections secs.json --offset N [--apply]` —
-  cuando **no puedes fiarte de los encabezados** de Docling: título repetido como
-  running header y promovido a encabezado en sitio equivocado (¡a mitad de frase!),
-  título recurrente como subtítulo, o título centrado partido en 2 líneas. Localiza el
-  límite REAL de cada capítulo por la **frase de apertura** de su página en el PDF
-  (índice → página del libro + `--offset` = página PDF). Determinista. `--apply` inserta
-  los `#` y borra los encabezados espurios → luego `split_chapters.py --by-heading 1`.
+
 - **VERIFICA los límites de sección/Libro contra el PDF antes de dar el troceo por
   bueno.** Los números de página de un `plan.json` armado a ojo pueden estar MUY mal
   (medido: 25-32 páginas de desfase en los Libros I-IV de Persian Nativities IV, con
@@ -615,6 +408,7 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   robusto en el texto OCR: el preámbulo de apertura del Libro (p. ej. «…is in N
   chapters») y el primer capítulo real («Chapter N.1») en página >front-matter. Un
   archivo que contiene capítulos de OTRO Libro (numeración que salta) es la señal.
+
 - **Límite honesto del escaneo MUY degradado:** cuando el OCR pierde los
   **delimitadores estructurales** (superíndices de nota, saltos de línea, tamaños de
   fuente), encabezados + notas + cuerpo quedan fundidos SIN frontera fiable. Un reflow
@@ -623,47 +417,36 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   los encabezados NO es automatizable**: eso pide corrección manual contra la imagen.
   No lo vendas como perfecto.
 
-> **Orden del flujo (importante):** en un escaneo con notas, hazlo
 > **convertir → RECONSTRUIR NOTAS → traducir → PDF**. Si traduces antes, hay que rehacer
 > el aparato en los dos idiomas a la vez. Comprueba SIEMPRE `grep -c "\[\^" markdown/*.md`
 > antes de lanzar traducciones: sin `[^N]`, las citas se imprimen como párrafos sueltos
 > en mitad del texto.
 
-> **Nombres de archivo en Unicode DESCOMPUESTO (NFD):** «Öner Döser» puede estar en disco
-> como `O`+U+0308. `pdfinfo`/`pdftotext` fallan aunque `ls` lo muestre bien, y **copiar la
-> ruta de `ls` tampoco sirve**. Resuélvelo SIEMPRE por glob: `F=$(ls *Financial*.pdf | head -1)`.
-> Afecta también al `.md` que genera `docling_incremental.py`.
+### 3d. VERIFICACIÓN de completitud (obligatorio antes de traducir o publicar)
 
-### 3d. VERIFICACIÓN de completitud (obligatorio antes de traducir/publicar)
-Los bisturíes pueden **perder texto sin avisar** (años, cláusulas) según el layout;
-es invisible salvo que se mida. NO des una conversión por buena hasta verificar:
-- `check_completeness.py cap.pdf cap.md [--pages A-B] [--repair]` — alinea el
-  markdown contra `pdftotext -layout` y lista/repara el texto perdido. También
-  como bandera del conversor: `pdf_chapters_to_markdown.py plan.json --verify`.
-- **Auditoría de un LIBRO entero (escaneo OCR-eado y troceado):**
-  `audit_conversion.py spec.json --out INFORME.md --sample 40 --render-dir ./pngs`.
-  Un informe por libro con 4 capas, separando lo **demostrable** de lo **estimable**:
-  [A] completitud determinista (ratio md/PDF por sección, lagunas, **balance de
-  notas `[^N]`**: refs↔defs, cero huérfanas), [B] ruido OCR por diccionario (cota
-  superior, aísla *garbage*), [C] renderiza N páginas para leerlas **contra la
-  imagen** (única capa que ancla la verdad del OCR), [D] contraste con un 2º motor
-  (tesseract sistema vs best) para señalar dónde MIRAR. **Nota clave aprendida:** el
-  contraste debe OCR-ear ambos motores por `tesseract stdout` al MISMO dpi; comparar
-  la capa `-layout` del PDF contra `tesseract stdout` mide orden de lectura, no
-  errores, e infla el %. La discrepancia se concentra siempre en índice/bibliografía
-  a 2 columnas (límite conocido), no en la prosa.
-- Corrupción OUP/Distiller (ligaduras y diacríticos, parecen erratas pero son
-  texto roto): `fix_ligatures.py` (fi→W… con guarda de diccionario y protección de
-  nombres propios CamelCase), `fix_diacritics.py` (ı/€/acentos + NFC),
-  `clean_openings.py` (portadillas/capitulares). Todo de una vez con
-  `limpiar_academico.py ./markdown` (`--no-openings` para notas/índice).
-- Back-matter a 2 columnas roto por el bisturí → Docling + `docling_clean.py`.
+Los bisturíes pueden **perder texto sin avisar** según el layout, y es invisible salvo que
+se mida. No des una conversión por buena hasta verificar:
+
+- `check_completeness.py cap.pdf cap.md` — alinea contra `pdftotext -layout` y lista o
+  repara lo perdido. También como bandera: `pdf_chapters_to_markdown.py plan.json --verify`.
+- `audit_conversion.py spec.json --out INFORME.md` — auditoría de un LIBRO entero en 4
+  capas, separando lo demostrable de lo estimable.
+- `auditar_biblioteca.py` — pasa por TODOS los libros ya convertidos y dice cuáles tienen
+  defectos detectables sin abrir el original. Responde a «¿cuántos más estarán mal?»,
+  que es una pregunta que ninguna auditoría por libro contesta.
+- `limpiar_academico.py ./markdown` — corrupción OUP/Distiller (ligaduras y diacríticos que
+  parecen erratas pero son texto roto).
+- Skills: **`/qa-conversion`** antes de traducir, **`/qa-traduccion`** después.
+
+**Leer el ratio es criterio humano, y estas tres lecturas hay que saberlas:**
+
 - **El ratio global md/PDF ENGAÑA si el libro tiene figuras.** En libros con cartas o
   diagramas, `pdftotext` extrae las etiquetas del gráfico como basura (`02' 05 21* Q 48'`)
   que Docling —con razón— descarta al recortar la figura. Eso baja el ratio sin que falte
   prosa (p. ej. 0.961 global). **Mide en un tramo SIN figuras** (glosario, un capítulo de
   prosa densa): si ahí sale ~0.98-0.99, no hay pérdida. Un ratio bajo en un tramo de prosa
   pura sí es alarma real.
+
 - **El ratio se DERRUMBA (0.6-0.8) en libros BILINGÜES con notas en otro alfabeto**
   (p. ej. ediciones de Dykes con el árabe original al pie): tesseract con modelo
   inglés convierte ese árabe en torrentes de basura que `pdftotext` sí extrae pero el
@@ -676,172 +459,35 @@ es invisible salvo que se mida. NO des una conversión por buena hasta verificar
   páginas de cuerpo de capítulos distintos leídas contra la imagen. Las **tablas y
   cartas** OCR-eadas se CONSERVAN (son contenido real, no se borran), pero son
   aproximadas: la imagen/PDF buscable es la fuente autoritativa de sus cifras.
+
 - **PDF buscable de tesseract enorme (GB):** la salida cruda embebe las imágenes a
   300 dpi RGB sin comprimir (2 GB para ~700 pp). Recomprime antes de entregar:
   `gs -sDEVICE=pdfwrite -dPDFSETTINGS=/ebook -dColorImageResolution=150
   -dGrayImageResolution=150 -dNOPAUSE -dBATCH x.pdf` → ~65 MB, conserva la capa de
   texto (verifícalo con `pdftotext` en 1 página). Córrelo bajo `systemd-run --user
   -p MemoryMax=4G` (el input de 2 GB es pesado).
-- Skills de QA: **`/qa-conversion`** (markdown vs PDF) antes de traducir;
-  **`/qa-traduccion`** (incluye detección de truncamiento por ratio de palabras)
-  después.
-
-### 3b. Elegir bisturí PDF
-| Situación | Script |
-|---|---|
-| **Cursiva significativa** o **2 columnas paralelas** original/traducción | `pdf_rich_to_markdown.py` (ver recuadro arriba) |
-| **PDF de Acrobat ClearScan** (`pdfinfo` dice «Paper Capture … ClearScan») | `clearscan_to_markdown.py` (ver recuadro abajo) |
-| **PDF digital cuya capa de texto está INCOMPLETA**: se pierden las llamadas de nota, los puntos suscritos o los dígitos | `pdfxml_to_markdown.py` (ver recuadro abajo) |
-| Carpeta de **un PDF por capítulo**, notas a pie | `pdf_chapters_to_markdown.py plan.json` |
-| **Un PDF digital limpio** (Calibre, con outline) | `detect_chapters.py` → `plan.json` → `pdf_sections_to_markdown.py plan.json` |
-| Libro **escaneado ya OCR-eado** con citas Harvard | `pdf_book_to_markdown.py` |
-| `pdftotext` **no extrae nada** pero tienes sidecar `.txt` de OCR | `ocr_text_to_markdown.py` |
-| Solo **partir** el PDF en PDFs por capítulo | `detect_chapters.py` → `plan.json` → `split_pdf.py` |
-
-> **PDF hecho con Acrobat ClearScan** → `clearscan_to_markdown.py`, NO `pdftotext` ni
-> Docling. ClearScan no deja el OCR como capa invisible: **sustituye el texto por fuentes
-> sintéticas** (`Fd<n>-Identity-H`), una por «racimo de formas». El texto se extrae bien,
-> pero **la cursiva se pierde EN SILENCIO**, y en una edición académica es información
-> (términos, transliteraciones, títulos, y a veces los propios subapartados). Ninguna vía
-> normal la ve: `pdffonts` no da ningún nombre con «italic», `pdftohtml -xml` emite **0**
-> marcas `<i>`, y el `/FontDescriptor` **miente** (`ItalicAngle` 0 y `Flags` idéntico en
-> las 384 fuentes). Lo que sí es verdad son los CONTORNOS: el script mide la inclinación
-> real de cada fuente embebida y decide redonda vs. cursiva. Medido en *The Search of the
-> Heart* (Dykes, 239 pp): bimodal limpio —92.8 % redonda, 4.9 % cursiva, 2.3 % zona gris
-> que resultaron ser los titulillos en versalita cursiva—, validado contra la imagen.
-> Detección: `pdfinfo` → `Producer: … Paper Capture … ClearScan`.
->
-> **Dos trampas medidas al escribirlo:** (1) los `fontspec` de `pdftohtml -xml` son
-> GLOBALES y se declaran donde aparecen por primera vez —un mapa por página deja el 40 %
-> del texto sin estilo—; (2) para rehacer párrafos hay que usar la sangría **relativa a la
-> línea siguiente**, no la absoluta: los párrafos en BLOQUE (citas, párrafos numerados
-> `[3]`) tienen todas sus líneas metidas y con un umbral absoluto se parten una a una.
-
-> **LA APERTURA DE CAPÍTULO NO LLEVA TITULILLO: esa es la señal.** Al fijar los límites
-> de troceo es fácil tomar por arranque una página INTERIOR cuyo titulillo diga
-> «152 CHAPTER FOUR» —el número es el de esa página, no el del comienzo—. La apertura
-> real trae el rótulo SOLO, sin cifra. Buscando `^(CHAPTER \w+|APPENDIX \w+|BIBLIOGRAPHY)$`
-> como primera línea salen todos los límites de una vez y verificados. Medido en Lehrich:
-> el cap. 4 empieza en la p. 161, no en la 166, y el error se delató por las
-> **definiciones 1-6 DUPLICADAS** en el capítulo anterior (el segundo juego era del
-> capítulo siguiente). Un aparato con la secuencia ROTA es la señal de que el límite
-> está mal, mucho antes que cualquier ratio.
-
-> **CIFRAS DEL CUERPO TOMADAS POR LLAMADAS DE NOTA.** `--footnotes` separa el pie por
-> CUERPO DE LETRA, así que cualquier cifra compuesta en otro tamaño se convierte en un
-> `[^N]` falso: las de un **cuadrado mágico**, las páginas de una **referencia
-> bibliográfica** («*Opera*, 2:1089-1101»). Medido en Lehrich: el cap. 3 —el de los
-> cuadrados mágicos— tiene 89 notas y salían llamadas hasta la **947**, y la bibliografía
-> daba 73 llamadas con CERO definiciones. **La regla que lo ataja es la CADENA
-> ASCENDENTE**: las llamadas van en orden y **nunca retroceden**, así que un número que
-> va hacia atrás —o que no tiene definición— es una cifra del cuerpo y se devuelve a
-> texto plano (era contenido; no se borra). **Pero la cadena sí puede SALTAR**: exigir
-> que avance de uno en uno rompe el capítulo entero al primer hueco —medido en Lehrich,
-> la nota 25 no tiene llamada en el original y esa regla estricta invalidó 120 llamadas
-> buenas en cascada—. Y en las secciones que NO tienen notas —bibliografía, apéndices—
-> sencillamente no uses `--footnotes`.
-
-> **MAQUETA SIN RENGLÓN EN BLANCO ENTRE PÁRRAFOS** (composición erudita: Brill y
-> similares solo sangran la primera línea) → `pdf_rich_to_markdown.py --indent-paragraphs`.
-> Sin ella el capítulo sale como UN párrafo gigante —el bisturí solo parte por salto
-> vertical— y, peor, **las citas en bloque quedan sepultadas dentro y `pdf_blocks.py` ya
-> no puede recuperarlas**. La sangría se mide **relativa a la línea SIGUIENTE, no en
-> absoluto**: en una cita en bloque TODAS las líneas van metidas y un umbral absoluto la
-> partiría renglón a renglón. Medido en Lehrich: 25 párrafos → 52, mismas palabras.
-> **Y el ORDEN de la receta importa:** bisturí → promover el título de capítulo →
-> `pdf_blocks` → quitar titulillos. Si se quitan los titulillos antes, el emparejamiento
-> contra el PDF falla; si no se promueve el título antes, el epígrafe se detecta como
-> cita y **se traga el encabezado del capítulo**.
-
-> **PDF DIGITAL con la capa de texto INCOMPLETA** (nativo, `pdftotext` da prosa legible,
-> pero faltan cosas que NADIE ve) → `pdfxml_to_markdown.py`. Medido en Attrell & Porreca,
-> *Picatrix* (Penn State, 2019). Tres pérdidas simultáneas y todas silenciosas:
-> (1) **las llamadas de nota desaparecen** —los volados van en una fuente sin `ToUnicode`
-> y se extraen como cadena vacía o PUA: en el texto solo queda un doble espacio, y el
-> aparato entero (95 notas) se evapora sin que el ratio ni el balance lo delaten—;
-> (2) **el punto suscrito de las transliteraciones** se compone con una fuente aparte
-> (`…DotUnder…`), así que `al-Qurṭubī` sale `al-Qurtubī` —una errata invisible—; y
-> (3) **los dígitos elzevirianos** (tablas, cifras) son glifos PUA que ni `pdftotext` ni
-> `mutool` extraen: la tabla conserva los rótulos y PIERDE los números.
-> **Cómo se resuelve:** `pdftohtml -xml` da posición + familia + tamaño por palabra en
-> 0,4 s (pdfminer tarda MINUTOS por página con fuentes Type 3). La familia dice qué lleva
-> punto suscrito; el volado se reconoce por la **LÍNEA BASE ALZADA** —no por el tamaño,
-> porque los dígitos elzevirianos también son bajos (260 glifos pequeños frente a 77
-> volados reales)— y se CUENTA, como en un escaneo. Los glifos PUA de los dígitos se
-> deducen comparando UNA tabla con su imagen y se pasan con `--charmap "U+F63A=2,…"`;
-> entonces la llamada además se puede LEER, lo que da un **cotejo de dos señales
-> independientes** (contada vs. impresa) que destapa cualquier desfase.
-> **Trampas medidas:** los `<fontspec>` son GLOBALES (declararlos por página deja 33 de 34
-> sin estilo); un volado de dos cifras son DOS glifos contiguos (sin agrupar, sales al
-> doble de notas); `pdftohtml` no emite token de espacio entre palabras —el espacio se
-> deduce del HUECO, y sin eso al cerrar una cursiva las palabras se pegan
-> (`*Picatrix*stand`)—; y el aparato de final de libro reinicia en «1.», así que si no
-> cortas ahí las notas de la sección siguiente se cuelan dentro de la última definición.
-> **Límite honesto:** las tablas SIMPLES salen bien (`--tables`), las de encabezado
-> apilado quedan aproximadas; y cada fuente de versalitas tiene SU propio mapeo corrupto,
-> así que un `--charmap` global de una sola letra puede estropear otra fuente: mapea
-> cadenas enteras (`Å±ÆÁÂ=TABLE`) y verifica contra la imagen.
->
-> **PDF HECHO CON CALIBRE DESDE UN EPUB: la llamada de nota se LEE, no se cuenta.** Es el
-> mismo bisturí, pero la señal es otra y confundirlas sale caro. Aquí el volado no es un
-> glifo mudo: es el número ENTERO y legible dentro de un `<a href>` que apunta al aparato
-> del final, en cuerpo menor y en azul (`size 17` sobre 23, `#0000ee`). `pdftotext` lo tira
-> igual —el aparato entero desaparece sin que nada avise—, pero **contar es peor que leer**:
-> si el original deja algún número sin anclar, el conteo se desfasa desde ese hueco y todas
-> las etiquetas siguientes apuntan a OTRA nota. Medido en *Physicians of the Heart* (530 pp):
-> 310 llamadas legibles sobre la serie 1..311, con la **32** ausente del cuerpo. El
-> discriminante para no tomar un exponente por llamada es el ENLACE, no solo el tamaño.
-> **Y el control gratis es la contigüidad:** convertido capítulo a capítulo, los rangos deben
-> encajar sin solapes ni saltos (1-2, 3, 4-19, 20-39…); si encajan, el aparato está entero.
-> **Cuatro artefactos más de esta maqueta, todos invisibles en el markdown:** la CAPITULAR
-> queda suelta (`*B*` y luego «ecause…», a veces en bloque aparte y a veces en la misma
-> línea); la CURSIVA sale partida en dos tramos (`*siraat-ul* *mustaqeem*`) y al fusionarla
-> no va espacio si el corte cayó en un guion (`*Al-* *hamdu*` = «Al-hamdu»); el ENCABEZADO
-> viene íntegro en cursiva; y el punto suscrito se emite como glifo aparte, con lo que el
-> hueco entre cajas mete un espacio ANTES de la marca combinante (`rah ̣-MAAN` por
-> `raḥ-MAAN`, 191 casos) — y un espacio nunca precede legítimamente a una combinante.
-> **Dos banderas nuevas para las secciones que no son prosa:** `--cell-gap` (el umbral de
-> columna era fijo en 0,06 del ancho y fundía en silencio una columna estrecha con su
-> vecina: un hueco real de 52 pt en página de 918 pide 0,05) y `--keep-lines`, para el
-> índice analítico y demás LISTAS, donde cada entrada ocupa un renglón sin sangría que la
-> distinga y el cosido por párrafos las deja en un párrafo corrido de cientos de entradas.
-
-`detect_chapters.py` lista páginas candidatas (no escribe el plan); con eso
-**redactas el `plan.json`** y corres el conversor con `--dry-run` primero.
-
-**Sondas de tipografía** (no convierten; te dicen qué hay antes de elegir):
-`pdf_headings.py x.pdf` lista los tamaños de fuente y qué líneas serían encabezado;
-`pdf_blocks.py x.pdf` vuelca los bloques con su fuente/tamaño/posición. Úsalas cuando
-dudes de si un título es título o de dónde está el corte de columna.
 
 ### EPUB
+
 ```bash
-python3 $T/build_plan.py "libro.epub" > plan.json   # spine + TOC (genérico)
+python3 $T/build_plan.py "libro.epub" > plan.json   # spine + TOC
 python3 $T/epub_to_markdown.py plan.json --dry-run && python3 $T/epub_to_markdown.py plan.json
 ```
-> **Pool de notas al final del libro → `footnotes_redistribute.py libro.md --apply`
-> ANTES de trocear.** Si las definiciones `[^N]:` viven todas juntas al final, al
-> partir por capítulos se van ENTERAS al último archivo y los demás quedan con las
-> llamadas huérfanas. Las reparte al capítulo donde está su primera llamada; las que
-> no tengan llamada se conservan y se reportan, nunca se borran.
-EPUB muy ilustrado → `epub_illustrated_to_markdown.py`.
 
-> **EPUB DE CALIBRE/KINDLE: LA CURSIVA SE PIERDE ENTERA Y EN SILENCIO.** Estos EPUB
-> **casi nunca usan `<i>`/`<em>`**: el énfasis va en una CLASE
-> (`<span class="italic">`, o una opaca `<span class="calibre12">` cuya regla es
-> `font-style: italic`). Un conversor que solo mire etiquetas saca el texto entero
-> —el ratio da 0.99 y el balance de notas cuadra— con **cero cursivas**, y en una
-> edición académica la cursiva ES información: títulos de obra, transliteraciones,
-> tecnicismos. La señal está en el CSS del propio libro, así que `epub_to_markdown.py`
-> lo lee (`styles_from_css`) y deriva qué clases son cursiva/negrita: general, no una
-> lista de nombres por libro. **Compruébalo en un segundo:**
-> `unzip -p x.epub '*.css' | grep -c font-style` frente a
-> `grep -c '<i>\|<em>' *.html`. Medido en *Astral High Magic* (Warnock): 94 `<span
-> class="italic">` y **0** `<i>`; con el arreglo, 157 cursivas recuperadas.
+- **Pool de notas al final → `footnotes_redistribute.py libro.md --apply` ANTES de
+  trocear.** Si no, al partir por capítulos las definiciones se van enteras al último
+  archivo y los demás quedan con llamadas huérfanas, que pandoc descarta en silencio.
+- Muy ilustrado → `epub_illustrated_to_markdown.py`.
+- La cursiva de los EPUB de Calibre va en una CLASE CSS y no en `<i>`: está resuelto en
+  `epub_to_markdown.py` y explicado en su docstring.
+
+**Lecciones de maquetas concretas que aún no son código:**
+
 > **Dos trampas:** las marcas van FUERA del espacio (`*De Imaginibus *ahora` no lo
 > renderiza pandoc), y un selector DESCENDIENTE (`.a .b`) no debe aportar clases o
 > sobre-aplica.
 >
+
 > **Pool de notas PLANO (todas dentro de UN `<p>`, separadas por `<br/>`):**
 > `footnote_format: "by_a_id_split"`. Los parsers por párrafo no ven ninguna nota
 > aquí, porque no hay un elemento por nota: **la frontera es el ancla vacía**
@@ -849,6 +495,7 @@ EPUB muy ilustrado → `epub_illustrated_to_markdown.py`.
 > del final se quita con sus corchetes. (Los otros dos formatos —`by_a_id_any` para
 > un `<p>` por nota, `by_p_id`— siguen igual.)
 >
+
 > **Otros tres defectos medidos en el mismo libro, todos invisibles en el markdown:**
 > (1) el título del capítulo sale DOS veces, porque el libro lo maqueta como `<p>` en
 > negrita y la deduplicación solo miraba `<h1>`-`<h6>` → ahora se suprime todo párrafo
@@ -861,6 +508,7 @@ EPUB muy ilustrado → `epub_illustrated_to_markdown.py`.
 > `--images imagenes --image-skip calibre_cover.jpg`: copia solo las que el markdown
 > referencia de verdad.
 >
+
 > **Subtítulos maquetados como `<p>` en negrita** (aquí «Version I:», «Version J:»,
 > «Agrippa Bk II», «Commentary on Chapter N»): promuévelos con la clave de plan
 > `"heading_paragraphs": {"clase": 2}` — el conocimiento del libro va en el PLAN, no en
@@ -868,6 +516,7 @@ EPUB muy ilustrado → `epub_illustrated_to_markdown.py`.
 > título, así que hay que quitar todas las negritas del encabezado (las cursivas no:
 > en un título son significativas).
 >
+
 > **EPUB DE EDITORIAL (InDesign/Inner Traditions), cuatro trampas más.** Medido en
 > *Three Books of Occult Philosophy* (Agripa, trad. Eric Purdue): 214 capítulos,
 > 3.026 notas, 194 imágenes.
@@ -884,10 +533,12 @@ EPUB muy ilustrado → `epub_illustrated_to_markdown.py`.
 > (4) El **título del capítulo viene PARTIDO en dos párrafos** (`chn` = «Chapter 1»,
 > `cht` = el título) y el plan los une en el H1, así que cada trozo se imprimía otra
 > vez debajo del encabezado.
+
 > **Y la guarda que faltaba desde siempre:** la deduplicación por título EXACTO no
 > miraba la POSICIÓN, así que un párrafo del cuerpo que coincidiera con el título se
 > borraba en silencio a mitad de capítulo. Eso es pérdida de texto, no deduplicación.
 >
+
 > **Verificar la conversión de un EPUB es fácil y hay que hacerlo:** el texto fuente se
 > saca con BeautifulSoup y se compara token a token con el markdown. El déficit debe
 > quedar EXPLICADO, no solo ser pequeño: en *Astral High Magic*, 195 tokens = 68
