@@ -304,6 +304,24 @@ Tras convertir, dejar el markdown listo para leer/traducir.
   `--number-only` (volado solo en su renglón). Es LIBRERÍA (`from footnote_chain import
   process_page`) — la importa el bisturí, que conoce la maqueta; el CLI procesa un bloque
   suelto. (Medido en la Abbreviation de Abū Maʿshar, notas 1-112, y las Flowers, 1-308.)
+- **VOLADOS APLANADOS por un reprocesador (Nitro Pro y similares): parece imposible y casi
+  siempre se puede.** El dígito de la llamada queda con la MISMA línea base y casi el mismo
+  cuerpo que el texto (Δy = 0,00), así que la detección por geometría se cae — pero **el
+  dígito sigue en el texto**, pegado sin espacio al carácter anterior.
+  `aparato_volados_aplanados.py ./markdown --notas 50_Notes.md --cuerpo 07-49 [--apply]`.
+  **Cuatro guardas, todas medidas en al-Tilimsānī (LAL/NYU), donde un primer intento ancló 13
+  de 544 y dio el caso por imposible; con ellas salen 590 de 591:** (1) **enmascarar ANTES las
+  otras series de números** —aquí la numeración de párrafo al margen estilo LAL (`**131.3**`),
+  que se entrelaza con la de las notas y era la causa REAL de que la cadena se rompiera, no
+  «las muchas cifras de la prosa»—, con relleno de la MISMA longitud para no invalidar los
+  offsets; (2) **la cadena tiene que poder SALTAR huecos** (aquí se partía tras la 25, igual
+  que en Lehrich); (3) **el regex NO puede ser ASCII**, o la transliteración árabe deja fuera
+  la llamada (`al-Baghawī26`); (4) **el asterisco cuenta como carácter anterior**, o se pierden
+  las que siguen a un cierre de cursiva (`.”*397`).
+  **Y AUDITA EL APARATO ANTES DE ENLAZAR** (`--auditar`): el mismo libro traía el bloque
+  truncado sin que nada lo delatara —1..544 seguidas y sin huecos, mientras el PDF llegaba a la
+  591, con las 47 restantes glutinadas dentro de la «entrada 544», de 375 palabras frente a una
+  mediana de 5—. La señal es comparar el número más alto del aparato con el más alto del cuerpo.
 - **PDF DIGITAL cuyos dígitos se pierden al extraer** (cursos y manuales con fuentes
   de símbolos: el párrafo se lee bien pero `Arc of Direction = RA °'"` ha quedado sin
   cifras). **Ningún control de §3d lo ve**: ni el ratio, ni el balance de notas, ni el
@@ -1143,6 +1161,27 @@ un PDF entero como sección.
    **Y verifica las TABLAS**: si el motor funde dos columnas o se come un renglón, el
    ratio apenas se mueve y el balance de notas ni se entera. En un libro cuyas tablas son
    el CONTENIDO —las Escalas de los números de Agripa— eso es pérdida grave e invisible.
+
+5d. **CUOTA AGOTADA A MEDIO LIBRO → `traducir_cascada.py`.** `agy` no es un modelo, es una
+   PASARELA multi-modelo (Gemini Pro/Flash, Claude Sonnet y Opus, GPT-OSS), y cada uno tiene
+   su cuota. Cuando el motor en uso se queda sin ella a mitad de un libro, la traducción se
+   para y hay que estar delante para relanzarla con otro `--model`. Esto los encadena y sigue
+   sin perder nada, porque el estado de `traducir_libro.py` se escribe tras cada archivo:
+   `traducir_cascada.py markdown --out es --glosario g.md --prompt P.txt --parallel 2`.
+   El orden por defecto es **calidad descendente, no capacidad**: que lo primero en agotarse
+   sea lo mejor, para que el grueso salga con el mejor motor y solo la cola caiga en los flojos.
+   **Lo que hacía falta para que esto funcione:** `agy()` devolvía sólo `stdout` y tiraba el
+   código de salida y el `stderr`, así que **una cuota agotada llegaba como cadena VACÍA,
+   indistinguible de un trozo mal traducido** — el trozo se reintentaba, se partía en dos,
+   volvía a fallar, y el libro entero se habría marcado «en fallo» archivo a archivo sin que
+   nadie supiera que bastaba con cambiar de modelo. Ahora se distingue (`MotorAgotado`, código
+   **86**), con un reintento previo para que un blip transitorio no tumbe un modelo entero, y
+   **no se escribe el `.md`** al agotarse: media traducción en disco es peor que ninguna,
+   porque el archivo existiría y parecería hecho.
+   `--solo a.md b.md` procesa archivos concretos EN ESE ORDEN, para gastar la cuota escasa de
+   un motor bueno en los capítulos que más la necesitan y no en los que caigan primero por
+   orden alfabético. **Medido:** los seis modelos agotados el mismo día, todos con reinicio a
+   ~167 h, así que cuenta con que la cascada entera se te acabe y planifica el resto.
 
 6. **RITMO por el límite de sesión:** los agentes que leen imágenes consumen mucho → lanza
    **2 a la vez**, espera, y sigue. **Cada tramo terminado se guarda en disco**, así que una

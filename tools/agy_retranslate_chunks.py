@@ -30,17 +30,52 @@ import argparse
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 REF = re.compile(r"\[\^(\d+)\](?!:)")
 DEFLINE = re.compile(r"^\[\^(\d+)\]:", re.M)
 
 
-def agy(prompt: str, workdir: Path, model: str, binpath: str) -> str:
-    r = subprocess.run([binpath, "-p", prompt, "--model", model,
-                        "--add-dir", str(workdir), "--dangerously-skip-permissions"],
-                       capture_output=True, text=True)
-    return r.stdout.strip()
+EXIT_AGOTADO = 86          # el motor no puede responder; el que llama debe cambiar de modelo
+
+AGOTADO = re.compile(
+    r"quota|rate.?limit|429|resource.?exhaust|exhausted|too many requests|"
+    r"insufficient|credit|billing|unauthor|forbidden|403|limit reached|overloaded",
+    re.I)
+
+
+class MotorAgotado(RuntimeError):
+    """El motor no puede responder (cuota, límite de tasa, autorización).
+
+    Hay que distinguirlo de «ha traducido mal»: antes, `agy()` devolvía
+    `r.stdout` y tiraba el código de salida y el `stderr`, así que una cuota
+    agotada llegaba como cadena VACÍA — idéntica a un trozo mal traducido—. El
+    trozo se reintentaba, se partía en dos, volvía a fallar, y el libro entero
+    se marcaba «en fallo» archivo a archivo sin que nadie supiera que lo único
+    que hacía falta era cambiar de modelo.
+    """
+
+
+def agy(prompt: str, workdir: Path, model: str, binpath: str,
+        intentos: int = 2, espera: int = 20) -> str:
+    ultimo = ""
+    for i in range(intentos):
+        r = subprocess.run([binpath, "-p", prompt, "--model", model,
+                            "--add-dir", str(workdir), "--dangerously-skip-permissions"],
+                           capture_output=True, text=True)
+        out = r.stdout.strip()
+        if out:
+            return out
+        err = (r.stderr or "").strip()
+        ultimo = f"código {r.returncode}: {err[:300] or 'sin stderr'}"
+        # Salida vacía PERO el proceso terminó bien y sin señal de cuota: es
+        # cosa del trozo, no del motor. Que lo trate el verificador de siempre.
+        if r.returncode == 0 and not AGOTADO.search(err):
+            return ""
+        if i + 1 < intentos:
+            time.sleep(espera)   # un blip transitorio no debe tumbar un modelo entero
+    raise MotorAgotado(f"[{model}] {ultimo}")
 
 
 def split_body_defs(md: str) -> tuple[str, list[str]]:
@@ -120,18 +155,24 @@ def main() -> int:
     print(f"[retraducción] {args.src.name}: {len(groups)} trozos de cuerpo + "
           f"{len(defs)} definiciones", file=sys.stderr)
 
-    out_parts = []
-    for i, g in enumerate(groups, 1):
-        es = translate_verified("\n\n".join(g), base_prompt, args.glosario.name,
-                                args.workdir, args.model, args.agy_bin)
-        out_parts.append(es)
-        print(f"  trozo {i}/{len(groups)} ok", file=sys.stderr)
+    try:
+        out_parts = []
+        for i, g in enumerate(groups, 1):
+            es = translate_verified("\n\n".join(g), base_prompt, args.glosario.name,
+                                    args.workdir, args.model, args.agy_bin)
+            out_parts.append(es)
+            print(f"  trozo {i}/{len(groups)} ok", file=sys.stderr)
 
-    defs_es = []
-    for grp in chunk(defs, 400):
-        es = translate_verified("\n".join(grp), base_prompt, args.glosario.name,
-                                args.workdir, args.model, args.agy_bin)
-        defs_es.append(es)
+        defs_es = []
+        for grp in chunk(defs, 400):
+            es = translate_verified("\n".join(grp), base_prompt, args.glosario.name,
+                                    args.workdir, args.model, args.agy_bin)
+            defs_es.append(es)
+    except MotorAgotado as e:
+        # NO se escribe el .md: media traducción en disco es peor que ninguna,
+        # porque el archivo existiría y parecería hecho.
+        print(f"MOTOR_AGOTADO {e}", file=sys.stderr)
+        return EXIT_AGOTADO
 
     out = "\n\n".join(out_parts).strip() + "\n\n" + "\n".join(defs_es).strip() + "\n"
     args.out.parent.mkdir(parents=True, exist_ok=True)

@@ -77,6 +77,7 @@
 - `agy_retranslate_chunks.py` — retraduce un markdown VERIFICANDO CADA TROZO.
 - `agy_transcribe.py` — Orquesta la TRANSCRIPCIÓN VISUAL de un rango de páginas de un
 - `agy_translate.py` — Traduce un markdown de capítulo/Book a otro idioma con agy/Gemini,
+- `aparato_volados_aplanados.py` — enlaza un aparato cuyos VOLADOS están APLANADOS.
 - `auditar_biblioteca.py` ⚠ — pasa por TODOS los libros ya convertidos y dice cuáles
 - `check_scan_margins.py` — Control de calidad del partido de un escaneo 2-up: avisa
 - `citas_en_bloque.py` — convierte en `>` los párrafos que son una CITA ENTERA, y
@@ -97,5 +98,6 @@
 - `quita_titulillos_fundidos.py` — borra los titulillos de página que el OCR PEGÓ al cuerpo.
 - `reflow_columns.py` — Recompone la prosa que un bisturí partió al mal-leer una maqueta
 - `rescata_capitulos.py` — devuelve al CUERPO los capítulos que acabaron dentro del aparato.
+- `traducir_cascada.py` — traduce un libro AGOTANDO un motor y pasando al siguiente.
 - `traducir_libro.py` — traduce un libro entero POR FASES, reanudable y verificado.
 

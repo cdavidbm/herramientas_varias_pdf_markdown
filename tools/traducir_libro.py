@@ -46,6 +46,9 @@ IMG = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 
 TOOL = Path(__file__).resolve().parent / "agy_retranslate_chunks.py"
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from agy_retranslate_chunks import EXIT_AGOTADO, MotorAgotado  # noqa: E402
+
 
 def cuerpo(t: str) -> str:
     """Texto sin las definiciones de nota (para el ratio de prosa)."""
@@ -264,6 +267,12 @@ def traducir_uno(src: Path, dst: Path, glosario: Path, prompt: Path,
         cmd += ["--model", model]
     t0 = time.time()
     p = subprocess.run(cmd, capture_output=True, text=True)
+    if p.returncode == EXIT_AGOTADO:
+        # El motor no puede responder. NO es un fallo del archivo: marcarlo como
+        # tal lo sacaría de la cola y se perdería sin traducir. Se avisa hacia
+        # arriba para que el que llama cambie de modelo y lo reintente igual.
+        raise MotorAgotado((p.stderr or "").strip().splitlines()[-1]
+                           if (p.stderr or "").strip() else f"[{model or 'por defecto'}]")
     en = src.read_text(encoding="utf-8")
     es = dst.read_text(encoding="utf-8") if dst.is_file() else ""
     fallos = verificar(en, es)
@@ -287,6 +296,11 @@ def main() -> int:
     ap.add_argument("--workdir", type=Path, default=Path("/tmp/_forja_work"))
     ap.add_argument("--estado", type=Path, default=None,
                     help="JSON de estado (por defecto OUT/_estado_traduccion.json)")
+    ap.add_argument("--solo", nargs="+", default=[],
+                    help="procesar SOLO estos archivos, EN ESTE ORDEN. Sirve para gastar "
+                         "la cuota escasa de un motor bueno en los capítulos que más la "
+                         "necesitan, en vez de en los que caigan primero por orden "
+                         "alfabético.")
     ap.add_argument("--desde", default="", help="procesar desde este prefijo de nombre")
     ap.add_argument("--hasta", default="", help="… hasta este prefijo (incluido)")
     ap.add_argument("--max", type=int, default=0, help="traducir como mucho N archivos y parar")
@@ -304,6 +318,13 @@ def main() -> int:
     estado = json.loads(estado_p.read_text()) if estado_p.is_file() else {}
 
     todos = sorted(a.src_dir.glob("*.md"))
+    if a.solo:
+        porn = {f.name: f for f in todos}
+        faltan = [n for n in a.solo if n not in porn]
+        if faltan:
+            print(f"error: no existen en {a.src_dir}: {', '.join(faltan)}")
+            return 2
+        todos = [porn[n] for n in a.solo]      # respeta el ORDEN pedido
     if a.desde:
         todos = [f for f in todos if f.name >= a.desde]
     if a.hasta:
@@ -351,7 +372,9 @@ def main() -> int:
                             a.workdir, a.chunk_words, a.model)
 
     hechos_ahora = fallos_ahora = 0
+    agotado = ""
     with ThreadPoolExecutor(max_workers=max(1, a.parallel)) as ex:
+      try:
         for nombre, info in ex.map(tarea, pend):
             estado[nombre] = info
             # Se escribe tras CADA archivo: una sesión cortada pierde uno como mucho.
@@ -363,9 +386,16 @@ def main() -> int:
             else:
                 fallos_ahora += 1
                 print(f"  ✗ {nombre}  {info['fallos']}", flush=True)
+      except MotorAgotado as e:
+        agotado = str(e)
+        ex.shutdown(wait=False, cancel_futures=True)
 
     print(f"\nfase terminada: {hechos_ahora} bien, {fallos_ahora} en fallo. "
           f"Estado en {estado_p}")
+    if agotado:
+        print(f"MOTOR_AGOTADO {agotado}", flush=True)
+        print("Cambia de modelo con --model y relanza: lo pendiente sigue pendiente.")
+        return EXIT_AGOTADO
     print("Relanza el mismo comando para continuar; los ✓ no se repiten.")
     return 0
 
