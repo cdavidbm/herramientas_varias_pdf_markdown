@@ -130,3 +130,35 @@ class FolioAntesDelHueco(unittest.TestCase):
               line(3, 180, 100, 34, "y todavia mas texto para dar cuerpo")]
         _rh, cuerpo, _notas = og.split_page(page(*ls))
         self.assertEqual(len(cuerpo), 3, "no debe recortar nada")
+
+
+class FiltroDeBasuraUnicode(unittest.TestCase):
+    """El filtro de `join_notes` cuenta LETRAS, no minúsculas ASCII."""
+
+    def test_no_borra_una_nota_en_griego(self):
+        """Medido en Greenbaum: 550 bloques de griego borrados en un capítulo.
+
+        `[a-z]{3,}` no casa con ninguna escritura no latina, así que la línea
+        entera se descartaba como si fuera un filete. Y es la pérdida más cara
+        posible: el griego es lo que más cuesta recuperar —hizo falta un re-OCR
+        con `-l eng+grc`— y lo que nadie echa de menos leyendo el markdown.
+        """
+        notas = ["θεοῖς καὶ δαίμοσι μεμισημένον.",
+                 "τῶν ἄνωθεν αὐτῆς δεχομένη ἀστέρων καὶ διακονοῦσα."]
+        salida = " ".join(og.join_notes(notas, D=set()))
+        for pieza in ("δαίμοσι", "ἀστέρων"):
+            self.assertIn(pieza, salida, "se ha perdido griego")
+
+    def test_tampoco_borra_arabe_ni_hebreo(self):
+        salida = " ".join(og.join_notes(["الرحمن الرحيم الملك", "אלהים אחד ברוך"], D=set()))
+        for pieza in ("الرحيم", "אחד"):
+            self.assertIn(pieza, salida)
+
+    def test_sigue_borrando_los_filetes_y_la_basura_corta(self):
+        """La guarda no puede volverse permisiva: eso era lo que el filtro hacía bien."""
+        for basura in ("---", "***", "1", "~~", "|| ||"):
+            self.assertEqual(og.join_notes([basura], D=set()), [],
+                             "no debería conservar %r" % basura)
+
+    def test_conserva_una_nota_latina_normal(self):
+        self.assertEqual(len(og.join_notes(["1 Plutarch, De genio Socratis, 589."], D=set())), 1)

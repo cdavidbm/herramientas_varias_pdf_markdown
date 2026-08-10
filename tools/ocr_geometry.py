@@ -233,7 +233,14 @@ def join_notes(note_lines, D=None):
     out = []
     for l in note_lines:
         s = l.strip()
-        if len(s) <= 4 or not re.search(r"[a-z]{3,}", s):
+        # El filtro de basura tiene que contar LETRAS, no minúsculas ASCII. Con
+        # `[a-z]{3,}` se borra entera cualquier línea en una escritura no latina
+        # —griego, árabe, hebreo, cirílico—, que es justo lo que más cuesta
+        # recuperar y lo que nadie echa de menos al leer el markdown.
+        # Medido en Greenbaum, *The Daimon in Hellenistic Astrology*: 550 bloques
+        # de griego borrados SOLO en el capítulo 1, recién recuperados por un
+        # re-OCR con `-l eng+grc` hecho a propósito para conservarlos.
+        if len(s) <= 4 or not re.search(r"[^\W\d_]{3,}", s):
             continue
         if NOTE_MARK.match(s) or not out:
             out.append(s)
