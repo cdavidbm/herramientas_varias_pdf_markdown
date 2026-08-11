@@ -43,7 +43,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from forja.aparato import definiciones_truncadas, llamadas_en_hueco_numerico  # noqa: E402
 from forja.estructura import (  # noqa: E402
-    capitulos_con_deficit, encabezados_partidos, subtitulos_fundidos, titulos_en_minuscula,
+    capitulos_con_deficit, encabezados_partidos, notas_duplicadas_en_cuerpo,
+    subtitulos_fundidos, titulos_en_minuscula,
 )
 
 
@@ -85,6 +86,23 @@ def main() -> int:
             print(f"   {nombre[:34]:<34} {formato(h)}")
         if len(hallazgos) > a.max:
             print(f"   … y {len(hallazgos) - a.max} más")
+
+    dup = []
+    for f in ficheros:
+        t = f.read_text(encoding="utf-8")
+        cuerpo, _, aparato = t.partition("\n## Notas\n")
+        if not aparato:
+            cuerpo, _, aparato = t.partition("\n## Notes\n")
+        if aparato:
+            n = notas_duplicadas_en_cuerpo(cuerpo, aparato)
+            if n > 2:
+                dup.append((f.name, n))
+    if dup:
+        total += len(dup)
+        print("\n── NOTAS DUPLICADAS EN EL CUERPO (el balance cuadra igual): "
+              f"{len(dup)} archivo(s)")
+        for nombre, n in dup[:a.max]:
+            print(f"   {nombre[:40]:<40} {n} definición(es) también en la prosa")
 
     if a.es:
         pares = []

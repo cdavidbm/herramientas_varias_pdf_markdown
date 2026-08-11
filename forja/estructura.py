@@ -110,21 +110,59 @@ def subtitulos_fundidos(md: str) -> list[tuple[str, str]]:
     return out
 
 
-def capitulos_con_deficit(pares, minimo: float = 0.85) -> list[tuple[str, float]]:
-    """(nombre, ratio) de los capítulos cuya traducción se queda corta.
+def capitulos_con_deficit(pares, minimo: float = 0.85, maximo: float = 1.15):
+    """(nombre, ratio) de las secciones cuyo tamaño se sale del rango esperado.
 
-    `pares` es un iterable de `(nombre, texto_origen, texto_destino)`.
+    `pares` es un iterable de `(nombre, texto_esperado, texto_presente)`.
 
-    Existe porque **el ratio GLOBAL no ve una laguna de capítulo**: en Ficino el
-    del libro era 0,98 y el del capítulo perdido, 0,62. Medir por archivo es lo
-    único que la destapa.
+    Existe por dos razones distintas, y la segunda se aprendió tarde:
+
+    **Por defecto**, porque el ratio GLOBAL no ve una laguna de capítulo: en
+    Ficino el del libro era 0,98 y el del capítulo perdido, 0,62. Medir por
+    archivo es lo único que la destapa.
+
+    **Por EXCESO**, porque una comprobación de una sola dirección no es una
+    comprobación. La versión anterior solo avisaba de ratios bajos, y con eso
+    dio por buenas cuatro secciones de Greenbaum que tenían 1,53 · 1,31 · 1,38 ·
+    1,41 — es decir, hasta un 53 % de texto de MÁS, porque el aparato de notas
+    se había duplicado dentro del cuerpo. Sobrar texto es tan defecto como
+    faltar, y se ve igual de poco al leer.
     """
     out = []
-    for nombre, en, es in pares:
-        n = len(en.split())
-        if n < 200:            # un capítulo muy corto da ratios ruidosos
+    for nombre, esperado, presente in pares:
+        n = len(esperado.split())
+        if n < 200:            # una sección muy corta da ratios ruidosos
             continue
-        r = len(es.split()) / n
-        if r < minimo:
+        r = len(presente.split()) / n
+        if not minimo <= r <= maximo:
             out.append((nombre, round(r, 3)))
     return out
+
+
+def notas_duplicadas_en_cuerpo(cuerpo: str, aparato: str, minimo_palabras: int = 8,
+                               muestra: int = 150) -> int:
+    """Cuántas definiciones del aparato aparecen TAMBIÉN en el cuerpo.
+
+    Es el defecto que produce reponer un aparato perdido sin reconstruir el
+    cuerpo: la misma nota queda dos veces, una en su sitio y otra empotrada en
+    la prosa. No lo denuncia el balance de notas —las etiquetas cuadran—, ni el
+    recuento de palabras si solo se mira que no falte.
+
+    Medido en Greenbaum al reparar un truncamiento: 43 de 70 notas duplicadas en
+    el capítulo 1 y 102 de 200 en el capítulo 6, mientras los capítulos intactos
+    daban 0. Ese contraste es la señal: en un libro sano el número es cero, no
+    «bajo».
+    """
+    plano = re.sub(r"\s+", " ", cuerpo)
+    n = 0
+    for linea in aparato.split("\n"):
+        if len(linea.split()) < minimo_palabras:
+            continue
+        # se compara SIN el número de nota: en el cuerpo la frase aparece sin él
+        limpia = re.sub(r"^\s*(?:\[\^)?\d{1,3}\]?[.:)]?\s+", "", re.sub(r"\s+", " ", linea)).strip()
+        if len(limpia) >= 30 and limpia[:50] in plano:
+            n += 1
+        muestra -= 1
+        if muestra <= 0:
+            break
+    return n

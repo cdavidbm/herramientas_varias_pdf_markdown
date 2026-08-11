@@ -76,5 +76,47 @@ class RatioPorCapitulo(unittest.TestCase):
         self.assertEqual(es.capitulos_con_deficit([("x.md", "una dos tres", "una")]), [])
 
 
+
+class ComprobarEnLosDosSentidos(unittest.TestCase):
+    """Una comprobación de una sola dirección no es una comprobación."""
+
+    def test_denuncia_el_texto_que_SOBRA_no_solo_el_que_falta(self):
+        """El fallo que dejó pasar cuatro capítulos con el aparato duplicado.
+
+        La versión anterior solo miraba ratios bajos. Con eso dio por buenas
+        cuatro secciones de Greenbaum con 1,53 · 1,31 · 1,38 · 1,41 —hasta un
+        53 % de texto de MÁS, porque las notas se habían duplicado dentro del
+        cuerpo—. Sobrar texto es tan defecto como faltar.
+        """
+        pares = [("corto.md", "palabra " * 1000, "palabra " * 620),      # falta
+                 ("largo.md", "palabra " * 1000, "palabra " * 1530),     # sobra
+                 ("sano.md",  "palabra " * 1000, "palabra " * 1010)]
+        got = dict(es.capitulos_con_deficit(pares))
+        self.assertIn("corto.md", got)
+        self.assertIn("largo.md", got, "el exceso también es un defecto")
+        self.assertNotIn("sano.md", got)
+
+
+class NotasDuplicadas(unittest.TestCase):
+    """Reponer un aparato sin rehacer el cuerpo deja la nota dos veces."""
+
+    def test_detecta_la_nota_que_esta_en_los_dos_sitios(self):
+        """Medido en Greenbaum: 43 de 70 en un capítulo, 102 de 200 en otro.
+
+        No lo ve el balance de notas —las etiquetas cuadran— ni un control de
+        palabras que solo compruebe que no falte nada.
+        """
+        nota = "Plutarch, De genio Socratis, translated by Frank Cole Babbitt, Moralia."
+        cuerpo = "Prosa del capitulo que sigue. " + nota + " Y mas prosa despues."
+        aparato = "1 " + nota + "\n2 Otra nota distinta con bastantes palabras propias aqui."
+        self.assertEqual(es.notas_duplicadas_en_cuerpo(cuerpo, aparato), 1)
+
+    def test_un_libro_sano_da_CERO(self):
+        """En los capítulos intactos el número era 0, no «bajo»: ese es el listón."""
+        cuerpo = "Prosa del capitulo, con sus frases propias y ninguna nota dentro."
+        aparato = ("1 Plutarch, De genio Socratis, translated by Babbitt, Moralia.\n"
+                   "2 Valens, Anthology, edited by Pingree, with the usual references.")
+        self.assertEqual(es.notas_duplicadas_en_cuerpo(cuerpo, aparato), 0)
+
 if __name__ == "__main__":
     unittest.main()

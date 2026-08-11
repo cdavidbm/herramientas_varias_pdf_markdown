@@ -95,7 +95,35 @@ def parse_lines(tsv_text: str):
     return out
 
 
-def split_page(tsv_text: str, rel_indent: bool = False):
+def bloques_sangrados(body_lines, margenes, min_lineas: int = 2):
+    """Índices de las líneas que forman una CITA EN BLOQUE (sangrada en bloque).
+
+    En una maqueta erudita la cita larga no lleva comillas: se distingue **solo
+    por la sangría**, y esa señal se pierde al pasar a texto plano. El resultado
+    es que una cita de seis renglones queda indistinguible de la prosa del autor,
+    que es justo lo que el lector necesita ver de un vistazo.
+
+    La cita es una RACHA de líneas cuyo margen izquierdo está a la derecha de la
+    mediana de la página. Se exige racha de al menos `min_lineas` porque una sola
+    línea desplazada es la sangría de primera línea de un párrafo normal, no una
+    cita — confundirlas convierte cada párrafo del libro en un blockquote.
+    """
+    if not margenes:
+        return set()
+    base = statistics.median(margenes)
+    dentro = [i for i, m in enumerate(margenes) if m - base > 25]
+    out, racha = set(), []
+    for i in dentro + [None]:
+        if racha and (i is None or i != racha[-1] + 1):
+            if len(racha) >= min_lineas:
+                out.update(racha)
+            racha = []
+        if i is not None:
+            racha.append(i)
+    return out
+
+
+def split_page(tsv_text: str, rel_indent: bool = False, con_margenes: bool = False):
     """Devuelve (running_head|None, [(es_sangria, texto)], [texto_nota]).
 
     `rel_indent=True` decide el párrafo por la sangría RELATIVA a la línea
@@ -105,7 +133,7 @@ def split_page(tsv_text: str, rel_indent: bool = False):
     renglón. Por defecto se mantiene el comportamiento anterior."""
     lines = parse_lines(tsv_text)
     if not lines:
-        return None, [], []
+        return (None, [], [], []) if con_margenes else (None, [], [])
     body_h = statistics.median(h for _, h, _, _ in lines)
     rh = None
     # Se prueba SIN marcas de énfasis: si un paso previo recuperó las cursivas del
@@ -126,7 +154,8 @@ def split_page(tsv_text: str, rel_indent: bool = False):
             and lines[-1][0] > lines[0][0] + (lines[-1][0] - lines[0][0]) * 0.90:
         lines = lines[:-1]
     if len(lines) < 3:
-        return rh, [(False, l[3]) for l in lines], []
+        cortas = [(False, l[3]) for l in lines]
+        return (rh, cortas, [], [l[2] for l in lines]) if con_margenes else (rh, cortas, [])
     ytop, ybot = lines[0][0], lines[-1][0]
     span = max(ybot - ytop, 1)
     ys = [l[0] for l in lines]
@@ -153,6 +182,8 @@ def split_page(tsv_text: str, rel_indent: bool = False):
     else:
         body = [((l[2] - base) > 25, l[3]) for l in body_lines]
     notes = [l[3] for l in note_lines]
+    if con_margenes:
+        return rh, body, notes, [l[2] for l in body_lines]
     return rh, body, notes
 
 
