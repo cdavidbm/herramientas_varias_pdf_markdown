@@ -77,6 +77,7 @@
 - `agy_retranslate_chunks.py` — retraduce un markdown VERIFICANDO CADA TROZO.
 - `agy_transcribe.py` — Orquesta la TRANSCRIPCIÓN VISUAL de un rango de páginas de un
 - `agy_translate.py` — Traduce un markdown de capítulo/Book a otro idioma con agy/Gemini,
+- `aparato_lista_a_definiciones.py` ⚠ — convierte el bloque de notas de LISTA OCR a
 - `aparato_volados_aplanados.py` — enlaza un aparato cuyos VOLADOS están APLANADOS.
 - `auditar_biblioteca.py` — pasa por TODOS los libros ya convertidos y dice cuáles
 - `book_explore.py` — Busca términos dentro de un PDF o EPUB y devuelve los pasajes
@@ -89,6 +90,7 @@
 - `crop_figure.py` — Recorta una FIGURA (carta astral, diagrama, rueda zodiacal…)
 - `detecta_defectos.py` — busca los defectos que NINGÚN control obvio ve.
 - `embed_figures_from_captions.py` — Añade las FIGURAS (cartas, diagramas) a un libro ya
+- `epub_notas_aside.py` ⚠ — rescata las notas EPUB3 «noteref + aside» que el
 - `footnote_chain.py` — separa el APARATO del CUERPO por la CADENA de números.
 - `footnotes_from_pdf.py` — Reconstruye el APARATO DE NOTAS leyendo el del PDF original.
 - `footnotes_redistribute.py` — reparte las definiciones `[^N]:` a su sección.
