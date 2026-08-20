@@ -91,6 +91,7 @@
 - `detecta_defectos.py` — busca los defectos que NINGÚN control obvio ve.
 - `embed_figures_from_captions.py` — Añade las FIGURAS (cartas, diagramas) a un libro ya
 - `epub_notas_aside.py` ⚠ — rescata las notas EPUB3 «noteref + aside» que el
+- `figuras_por_leyenda.py` ⚠ — recorta del PDF las figuras que solo dejaron LEYENDA.
 - `footnote_chain.py` — separa el APARATO del CUERPO por la CADENA de números.
 - `footnotes_from_pdf.py` — Reconstruye el APARATO DE NOTAS leyendo el del PDF original.
 - `footnotes_redistribute.py` — reparte las definiciones `[^N]:` a su sección.
