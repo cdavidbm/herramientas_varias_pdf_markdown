@@ -48,6 +48,16 @@ en el cap. 2 detectaba 3 de 268. Hay que buscar los números también dentro del
 párrafo, y ahí es la cadena la que dice cuáles son notas y cuáles son cifras del
 texto.
 
+**(b-bis) Cuando la entrada trae los DOS números, la cadena no puede elegir.**
+Si el conversor conservó su contador de lista, la entrada empieza `51. 52 Synesius…`:
+contador y número real, y AMBAS series crecen, así que la subsecuencia creciente
+más larga vale igual para las dos y puede quedarse con la equivocada. La regla que
+sí distingue no es aritmética sino estructural: **un número seguido de punto y de
+otro número pegado es el contador, y manda el segundo**. Sin esto, en cuanto falta
+una definición el contador se desfasa y las notas quedan impresas bajo el número de
+otra — medido: 50 notas del cap. 3 y una racha entera del cap. 4, con el balance de
+llamadas cuadrando y el ratio intacto.
+
 **(c) El OCR TRUNCA el número, y siempre los mismos.** Los que faltaban en tres
 capítulos distintos eran 11, 31, 51, 61, 71, 81: números acabados en 1, a los que
 el reconocimiento se come el último dígito y deja «1», «3», «5». Como esa cifra
@@ -83,7 +93,8 @@ RE_ENTRADA = re.compile(r"^(\d{1,3})\.\s+(.*)$")
 # Un número que abre nota: al principio de renglón o tras final de frase, y
 # seguido de texto. La basura del volado («!5», «|12») va delante del dígito.
 RE_CAND = re.compile(
-    r"(?:(?<=^)|(?<=\n)|(?<=[.;:)\]”’»)])\s)[^\w\n]{0,3}(\d{1,3})[\.\)]?"
+    r"(?:(?<=^)|(?<=\n)|(?<=[.;:)\]”’»)])\s)"
+    r"[^\w\n]{0,3}(?:(\d{1,3})\.\s{1,3})?(\d{1,3})[\.\)]?"
     r"(?:\s+(?=[^\s])|(?=[A-ZÀ-ÞΑ-Ω‘“«\"*_(]))", re.M)   # el nº puede ir PEGADO: «1S. Freud»
 # El nº real abre el texto y el OCR lo deja sucio: «7», «!5», «|12», «l2».
 RE_NUM_INICIAL = re.compile(r"^[^\w]{0,3}(\d{1,3})\b[\.\)]?\s*")
@@ -139,13 +150,28 @@ def creciente_mas_larga(valores: list[int]) -> list[int]:
     return salida[::-1]
 
 
+def numero_de_nota(m) -> int:
+    """Decide el número cuando la entrada trae contador y número real.
+
+    `51. 52 Synesius…` -> manda el 52. Pero `31. 4.3.16-17 (ed. Henry…)` NO trae
+    número real: ese «4» es el principio de una CITA, y tomarlo hunde la cadena.
+    Los distingue la distancia: contador y número real sólo se separan por los
+    saltos acumulados (una definición ausente, una de más), así que van cerca.
+    """
+    contador, num = m.group(1), int(m.group(2))
+    if contador is None:
+        return num
+    contador = int(contador)
+    return num if abs(num - contador) <= 10 else contador
+
+
 def rellenar_huecos(ap: str, cands: list, elegidos: list[int], validos: set[int]) -> list[int]:
     """Recupera las notas cuyo número el OCR truncó (11 -> «1», 51 -> «5»).
 
     Sólo si el candidato es ÚNICO en el tramo entre las dos notas vecinas: una
     nota de menos es preferible a una nota partida por el sitio equivocado.
     """
-    todos = [(m.start(), int(m.group(1)), m.end()) for m in RE_CAND.finditer(ap)]
+    todos = [(m.start(), numero_de_nota(m), m.end()) for m in RE_CAND.finditer(ap)]
     salida = list(elegidos)
     for j in range(len(elegidos)):
         num_a = cands[elegidos[j]][1]
@@ -174,7 +200,7 @@ def trocear_por_cadena(ap: str, validos: set[int]) -> list[tuple[int, str]]:
     No exige que la entrada abra renglón: cuando el OCR aplasta el pie, las notas
     de una página van concatenadas en un párrafo.
     """
-    cands = [(m.start(), int(m.group(1)), m.end()) for m in RE_CAND.finditer(ap)]
+    cands = [(m.start(), numero_de_nota(m), m.end()) for m in RE_CAND.finditer(ap)]
     cands = [c for c in cands if c[1] in validos]
     if not cands:
         return []
@@ -188,8 +214,17 @@ def trocear_por_cadena(ap: str, validos: set[int]) -> list[tuple[int, str]]:
     return trozos
 
 
-def es_continuacion(texto: str) -> bool:
-    """¿Esta «entrada» es en realidad el segundo renglón de la nota anterior?"""
+def es_continuacion(texto: str, anterior: str = "") -> bool:
+    """¿Esta «entrada» es en realidad el segundo renglón de la nota anterior?
+
+    Dos señales, y la segunda es la fiable: (a) quitado el número, el texto no
+    empieza como empieza una nota; (b) **la nota anterior se quedó a medias** —sin
+    puntuación de cierre—, que es prueba de que algo la continúa. La (a) sola falla
+    con los paréntesis: «(see Appendix 4.A…)» abre igual que una nota y sin embargo
+    era la cola de una lista de referencias.
+    """
+    if anterior and not anterior.rstrip().endswith((".", "!", "?", ")", "’", "”")):
+        return True
     resto = RE_NUM_INICIAL.sub("", texto, count=1).lstrip()
     if not resto:
         return True
@@ -197,27 +232,51 @@ def es_continuacion(texto: str) -> bool:
 
 
 def asignar(ents: list[tuple[int, str]], validos: set[int]) -> list[tuple[int | None, str]]:
-    """Asigna a cada entrada su nº de nota. None = no se pudo decidir."""
-    propuesto: list[int | None] = []
-    minimo = 1
+    """Asigna a cada entrada su nº de nota. None = no se pudo decidir.
+
+    Las fronteras ya las dio el contador, así que aquí sólo se decide la etiqueta:
+    se toma el número real que abre cada entrada como EVIDENCIA, se acepta la
+    subsecuencia creciente más larga (una cifra suelta mal leída no arrastra a las
+    demás) y los huecos se deducen. La deducción es fuerte porque las entradas son
+    contiguas: si entre dos etiquetas conocidas caben exactamente tantos números
+    como entradas hay en medio, no hay ninguna otra posibilidad.
+    """
+    cand: list[int | None] = []
     for _, texto in ents:
         m = RE_NUM_INICIAL.match(texto)
-        cand = int(m.group(1)) if m else None
-        if cand is not None and cand in validos and cand >= minimo:
-            propuesto.append(cand)
-            minimo = cand + 1
-        else:
-            propuesto.append(None)
+        v = int(m.group(1)) if m else None
+        cand.append(v if (v is not None and v in validos) else None)
 
-    # Deducir los huecos: sólo si entre los vecinos cabe UN único valor válido.
-    for i, val in enumerate(propuesto):
-        if val is not None:
+    idx = [i for i, v in enumerate(cand) if v is not None]
+    elegidos = creciente_mas_larga([cand[i] for i in idx])
+    firmes = {idx[k] for k in elegidos}
+    propuesto: list[int | None] = [cand[i] if i in firmes else None for i in range(len(ents))]
+
+    # deducir los tramos: entre dos etiquetas firmes, si el hueco encaja, es forzado
+    conocidos = [i for i, v in enumerate(propuesto) if v is not None]
+    for a, b in zip([-1] + conocidos, conocidos + [len(ents)]):
+        if b - a <= 1:
             continue
-        antes = next((v for v in reversed(propuesto[:i]) if v is not None), 0)
-        despues = next((v for v in propuesto[i + 1:] if v is not None), max(validos) + 1)
-        opciones = [n for n in validos if antes < n < despues]
-        if len(opciones) == 1:
-            propuesto[i] = opciones[0]
+        antes = propuesto[a] if a >= 0 else 0
+        despues = propuesto[b] if b < len(ents) else max(validos) + 1
+        libres = [n for n in sorted(validos) if antes < n < despues]
+        if len(libres) == b - a - 1:
+            for j, n in zip(range(a + 1, b), libres):
+                propuesto[j] = n
+            continue
+        # Si no encaja por conteo, aún puede decidirlo el TRUNCAMIENTO: el OCR se
+        # come el primer dígito (112 -> «12») y esa cifra retrocede, así que la
+        # cadena la rechaza aunque el número esté a la vista. Se acepta cuando en
+        # el hueco hay UN solo número del que la cifra leída sea truncamiento.
+        for j in range(a + 1, b):
+            v = cand[j]
+            if v is None:
+                continue
+            posibles = [n for n in libres
+                        if n != v and (str(n).endswith(str(v)) or str(n).startswith(str(v)))]
+            if len(posibles) == 1:
+                propuesto[j] = posibles[0]
+                libres.remove(posibles[0])
 
     return [(propuesto[i], ents[i][1]) for i in range(len(ents))]
 
@@ -241,7 +300,31 @@ def main() -> int:
     refs = llamadas(cuerpo, a.prefijo)
     if not refs:
         sys.exit("el cuerpo no tiene llamadas: ancla primero, o revisa --prefijo")
-    asignadas = trocear_por_cadena(bloque_ap, set(refs))
+    # DOS bloques distintos piden DOS rutas. Si el conversor conservó su contador
+    # de lista, ese contador es perfecto —lo generó una máquina, va contiguo— y es
+    # la mejor frontera posible: se trocea por él y el número real sólo decide la
+    # ETIQUETA. Si no hay contadores (el pie salió aplastado en párrafos), no queda
+    # más señal que la cadena de números. Elegir mal cuesta caro en las dos
+    # direcciones: por cadena en un bloque con contadores salen notas bajo el
+    # número de otra; por contador en un bloque sin ellos no sale casi ninguna.
+    ents = entradas(bloque_ap)
+    if len(ents) >= max(10, len(refs) // 2):
+        crudas = asignar(ents, set(refs))
+        asignadas, sueltas = [], []
+        for n, txt in crudas:
+            if n is not None:
+                asignadas.append((n, limpiar(txt)))
+            elif asignadas and es_continuacion(txt, asignadas[-1][1]):
+                # el segundo renglón de la nota anterior: se cose CON su número,
+                # que es parte de la cita
+                asignadas[-1] = (asignadas[-1][0], asignadas[-1][1] + " " + txt.strip())
+            else:
+                sueltas.append(txt)
+        via = f"contador de lista ({len(ents)} entradas)"
+    else:
+        asignadas = trocear_por_cadena(bloque_ap, set(refs))
+        sueltas = []
+        via = "cadena de números"
     if not asignadas:
         sys.exit("no encuentro ninguna entrada: ¿es este el bloque correcto?")
 
@@ -250,9 +333,10 @@ def main() -> int:
     repetidas = sorted({n for n in hechas if hechas.count(n) > 1})
     # Lo que queda ANTES de la primera nota es cola de la página anterior o el
     # asterisco de agradecimientos: no se tira, se avisa.
-    cabecera = " ".join(bloque_ap[:RE_CAND.search(bloque_ap).start()].split())
+    m_cab = RE_CAND.search(bloque_ap)
+    cabecera = " ".join(bloque_ap[:m_cab.start()].split()) if m_cab else ""
 
-    print(f"{p.name}: {len(refs)} llamadas · {len(asignadas)} notas troceadas")
+    print(f"{p.name}: {len(refs)} llamadas · {len(asignadas)} notas troceadas · vía {via}")
     print(f"  sin definición : {len(sin_definir)}  {sin_definir[:20]}")
     if repetidas:
         print(f"  !! repetidas   : {repetidas}")
@@ -264,7 +348,7 @@ def main() -> int:
         return 0
 
     defs = [f"[^{a.prefijo}{n}]: {txt}" for n, txt in asignadas]
-    sobras = [f"- {cabecera}"] if cabecera else []
+    sobras = ([f"- {cabecera}"] if cabecera else []) + [f"- {x}" for x in sueltas]
     nuevo = cuerpo + "\n\n" + "\n\n".join(defs) + "\n"
     if sobras:
         # Nada se tira: lo que no se pudo numerar queda a la vista para decidirlo.
