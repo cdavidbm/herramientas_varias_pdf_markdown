@@ -57,6 +57,38 @@ class MotorAgotado(RuntimeError):
     """
 
 
+CHARLA = re.compile(
+    r"^(now i|let me|i'?ll|i will|here'?s|here is|okay|ok,|looking at|first,|i have|"
+    r"the translation|translation:|sure[,.]|understood)", re.I)
+
+
+def sin_preambulo(texto: str) -> str:
+    """Quita la CHARLA del modelo que a veces encabeza la respuesta.
+
+    Un modelo con razonamiento puede escribir su plan como primera línea («Now I
+    have the glossary. Let me produce the translation…») y eso acaba DENTRO del
+    archivo traducido. El verificador lo denuncia como «párrafo sin traducir»
+    —tiene razón: está en inglés—, así que el archivo se marca en fallo y se
+    reintenta entero una y otra vez sin que el reintento arregle nada, porque el
+    modelo vuelve a hacer lo mismo. Medido en el Daimon: dos pasadas perdidas en
+    el mismo archivo, una por motor.
+
+    Solo se quita del PRINCIPIO y solo si no es estructura del markdown: un
+    encabezado, una cita o una definición de nota se respetan siempre.
+    """
+    lineas = texto.split("\n")
+    i = 0
+    while i < len(lineas):
+        linea = lineas[i].strip()
+        if not linea:
+            i += 1
+            continue
+        if linea[0] in "#>*-[|" or not CHARLA.match(linea):
+            break
+        i += 1
+    return "\n".join(lineas[i:]).lstrip("\n")
+
+
 def agy(prompt: str, workdir: Path, model: str, binpath: str,
         intentos: int = 2, espera: int = 20) -> str:
     ultimo = ""
@@ -64,7 +96,7 @@ def agy(prompt: str, workdir: Path, model: str, binpath: str,
         r = subprocess.run([binpath, "-p", prompt, "--model", model,
                             "--add-dir", str(workdir), "--dangerously-skip-permissions"],
                            capture_output=True, text=True)
-        out = r.stdout.strip()
+        out = sin_preambulo(r.stdout.strip())
         if out:
             return out
         err = (r.stderr or "").strip()
