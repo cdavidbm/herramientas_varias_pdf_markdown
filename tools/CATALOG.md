@@ -59,6 +59,11 @@
 - `check_completeness.py` — Detecta (y opcionalmente REPARA) el TEXTO PERDIDO durante
 - `index_rebuild.py` — Reconstruye el ÍNDICE ANALÍTICO de un libro contra el PDF que
 
+## Escritura de libros (investigar un corpus y escribir)
+- `apa_video_keys.py` — genera la tabla de CLAVES DE CITA APA 7 de un corpus de vídeos transcritos (clases, conferencias, coloquios).
+- `book_integrity.py` — control de INTEGRIDAD de un libro escrito en markdown (varios .md).
+- `book_invariants.py` — compara dos versiones de un texto y avisa si una EDICIÓN DE ESTILO tocó lo intocable.
+
 ## Salida / build
 - `build_plan.py` — Generate a plan.json for ANY EPUB, ready for epub_to_markdown.py.
 - `md_to_pdf.py` — Convierte markdown de estudio (suite La Forja) a un **PDF bello**,

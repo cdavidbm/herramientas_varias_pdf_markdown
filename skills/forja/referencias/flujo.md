@@ -25,6 +25,7 @@ tokens (leer solo lo necesario).
 | "revisa/corrige este texto" | `referencias/revisar-prosa.md` (script `proofread.py` + criterio) |
 | "verifica esta traducción" | `referencias/qa-traduccion.md` (`check_translation.py` + criterio) |
 | "gestiona/añade la bibliografía" | `referencias/citas.md` (`check_citations.py` + `pandoc --citeproc`) |
+| "investiga estas fuentes y escribe un libro/ensayo sobre X" | `referencias/escribir-libro.md`: corpus → dossiers (agentes) → plan+matriz+guía → redacción → verificación de citas → revisión de conjunto → `book_integrity.py` → `md_to_pdf.py` → archivar el trabajo |
 | "arma/compila el libro final" | `pandoc` de los `.md` → EPUB/DOCX/PDF (cierre del ciclo) |
 
 ## Reglas de orquestación

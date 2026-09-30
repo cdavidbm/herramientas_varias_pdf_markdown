@@ -238,10 +238,14 @@ def preamble(title, author, lang, toc, graphicspath="", fnmode="page", fallback=
 # Chapters»: todos los H1 son «Capítulo N: …»). Sin reconocerlos, classify_roles no ve
 # capítulos numerados, los manda todos a `appendix` (\chapter*) y entonces
 # `--footnotes chapter` NO reinicia las notas, porque el contador de capítulo no avanza.
+# El punto medio «·» también separa («# Capítulo 5 · La Luna»): es el que usan los libros
+# que escribe La Forja (referencias/escribir-libro.md). Sin él, todos los capítulos caían a
+# `appendix` y había que reescribir los H1 en una copia antes de maquetar (medido en
+# *El cielo de los Nombres*).
 CHAP_RE = re.compile(
-    r"^#\s+(?:(?:Cap[íi]tulo|Chapter)\s+\S+|\d{1,3})\s*(?:—|–|-{1,3}|\.|:)", re.I)
+    r"^#\s+(?:(?:Cap[íi]tulo|Chapter)\s+\S+|\d{1,3})\s*(?:—|–|-{1,3}|\.|:|·)", re.I)
 PREF_RE = re.compile(
-    r"^\s*(?:(?:Cap[íi]tulo|Chapter)\s+\S+|\d{1,3})\s*(?:—|–|-{1,3}|\.|:)\s*", re.I)
+    r"^\s*(?:(?:Cap[íi]tulo|Chapter)\s+\S+|\d{1,3})\s*(?:—|–|-{1,3}|\.|:|·)\s*", re.I)
 # Títulos H1 de front-matter (para libros SIN «Capítulo N», organizados por Partes)
 FRONT_RE = re.compile(
     r"^#\s+(prefacio|preface|pr[oó]logo|proemio|introducci[oó]n|introduction|"
@@ -557,7 +561,9 @@ def strip_empty_note_heading(text):
             j, droppable = i + 1, True
             while j < n and not re.match(r"^#{1,6}\s", lines[j]):
                 s = lines[j].strip()
-                if s and not re.match(r"^\[\^[^\]]+\]:", s):
+                # un separador «---»/«***» entre las notas y las referencias no es contenido:
+                # con él, el título «## Notas» quedaba vacío en el PDF (medido)
+                if s and not re.match(r"^\[\^[^\]]+\]:", s) and not re.fullmatch(r"(?:-{3,}|\*{3,}|_{3,})", s):
                     droppable = False; break
                 j += 1
             if droppable:                        # solo definiciones (o nada) debajo -> fuera el título

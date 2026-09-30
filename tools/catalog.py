@@ -37,6 +37,8 @@ GROUPS = [
     ("Verificación / auditoría", lambda n: n in {
         "check_completeness.py", "audit_conversion.py", "chapter_bounds.py",
         "index_rebuild.py"}),
+    ("Escritura de libros (investigar un corpus y escribir)", lambda n: n in {
+        "apa_video_keys.py", "book_integrity.py", "book_invariants.py"}),
     ("Salida / build", lambda n: n in {"md_to_pdf.py", "build_plan.py",
         "latex_to_markdown.py"}),
     ("YouTube", lambda n: n.startswith("yt_") or n == "asr_setup.sh"),

@@ -1,6 +1,6 @@
 ---
 name: forja
-description: Trabaja con LIBROS y DOCUMENTOS de principio a fin — convertir PDF/EPUB/RTF/DjVu/Office a markdown limpio por capítulo, hacer OCR de escaneos malos, reconstruir el aparato de notas al pie, traducir capítulo a capítulo con glosario, verificar que no se perdió texto, corregir la prosa, gestionar citas y bibliografía, explorar un libro por tema y maquetar el PDF final. Actívala ante CUALQUIER petición sobre un libro o documento largo, tanto si abarca un solo paso ("pasa este PDF a markdown", "haz OCR de este escaneo", "tradúceme este capítulo", "revisa esta traducción", "qué dice este libro sobre X") como si abarca varios ("procesa este libro", "prepáralo para estudio", "de este PDF sácame un PDF español"). No la uses para vídeos de YouTube.
+description: Trabaja con LIBROS y DOCUMENTOS de principio a fin — convertir PDF/EPUB/RTF/DjVu/Office a markdown limpio por capítulo, hacer OCR de escaneos malos, reconstruir el aparato de notas al pie, traducir capítulo a capítulo con glosario, verificar que no se perdió texto, corregir la prosa, gestionar citas y bibliografía, explorar un libro por tema, INVESTIGAR UN CORPUS Y ESCRIBIR UN LIBRO PROPIO (dossiers, plan, redacción con citas verificadas, revisión) y maquetar el PDF final. Actívala ante CUALQUIER petición sobre un libro o documento largo, tanto si abarca un solo paso ("pasa este PDF a markdown", "haz OCR de este escaneo", "tradúceme este capítulo", "revisa esta traducción", "qué dice este libro sobre X") como si abarca varios ("procesa este libro", "prepáralo para estudio", "de este PDF sácame un PDF español", "investiga estas fuentes y escríbeme un libro sobre X"). No la uses para vídeos de YouTube.
 ---
 
 # La Forja — libros y documentos, de principio a fin
@@ -38,6 +38,7 @@ Define `T=tools` (o la ruta absoluta del repo) al empezar.
 | corregir estilo, erratas, consistencia | `referencias/revisar-prosa.md` |
 | citas `[@clave]`, `.bib`, bibliografía | `referencias/citas.md` |
 | buscar qué dice un libro sobre un tema | `referencias/explorar.md` |
+| investigar un corpus y ESCRIBIR un libro o ensayo propio (dossiers, plan, redacción, verificación de citas, revisión, PDF) | `referencias/escribir-libro.md` (+ plantillas en `plantillas/libro/`) |
 | la petición abarca varios pasos | `referencias/flujo.md` |
 
 ## El orden del flujo, que importa

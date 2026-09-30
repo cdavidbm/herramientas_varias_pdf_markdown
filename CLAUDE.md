@@ -862,6 +862,24 @@ por debajo de ~60 px de alto van EN LÍNEA: `epub_to_markdown.py --inline-img-px
 `> 600×500` = lámina o tabla), no por el capítulo en el que caen: en el mismo capítulo de
 las Escalas conviven una tabla de 850×1127 y cinco palabras hebreas de 30 px.
 
+## Investigar un corpus y ESCRIBIR un libro propio
+
+Método completo, plantillas y prompts de agentes en `skills/forja/referencias/escribir-libro.md`
+y `skills/forja/plantillas/libro/` (medido en *El cielo de los Nombres*: 86 000 palabras,
+~1 000 citas verificadas). Lo esencial:
+- **Corpus cerrado** y **grado de evidencia** en cada tesis ([E]/[D]/[P]/[O]/[X] y convergencia
+  por familias de fuentes). Esas distinciones no son «blindaje»: ninguna revisión las borra.
+- Investigar antes de escribir: dossiers por fuente → plan + matriz de decisiones + guía de
+  estilo → redacción con plantilla común → verificación de citas CONTRA LA FUENTE LOCAL (los
+  dossiers heredan erratas) → revisión de conjunto (tres auditorías de solo lectura, luego
+  agentes con archivos disjuntos) → integridad → PDF → archivar el trabajo, no borrarlo.
+- Herramientas: `apa_video_keys.py` (claves APA deterministas de un corpus de vídeos; las
+  letras a mano producen citas cruzadas), `book_integrity.py` (notas, remisiones internas,
+  marcas olvidadas, cobertura de referencias) y `book_invariants.py` (qué tocó una edición de
+  estilo; se corre tras cada pasada de agentes contra la copia `.orig`).
+- Auditoría fina con agentes: exigir lectura SECCIÓN POR SECCIÓN desde el primer encargo; la
+  primera pasada sobre el archivo entero sale superficial (medido: ~15 ediciones/5 000 palabras).
+
 ## YouTube → markdown de estudio (skill `/youtube`)
 
 Otra fuente además de libros: videos de YouTube, vía **`yt-dlp`**.
