@@ -100,7 +100,10 @@ def body_citations(body: str) -> set[tuple[str, str]]:
         author = None
         for part in re.split(r";", inner):
             part = part.strip()
-            am = re.match(r"^(?:véase\s+|cf\.\s+|citado en\s+)?([A-ZÁÉÍÓÚa-z][^,()]*?),\s*(" + YEAR + r")", part)
+            # «(Abū Maʿšar, citado en Obert, 2020, …)»: la entrada de referencias es la
+            # fuente SECUNDARIA (Obert); el autor antiguo no tiene entrada propia (APA 7).
+            part = re.sub(r"^.*?\bcitad[oa]s?\s+(?:en|por)\s+", "", part)
+            am = re.match(r"^(?:véase\s+|cf\.\s+)?([A-ZÁÉÍÓÚa-z][^,()]*?),\s*(" + YEAR + r")", part)
             if am and not re.match(r"^\d", am.group(1)):
                 author = surname_key(re.split(r"\s+y\s+|\s+et al\.", am.group(1))[0])
                 out.add((author, norm_year(am.group(2))))

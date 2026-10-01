@@ -23,6 +23,7 @@ CAP4 = """# Capítulo 4 · Método
 
 Texto con nota.[^1] Según Masdeu (2021at, 2022k) y Raúl y Masdeu (2023e), la tabla
 se sostiene (al-Tilimsānī, ca. 1291/2023, §12.1; Ibn al-ʿArabī, 1224/1996, n.º 36).
+Abū Maʿšar lo dice (Abū Maʿšar, citado en Obert, 2020, cap. «Mercurio»).
 
 [^1]: Una nota.
 
@@ -35,6 +36,8 @@ Masdeu, A. (2021at, 8 de julio). *Clase 10*.
 Masdeu, A. (2022k, 30 de junio). *Antares 110*.
 
 Raúl, F., y Masdeu, A. (2023e, 7 de enero). *Coloquio 5*.
+
+Obert, C. (2020). *The classical seven planets*.
 
 al-Tilimsānī, ʿA. al-D. (2023). *The divine names*.
 """
